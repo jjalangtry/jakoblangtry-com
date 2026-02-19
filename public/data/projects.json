@@ -1,7 +1,32 @@
 [
   {
+    "name": "Website",
+    "url": "https://jakoblangtry.com",
+    "description": "This portfolio site and terminal interface"
+  },
+  {
     "name": "Converter",
     "url": "https://convert.jakoblangtry.com",
-    "description": "Link conversion tool"
+    "description": "Convert links between Apple Music and Spotify"
+  },
+  {
+    "name": "Playlist",
+    "url": "https://playlist.jakoblangtry.com",
+    "description": "Public playlist conversion tool"
+  },
+  {
+    "name": "SSE Jello",
+    "url": "https://sse.jakoblangtry.com",
+    "description": "Jello Kanban web app"
+  },
+  {
+    "name": "BeyondRGB",
+    "url": "https://github.com/BeyondRGB/beyondrgb.github.io",
+    "description": "Project I contributed to heavily"
+  },
+  {
+    "name": "SSE RIT",
+    "url": "https://sse.rit.edu",
+    "description": "Work I contributed to through RIT SSE"
   }
 ]
