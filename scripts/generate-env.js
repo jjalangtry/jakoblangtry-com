@@ -2,15 +2,11 @@ const fs = require('fs');
 const path = require('path');
 
 const apiKey = process.env.OPENWEATHERMAP_API_KEY;
-
-if (!apiKey) {
-  console.error('Error: OPENWEATHERMAP_API_KEY environment variable is not set.');
-  process.exit(1);
-}
+const safeApiKey = apiKey || '';
 
 const envContent = `// Client-side environment variables
 const ENV = {
-    OPENWEATHERMAP_API_KEY: '${apiKey}'
+    OPENWEATHERMAP_API_KEY: '${safeApiKey}'
 };
 
 // Expose the environment to the window
@@ -27,4 +23,8 @@ if (!fs.existsSync(publicDir)) {
 
 fs.writeFileSync(outputPath, envContent);
 
-console.log(`Successfully generated ${outputPath} with API key.`); 
+if (!apiKey) {
+  console.warn('Warning: OPENWEATHERMAP_API_KEY is not set. Weather command will show a clear runtime error.');
+}
+
+console.log(`Successfully generated ${outputPath}.`);

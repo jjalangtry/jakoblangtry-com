@@ -22,7 +22,7 @@ const terminalData = {
 };
 
 const commandList = [
-    'banner', 'clear', 'converter', 'curl', 'qr', 'date', 'echo', 'email',
+    'banner', 'clear', 'converter', 'curl', 'qr', 'date', 'echo', 'email', 'exit',
     'github', 'help', 'ls', 'projects', 'repo', 'resume', 'weather', 'whoami'
 ];
 
@@ -425,6 +425,9 @@ AVAILABLE COMMANDS:
   email      Open email client to contact Jakob
              Usage: email
 
+  exit       Close the terminal session
+             Usage: exit
+
   github     Open Jakob's GitHub profile
              (alias: repo)
              Usage: github
@@ -505,6 +508,10 @@ Type 'resume' to view my resume or 'projects' to see my work.`, 'info-text');
             break;
         case 'weather':
             appendOutput('Usage: weather [city or location]. Examples:\n  weather New York\n  weather Syracuse NY\n  weather London, UK\n  weather Paris France', 'info-text');
+            break;
+        case 'exit':
+            appendOutput('Goodbye! Closing terminal...');
+            setTimeout(() => window.close(), 1000);
             break;
         case 'resume':
             openResumeFromConfig();
@@ -676,6 +683,12 @@ function displayCommandHelp(command) {
             usage: 'email',
             examples: ['email'],
             notes: 'This will open your system\'s default email client with jjalangtry@gmail.com as the recipient.'
+        },
+        exit: {
+            desc: 'Close the terminal session and browser tab.',
+            usage: 'exit',
+            examples: ['exit'],
+            notes: 'This command attempts to close the current browser tab. Browser security settings may prevent this on some browsers.'
         },
         github: {
             desc: 'Open Jakob\'s GitHub profile in a new browser tab.',

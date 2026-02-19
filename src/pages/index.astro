@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ProfilePanel from '../components/ProfilePanel.astro';
+import TerminalPanel from '../components/TerminalPanel.astro';
+import '../../styles.css';
+---
+
+<BaseLayout
+  title="Jakob Langtry - Software Engineer & Developer"
+  description="Professional portfolio of Jakob Langtry, Software Engineering Student at Rochester Institute of Technology"
+>
+  <div class="page-container">
+    <ProfilePanel />
+    <TerminalPanel />
+  </div>
+
+  <script is:inline src="/env.js"></script>
+  <script type="module" is:inline>
+    import '../../script.js';
+  </script>
+</BaseLayout>

@@ -22,6 +22,5 @@ Thumbs.db
 /dist
 /build
 .eslintcache
-
-# Public Directory
-public/ 
+.astro/
+public/env.js

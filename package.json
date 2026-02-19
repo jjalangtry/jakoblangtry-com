@@ -3,8 +3,14 @@
   "version": "1.0.0",
   "description": "Jakob Langtry's personal website",
   "scripts": {
-    "build": "echo \"DEBUG: Checking OPENWEATHERMAP_API_KEY...\" && echo \"DEBUG: Value is [$OPENWEATHERMAP_API_KEY]\" && mkdir -p public && cp index.html script.js styles.css public/ && ([ -f 404.html ] && cp 404.html public/) && cp jakob.png public/ && node scripts/generate-env.js && echo 'Build finished.'"
+    "dev": "astro dev",
+    "predev": "node scripts/generate-env.js",
+    "build": "astro build",
+    "prebuild": "node scripts/generate-env.js",
+    "preview": "astro preview"
   },
-  "dependencies": {},
+  "dependencies": {
+    "astro": "latest"
+  },
   "devDependencies": {}
 } 
