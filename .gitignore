@@ -23,4 +23,3 @@ Thumbs.db
 /build
 .eslintcache
 .astro/
-public/env.js

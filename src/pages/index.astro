@@ -3,6 +3,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import ProfilePanel from '../components/ProfilePanel.astro';
 import TerminalPanel from '../components/TerminalPanel.astro';
 import '../../styles.css';
+
+const weatherApiKey =
+  import.meta.env.OPENWEATHERMAP_API_KEY ||
+  import.meta.env.PUBLIC_OPENWEATHERMAP_API_KEY ||
+  '';
 ---
 
 <BaseLayout
@@ -14,7 +19,12 @@ import '../../styles.css';
     <TerminalPanel />
   </div>
 
-  <script is:inline src="/env.js"></script>
+  <script is:inline define:vars={{ weatherApiKey }}>
+    window.ENV = {
+      ...(window.ENV || {}),
+      OPENWEATHERMAP_API_KEY: weatherApiKey || ''
+    };
+  </script>
   <script type="module" is:inline>
     import '../../script.js';
   </script>

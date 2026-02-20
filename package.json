@@ -4,9 +4,7 @@
   "description": "Jakob Langtry's personal website",
   "scripts": {
     "dev": "astro dev",
-    "predev": "node scripts/generate-env.js",
     "build": "astro build",
-    "prebuild": "node scripts/generate-env.js",
     "preview": "astro preview",
     "start": "serve -s dist -l ${PORT:-4321}"
   },

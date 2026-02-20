@@ -21,6 +21,35 @@ const terminalData = {
     projects: [...DEFAULT_PROJECTS]
 };
 
+function setStatusValue(id, value) {
+    const target = document.getElementById(id);
+    if (target) {
+        target.textContent = value;
+    }
+}
+
+function updateClockBadge() {
+    const now = new Date();
+    setStatusValue('status-clock', now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+}
+
+function initControlDeck() {
+    document.querySelectorAll('[data-command]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const cmd = button.getAttribute('data-command');
+            if (!cmd) return;
+            if (currentInput) {
+                currentInput.value = cmd;
+                currentInput.focus();
+            }
+            executeCommand(cmd);
+        });
+    });
+
+    updateClockBadge();
+    setInterval(updateClockBadge, 15000);
+}
+
 const commandList = [
     'banner', 'clear', 'converter', 'curl', 'qr', 'date', 'echo', 'email',
     'github', 'help', 'ls', 'projects', 'repo', 'resume', 'theme', 'weather', 'whoami'
@@ -121,6 +150,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (savedTheme) {
         applyTheme(savedTheme);
     }
+    setStatusValue('status-theme', getCurrentTheme());
 
     // Check if we're on a mobile device
     isMobileDevice = isMobile();
@@ -141,6 +171,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Bio typing animation
     setupBioTypingAnimation();
+    initControlDeck();
     
     // Load editable command/config content before terminal initialization
     await loadTerminalData();
@@ -421,6 +452,7 @@ function executeCommand(command) {
     cliOutput.insertBefore(commandLine, inputLine);
     
     const normalizedCommand = command.toLowerCase();
+    setStatusValue('status-last-command', command);
     switch (normalizedCommand) {
         case 'help':
             const helpText = `
@@ -542,6 +574,7 @@ Type 'resume' to view my resume or 'projects' to see my work.`, 'info-text');
             {
                 const next = toggleTheme();
                 appendOutput(`Switched to ${next} mode.`, 'success-text');
+                setStatusValue('status-theme', next);
             }
             break;
         case 'resume':
@@ -577,6 +610,7 @@ Type 'resume' to view my resume or 'projects' to see my work.`, 'info-text');
                 if (arg === 'dark' || arg === 'light') {
                     applyTheme(arg);
                     appendOutput(`Switched to ${arg} mode.`, 'success-text');
+                    setStatusValue('status-theme', arg);
                 } else {
                     appendOutput('Usage: theme [dark|light]', 'info-text');
                 }
@@ -814,6 +848,7 @@ NOTES:
 async function fetchWeather(city) {
     try {
         appendOutput(`Fetching weather data for ${city}...`);
+        setStatusValue('status-weather', 'fetching...');
         
         // Format city name for best API results
         let formattedCity = city;
@@ -882,6 +917,7 @@ async function fetchWeather(city) {
         const apiKey = (window.ENV?.OPENWEATHERMAP_API_KEY || '').trim();
         if (!apiKey || apiKey === 'your_api_key_here' || apiKey === 'REPLACE_WITH_YOUR_API_KEY') {
             appendOutput('Weather is unavailable: OpenWeatherMap API key is missing. Configure OPENWEATHERMAP_API_KEY and rebuild.', 'error-text');
+            setStatusValue('status-weather', 'api key missing');
             return;
         }
 
@@ -892,14 +928,17 @@ async function fetchWeather(city) {
         if (!geoResponse.ok) {
             if (geoResponse.status === 401) {
                 appendOutput('Weather is unavailable: OpenWeatherMap API key is invalid or expired.', 'error-text');
+                setStatusValue('status-weather', 'auth failed');
             } else {
                 appendOutput(`Error fetching weather location: ${geoData?.message || geoResponse.statusText}`, 'error-text');
+                setStatusValue('status-weather', 'lookup failed');
             }
             return;
         }
 
         if (!geoData || !geoData.length) {
             appendOutput(`City "${city}" not found. Try "City, State" or "City, Country".`, 'error-text');
+            setStatusValue('status-weather', 'city not found');
             return;
         }
 
@@ -913,17 +952,21 @@ async function fetchWeather(city) {
         if (!weatherResponse.ok) {
             if (weatherResponse.status === 401) {
                 appendOutput('Weather is unavailable: OpenWeatherMap API key is invalid or expired.', 'error-text');
+                setStatusValue('status-weather', 'auth failed');
             } else {
                 appendOutput(`Error fetching weather forecast: ${weatherData?.message || weatherResponse.statusText}`, 'error-text');
+                setStatusValue('status-weather', 'forecast failed');
             }
             return;
         }
 
         displayWeatherReport(weatherData, name, state, country, lat, lon);
+        setStatusValue('status-weather', `${name}, ${country}`);
         return;
 
     } catch (error) {
         appendOutput(`Error fetching weather data: ${error.message}`, 'error-text');
+        setStatusValue('status-weather', 'network error');
     }
 }
 
