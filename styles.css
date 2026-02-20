@@ -1,5 +1,43 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
 
+:root {
+    --body-bg: #0d0d0d;
+    --terminal-bg: rgba(0, 0, 0, 0.9);
+    --bio-bg: rgba(0, 0, 0, 0.8);
+    --text-primary: #98c379;
+    --text-prompt: #d19a66;
+    --text-info: #61afef;
+    --text-error: #e06c75;
+    --text-warning: #e5c07b;
+    --text-command: #e5c07b;
+    --text-log: #abb2bf;
+    --text-success: #98c379;
+    --border-accent: #98c379;
+    --cursor-color: #98c379;
+    --scrollbar-track: #1a1a1a;
+    --scrollbar-thumb: #3d3d3d;
+    --input-bg: transparent;
+}
+
+body.light-theme {
+    --body-bg: #f5f5f0;
+    --terminal-bg: #ffffff;
+    --bio-bg: #f0ede8;
+    --text-primary: #2d5016;
+    --text-prompt: #8a5a1e;
+    --text-info: #1a5fa0;
+    --text-error: #b3303a;
+    --text-warning: #8a6d1e;
+    --text-command: #6b5500;
+    --text-log: #4a4a4a;
+    --text-success: #2d5016;
+    --border-accent: #2d5016;
+    --cursor-color: #2d5016;
+    --scrollbar-track: #e8e8e8;
+    --scrollbar-thumb: #bbbbbb;
+    --input-bg: transparent;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -7,11 +45,12 @@
 }
 
 body {
-    background-color: #2c0922;
+    background-color: var(--body-bg);
     font-family: 'JetBrains Mono', Consolas, 'Courier New', 'Lucida Console', monospace;
     height: 100vh;
     margin: 0;
     padding: 0;
+    transition: background-color 0.3s ease;
 }
 
 /* Windows-specific styling */
@@ -77,7 +116,7 @@ body.mobile-device .weather-container {
 /* Bio Container Styling */
 .bio-container {
     width: 300px;
-    background-color: rgba(0, 0, 0, 0.8);
+    background-color: var(--bio-bg);
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -85,14 +124,15 @@ body.mobile-device .weather-container {
     text-align: left;
     position: sticky;
     top: 0;
-    border-left: 1px solid #98c379;
+    border-left: 1px solid var(--border-accent);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 /* Profile Image Styling */
 .profile-image-container {
     width: 100%;
     height: auto;
-    border: 2px solid #98c379;
+    border: 2px solid var(--border-accent);
     overflow: hidden;
     margin-bottom: 20px;
     aspect-ratio: 1 / 1;
@@ -122,7 +162,7 @@ body.mobile-device .weather-container {
     display: flex;
     justify-content: center;
     align-items: center;
-    color: #98c379;
+    color: var(--text-primary);
     font-size: 24px;
     text-decoration: none;
     transition: all 0.3s ease;
@@ -162,7 +202,7 @@ body.mobile-device .weather-container {
 
 /* Bio Text Styling */
 .bio-text {
-    color: #98c379;
+    color: var(--text-primary);
     font-size: 14px;
     line-height: 1.5;
     width: 100%;
@@ -179,7 +219,7 @@ body.mobile-device .weather-container {
     margin-left: 1px;
     width: 10px;
     height: 20px;
-    background-color: #98c379;
+    background-color: var(--cursor-color);
     animation: blink 1s infinite;
 }
 
@@ -190,34 +230,35 @@ body.mobile-device .weather-container {
 
 /* Make terminal take full left side */
 .terminal {
-    flex: 1; /* Takes up all available space */
-    background-color: rgba(0, 0, 0, 0.9);
+    flex: 1;
+    background-color: var(--terminal-bg);
     padding: 16px;
     display: flex;
     flex-direction: column;
     user-select: text;
-    cursor: text; /* Indicates the area is text-editable */
-    position: relative; /* For proper click handling */
-    width: 100%; /* Ensure it takes full width */
-    height: 100%; /* Ensure it takes full height */
-    min-width: 0; /* Allows flex child to shrink below content size if needed */
+    cursor: text;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    transition: background-color 0.3s ease;
 }
 
 .terminal-output {
-    color: #98c379;
+    color: var(--text-primary);
     overflow-y: auto;
     padding-bottom: 16px;
     user-select: text;
 }
 
 .prompt {
-    color: #d19a66;
+    color: var(--text-prompt);
 }
 
 #cli-input {
-    background: transparent;
+    background: var(--input-bg);
     border: none;
-    color: #98c379;
+    color: var(--text-primary);
     font-family: inherit;
     font-size: inherit;
     outline: none;
@@ -239,7 +280,7 @@ body.mobile-device .weather-container {
     display: inline-block;
     width: 10px;
     height: 18px;
-    background-color: #98c379;
+    background-color: var(--cursor-color);
     position: absolute;
     left: 0;
     top: 50%;
@@ -264,11 +305,11 @@ body.mobile-device .weather-container {
 }
 
 ::-webkit-scrollbar-track {
-    background: #1a1a1a;
+    background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #3d3d3d;
+    background: var(--scrollbar-thumb);
     border-radius: 4px;
 }
 
@@ -280,7 +321,7 @@ body.mobile-device .weather-container {
 .ascii-art {
     white-space: pre;
     padding: 10px 0;
-    color: #98c379;
+    color: var(--text-primary);
     line-height: 1.2;
     overflow-x: auto;
     max-width: 100%;
@@ -295,11 +336,11 @@ body.mobile-device .weather-container {
     font-family: 'JetBrains Mono', Consolas, 'Courier New', 'Lucida Console', monospace;
     line-height: 1.4;
     font-size: 14px;
-    color: #e5c07b;
+    color: var(--text-command);
 }
 
 .info-text {
-    color: #61afef;
+    color: var(--text-info);
     user-select: text;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -307,21 +348,21 @@ body.mobile-device .weather-container {
 }
 
 .error-text {
-    color: #e06c75;
+    color: var(--text-error);
     user-select: text;
     white-space: pre-wrap;
     word-wrap: break-word;
 }
 
 .success-text {
-    color: #98c379;
+    color: var(--text-success);
     user-select: text;
     white-space: pre-wrap;
     word-wrap: break-word;
 }
 
 .command-text {
-    color: #d19a66;
+    color: var(--text-prompt);
     font-weight: bold;
     user-select: text;
     white-space: pre-wrap;
@@ -329,7 +370,7 @@ body.mobile-device .weather-container {
 }
 
 .log-text {
-    color: #abb2bf;
+    color: var(--text-log);
     user-select: text;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -337,7 +378,7 @@ body.mobile-device .weather-container {
 }
 
 .warning-text {
-    color: #e5c07b;
+    color: var(--text-warning);
     user-select: text;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -367,7 +408,7 @@ pre {
         height: auto;
         order: 1;
         border-left: none;
-        border-bottom: 1px solid #98c379;
+        border-bottom: 1px solid var(--border-accent);
         align-items: center;
         text-align: center;
         flex-shrink: 0;
@@ -412,8 +453,8 @@ pre {
         max-height: none;
         padding: 20px 10px 16px 10px;
         overflow-y: visible;
-        background: rgba(0,0,0,0.85);
-        border-bottom: 1.5px solid #98c379;
+        background: var(--bio-bg);
+        border-bottom: 1.5px solid var(--border-accent);
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .profile-image-container {
@@ -467,7 +508,7 @@ pre {
 }
 
 .qr-title {
-    color: #61afef;
+    color: var(--text-info);
 }
 
 .qr-img {
@@ -475,7 +516,7 @@ pre {
     height: 256px;
     image-rendering: pixelated;
     background: #ffffff;
-    border: 1px solid #3d3d3d;
+    border: 1px solid var(--scrollbar-thumb);
 }
 
 .qr-actions {
@@ -486,12 +527,16 @@ pre {
 .qr-download-btn {
     display: inline-block;
     padding: 6px 10px;
-    border: 1px solid #98c379;
-    color: #98c379;
+    border: 1px solid var(--border-accent);
+    color: var(--text-primary);
     text-decoration: none;
     border-radius: 4px;
 }
 
 .qr-download-btn:hover {
     background: rgba(152, 195, 121, 0.12);
+}
+
+body.light-theme .qr-download-btn:hover {
+    background: rgba(45, 80, 22, 0.1);
 }

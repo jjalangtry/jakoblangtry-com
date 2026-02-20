@@ -23,8 +23,31 @@ const terminalData = {
 
 const commandList = [
     'banner', 'clear', 'converter', 'curl', 'qr', 'date', 'echo', 'email',
-    'github', 'help', 'ls', 'projects', 'repo', 'resume', 'weather', 'whoami'
+    'github', 'help', 'ls', 'projects', 'repo', 'resume', 'theme', 'weather', 'whoami'
 ];
+
+function applyTheme(theme) {
+    if (theme === 'light') {
+        document.body.classList.add('light-theme');
+    } else {
+        document.body.classList.remove('light-theme');
+    }
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+        metaThemeColor.setAttribute('content', theme === 'light' ? '#f5f5f0' : '#000000');
+    }
+    localStorage.setItem('terminal-theme', theme);
+}
+
+function getCurrentTheme() {
+    return document.body.classList.contains('light-theme') ? 'light' : 'dark';
+}
+
+function toggleTheme() {
+    const next = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    return next;
+}
 
 async function loadJsonConfig(path, fallback) {
     try {
@@ -93,6 +116,12 @@ function focusTerminalInput() {
 
 // Initialize the terminal interface once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', async function() {
+    // Restore saved theme preference
+    const savedTheme = localStorage.getItem('terminal-theme');
+    if (savedTheme) {
+        applyTheme(savedTheme);
+    }
+
     // Check if we're on a mobile device
     isMobileDevice = isMobile();
     
@@ -441,6 +470,9 @@ AVAILABLE COMMANDS:
   resume     View Jakob's resume
              Usage: resume
 
+  theme      Toggle between dark and light mode
+             Usage: theme [dark|light]
+
   weather    Display weather forecast for a location
              Usage: weather [city or location]
              Examples: weather New York
@@ -506,6 +538,12 @@ Type 'resume' to view my resume or 'projects' to see my work.`, 'info-text');
         case 'weather':
             appendOutput('Usage: weather [city or location]. Examples:\n  weather New York\n  weather Syracuse NY\n  weather London, UK\n  weather Paris France', 'info-text');
             break;
+        case 'theme':
+            {
+                const next = toggleTheme();
+                appendOutput(`Switched to ${next} mode.`, 'success-text');
+            }
+            break;
         case 'resume':
             openResumeFromConfig();
             break;
@@ -532,6 +570,16 @@ Type 'resume' to view my resume or 'projects' to see my work.`, 'info-text');
             if (normalizedCommand === 'converter') {
                 appendOutput('Opening Link Converter...');
                 window.open('https://convert.jakoblangtry.com', '_blank');
+                break;
+            }
+            else if (normalizedCommand.startsWith('theme ')) {
+                const arg = normalizedCommand.substring(6).trim();
+                if (arg === 'dark' || arg === 'light') {
+                    applyTheme(arg);
+                    appendOutput(`Switched to ${arg} mode.`, 'success-text');
+                } else {
+                    appendOutput('Usage: theme [dark|light]', 'info-text');
+                }
                 break;
             }
             else if (normalizedCommand.startsWith('curl ')) {
@@ -712,6 +760,12 @@ function displayCommandHelp(command) {
             usage: 'resume',
             examples: ['resume'],
             notes: 'Resume path is loaded from data/site-config.json and defaults to /resume.pdf.'
+        },
+        theme: {
+            desc: 'Toggle between dark and light terminal themes.',
+            usage: 'theme [dark|light]',
+            examples: ['theme', 'theme dark', 'theme light'],
+            notes: 'Without arguments, toggles to the opposite theme. Preference is saved in your browser.'
         },
         weather: {
             desc: 'Display weather forecast for a specified location.',
