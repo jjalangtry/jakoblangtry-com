@@ -52,59 +52,27 @@ const github = raw.github ?? [];
       <div class="project-cards">
         {
           featured.map((p) => (
-            <article class="project-card">
+            <a
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="project-card"
+              aria-label={`${p.name}: ${p.description}`}
+            >
               <div class="card-header">
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="card-title text-command"
-                >
-                  {p.name}
-                </a>
+                <span class="card-title text-command">{p.name}</span>
                 {p.language && <span class="card-lang">{p.language}</span>}
               </div>
               <p class="card-desc text-log">{p.description}</p>
-              <div class="card-links">
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="card-link text-info"
-                >
+              <div class="card-footer">
+                <span class="card-url text-info">
                   {p.url.replace("https://", "")}
-                </a>
+                </span>
                 {p.repo && (
-                  <a
-                    href={p.repo}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="card-link card-link-repo text-log"
-                  >
-                    source
-                  </a>
+                  <span class="card-repo text-log">source &rarr;</span>
                 )}
               </div>
-              {p.iframe && (
-                <div class="card-preview">
-                  <iframe
-                    src={p.url}
-                    title={`Preview of ${p.name}`}
-                    loading="lazy"
-                    sandbox="allow-scripts allow-same-origin"
-                  />
-                  <a
-                    href={p.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="preview-overlay"
-                    aria-label={`Open ${p.name} in new tab`}
-                  >
-                    <span class="preview-cta">Open in new tab &rarr;</span>
-                  </a>
-                </div>
-              )}
-            </article>
+            </a>
           ))
         }
       </div>
@@ -119,58 +87,26 @@ const github = raw.github ?? [];
       <div class="project-cards">
         {
           contributions.map((p) => (
-            <article class="project-card">
+            <a
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="project-card"
+              aria-label={`${p.name}: ${p.description}`}
+            >
               <div class="card-header">
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="card-title text-command"
-                >
-                  {p.name}
-                </a>
+                <span class="card-title text-command">{p.name}</span>
               </div>
               <p class="card-desc text-log">{p.description}</p>
-              <div class="card-links">
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="card-link text-info"
-                >
+              <div class="card-footer">
+                <span class="card-url text-info">
                   {p.url.replace("https://", "")}
-                </a>
+                </span>
                 {p.repo && p.repo !== p.url && (
-                  <a
-                    href={p.repo}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="card-link card-link-repo text-log"
-                  >
-                    source
-                  </a>
+                  <span class="card-repo text-log">source &rarr;</span>
                 )}
               </div>
-              {p.iframe && (
-                <div class="card-preview">
-                  <iframe
-                    src={p.url}
-                    title={`Preview of ${p.name}`}
-                    loading="lazy"
-                    sandbox="allow-scripts allow-same-origin"
-                  />
-                  <a
-                    href={p.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="preview-overlay"
-                    aria-label={`Open ${p.name} in new tab`}
-                  >
-                    <span class="preview-cta">Open in new tab &rarr;</span>
-                  </a>
-                </div>
-              )}
-            </article>
+            </a>
           ))
         }
       </div>
@@ -278,20 +214,31 @@ const github = raw.github ?? [];
   /* ── Project cards (featured + contributions) ──────── */
   .project-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
     margin-bottom: 16px;
   }
   .project-card {
-    border: 1px solid var(--border-accent);
-    padding: 14px 16px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    transition: border-color 0.15s;
+    gap: 6px;
+    border: 1px solid var(--border-accent);
+    padding: 14px 16px;
+    text-decoration: none;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
   }
   .project-card:hover {
     border-color: var(--text-info);
+    background: rgba(152, 195, 121, 0.05);
+  }
+  .project-card:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  body.light-theme .project-card:hover {
+    background: rgba(45, 80, 22, 0.04);
   }
   .card-header {
     display: flex;
@@ -301,10 +248,6 @@ const github = raw.github ?? [];
   .card-title {
     font-weight: 700;
     font-size: 15px;
-    text-decoration: none;
-  }
-  .card-title:hover {
-    text-decoration: underline;
   }
   .card-lang {
     font-size: 11px;
@@ -318,63 +261,18 @@ const github = raw.github ?? [];
     line-height: 1.5;
     margin: 0;
   }
-  .card-links {
+  .card-footer {
     display: flex;
     gap: 12px;
     font-size: 12px;
+    margin-top: auto;
+    padding-top: 4px;
   }
-  .card-link {
+  .card-url {
     text-decoration: underline;
   }
-  .card-link:hover {
-    color: var(--text-primary);
-  }
-  .card-link-repo::before {
-    content: "⟨";
-    margin-right: 2px;
-  }
-  .card-link-repo::after {
-    content: "⟩";
-    margin-left: 2px;
-  }
-
-  /* ── Iframe preview ────────────────────────────────── */
-  .card-preview {
-    position: relative;
-    margin-top: 4px;
-    border: 1px solid var(--border-accent);
-    overflow: hidden;
-    height: 200px;
-  }
-  .card-preview iframe {
-    width: 200%;
-    height: 400px;
-    transform: scale(0.5);
-    transform-origin: top left;
-    border: none;
-    pointer-events: none;
-  }
-  .preview-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-end;
-    padding: 8px 12px;
-    background: linear-gradient(transparent 60%, rgba(0, 0, 0, 0.6) 100%);
-    text-decoration: none;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-  .card-preview:hover .preview-overlay {
-    opacity: 1;
-  }
-  .preview-cta {
-    font-size: 12px;
-    color: var(--text-primary);
-    background: rgba(0, 0, 0, 0.7);
-    padding: 4px 10px;
-    border: 1px solid var(--border-accent);
+  .card-repo {
+    opacity: 0.6;
   }
 
   /* ── GitHub repo list (ls style) ───────────────────── */
@@ -462,10 +360,7 @@ const github = raw.github ?? [];
     }
     .project-cards {
       grid-template-columns: 1fr;
-      gap: 12px;
-    }
-    .card-preview {
-      height: 160px;
+      gap: 10px;
     }
     .repo-row {
       grid-template-columns: 1fr;

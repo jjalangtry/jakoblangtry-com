@@ -46,3 +46,33 @@
     <a href="mailto:jjalangtry@gmail.com" class="quick-action-link">Contact</a>
   </div>
 </aside>
+
+<script>
+  const bioText =
+    "Hi, I'm Jakob Langtry. I'm a software engineering student at Rochester Institute of Technology. I love to code, I love to learn, and I'd love if you'd check out my projects!";
+
+  const el = document.getElementById("typed-bio");
+  if (el) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      el.textContent = bioText;
+      const cur = document.querySelector(".bio-text .cursor");
+      if (cur) cur.style.display = "none";
+    } else {
+      let i = 0;
+      function type() {
+        if (i < bioText.length) {
+          el.textContent += bioText.charAt(i);
+          i++;
+          setTimeout(type, Math.random() * 50 + 30);
+        } else {
+          const cur = document.querySelector(".bio-text .cursor");
+          if (cur) {
+            cur.style.animation = "none";
+            cur.style.opacity = "0";
+          }
+        }
+      }
+      setTimeout(type, 1000);
+    }
+  }
+</script>

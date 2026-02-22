@@ -39,5 +39,28 @@ const { title, description } = Astro.props;
   </head>
   <body>
     <slot />
+    <script>
+      // Theme restoration — runs before paint on every page
+      const saved = localStorage.getItem("terminal-theme");
+      if (saved === "light") {
+        document.body.classList.add("light-theme");
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute("content", "#f5f5f0");
+      }
+
+      // Device class hints
+      const ua = navigator.userAgent || navigator.vendor;
+      if (
+        /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(
+          ua,
+        )
+      ) {
+        document.body.classList.add("mobile-device");
+      }
+      if (navigator.platform.toLowerCase().includes("win")) {
+        document.body.classList.add("windows-device");
+      }
+    </script>
   </body>
 </html>

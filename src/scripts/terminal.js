@@ -24,10 +24,33 @@ const DEFAULT_PROJECTS = [
   { name: "Converter", url: "https://convert.jjalangtry.com" },
 ];
 
-const terminalData = {
-  siteConfig: { ...DEFAULT_SITE_CONFIG },
-  projects: [...DEFAULT_PROJECTS],
-};
+// Data is embedded at build time by TerminalPanel.astro via a JSON script tag.
+// Falls back to defaults if the tag is missing (shouldn't happen in normal use).
+function loadTerminalDataFromDOM() {
+  const el = document.getElementById("terminal-data");
+  if (!el)
+    return {
+      siteConfig: { ...DEFAULT_SITE_CONFIG },
+      projects: [...DEFAULT_PROJECTS],
+    };
+  try {
+    const raw = JSON.parse(el.textContent || "{}");
+    return {
+      siteConfig: { ...DEFAULT_SITE_CONFIG, ...(raw.siteConfig || {}) },
+      projects:
+        Array.isArray(raw.projects) && raw.projects.length > 0
+          ? raw.projects
+          : [...DEFAULT_PROJECTS],
+    };
+  } catch {
+    return {
+      siteConfig: { ...DEFAULT_SITE_CONFIG },
+      projects: [...DEFAULT_PROJECTS],
+    };
+  }
+}
+
+const terminalData = loadTerminalDataFromDOM();
 
 // Load terminal logic functions. In a real module setup we would import, but
 // for a vanilla script we need to ensure the logic exists here if not bundled.
@@ -80,41 +103,7 @@ function toggleTheme() {
   return next;
 }
 
-async function loadJsonConfig(path, fallback) {
-  try {
-    const response = await fetch(path, { cache: "no-store" });
-    if (!response.ok) {
-      return fallback;
-    }
-    return await response.json();
-  } catch (error) {
-    return fallback;
-  }
-}
-
-async function loadTerminalData() {
-  const [siteConfig, projects] = await Promise.all([
-    loadJsonConfig("/data/site-config.json", DEFAULT_SITE_CONFIG),
-    loadJsonConfig("/data/projects.json", DEFAULT_PROJECTS),
-  ]);
-
-  terminalData.siteConfig = { ...DEFAULT_SITE_CONFIG, ...(siteConfig || {}) };
-
-  let flatProjects = [];
-  if (projects && typeof projects === "object" && !Array.isArray(projects)) {
-    flatProjects = [
-      ...(projects.featured || []),
-      ...(projects.contributions || []),
-      ...(projects.github || []),
-    ];
-  } else if (Array.isArray(projects)) {
-    flatProjects = projects;
-  }
-  terminalData.projects =
-    flatProjects.length > 0
-      ? flatProjects.filter((p) => p && p.name && p.url)
-      : [...DEFAULT_PROJECTS];
-}
+// Data is loaded from the DOM at module init — no runtime fetch needed.
 
 /**
  * Detects the operating system of the client.
@@ -168,110 +157,34 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-// Initialize the terminal interface once the DOM is fully loaded
-document.addEventListener("DOMContentLoaded", async function () {
-  // Restore saved theme preference
-  const savedTheme = localStorage.getItem("terminal-theme");
-  if (savedTheme) {
-    applyTheme(savedTheme);
-  }
-
-  // Check if we're on a mobile device
+// Initialize the terminal interface once the DOM is fully loaded.
+// Theme, bio typing, and mobile detection are handled by BaseLayout and ProfilePanel.
+document.addEventListener("DOMContentLoaded", function () {
   isMobileDevice = isMobile();
 
-  // Add a class to the body for mobile-specific styling
-  if (isMobileDevice) {
-    document.body.classList.add("mobile-device");
-  }
-
-  // Check if on Windows to apply monospace font
-  const os = detectOS();
-  if (os === "windows") {
-    document.body.classList.add("windows-device");
-  }
-
-  // Enable text selection in terminal
   enableTextSelection();
 
-  // Bio typing animation
-  setupBioTypingAnimation();
-
-  // Load editable command/config content before terminal initialization
-  await loadTerminalData();
-
-  // Initialize the CLI
   initCLI();
 
-  // Only auto-focus on pointer/keyboard-first devices.
   if (shouldAutoFocusTerminal()) {
     setTimeout(focusTerminalInput, 100);
   }
 
-  // Focus terminal input only for direct clicks in terminal background area.
   document.addEventListener("click", function (e) {
     const terminal = document.querySelector(".terminal");
     if (!terminal || !currentInput) return;
 
     if (terminal.contains(e.target)) {
-      // But not on a link
       if (e.target.closest("a, button, input, textarea, select")) return;
-
-      // And not while selecting text
       if (window.getSelection().toString().length > 0) return;
-
-      // Then focus the input (using the global focus function)
       if (currentInput) {
-        // Use a small timeout to ensure focus happens after potential selection clearing
         setTimeout(focusTerminalInput, 10);
       }
     }
   });
 });
 
-/**
- * Sets up and starts the bio typing animation effect.
- */
-function setupBioTypingAnimation() {
-  // Bio content - customize this with your personal bio
-  const bioText =
-    "Hi, I'm Jakob Langtry. I'm a software engineering student at Rochester Institute of Technology. I love to code, I love to learn, and I'd love if you'd check out my projects!";
-
-  const typedBioElement = document.getElementById("typed-bio");
-  if (!typedBioElement) return; // Guard clause: Ensure element exists
-
-  if (prefersReducedMotion()) {
-    typedBioElement.textContent = bioText;
-    const staticCursor = document.querySelector(".cursor");
-    if (staticCursor) {
-      staticCursor.style.display = "none";
-    }
-    return;
-  }
-
-  let charIndex = 0;
-
-  /**
-   * Types the next character in the bio text.
-   * Handles the recursive typing effect and hides the cursor when done.
-   */
-  function typeText() {
-    if (charIndex < bioText.length) {
-      typedBioElement.textContent += bioText.charAt(charIndex);
-      charIndex++;
-      setTimeout(typeText, Math.random() * 50 + 30); // Random typing speed for realistic effect
-    } else {
-      // Stop cursor blinking after text is complete
-      const cursor = document.querySelector(".cursor");
-      if (cursor) {
-        cursor.style.animation = "none";
-        cursor.style.opacity = "0"; // Hide the cursor
-      }
-    }
-  }
-
-  // Start typing animation after a short delay
-  setTimeout(typeText, 1000);
-}
+// Bio typing animation is handled by ProfilePanel.astro.
 
 /**
  * Enables text selection within the terminal output area using CSS properties.
@@ -358,7 +271,7 @@ function displayBanner() {
  */
 function displayWelcomeMessage() {
   appendOutput(
-    "Welcome. This is Jakob Langtry's interactive terminal portfolio.\nClick a command below to get started, or just start typing.",
+    "Hey! I'm Jakob. I'm going to try to keep all my stuff here. My own little corner. \nClick a command below to get started, or just start typing.",
     "info-text",
   );
 }

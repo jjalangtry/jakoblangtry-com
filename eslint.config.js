@@ -52,7 +52,7 @@ module.exports = [
     },
   },
   {
-    files: ["public/script.js", "src/scripts/terminal.js"],
+    files: ["src/scripts/terminal.js"],
     rules: {
       "no-unused-vars": "off",
       "no-case-declarations": "off",
