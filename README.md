@@ -34,3 +34,43 @@ Terminal-style personal website with command-driven navigation.
 pnpm build
 pnpm preview
 ```
+
+## Quality Checks
+
+Run the full local quality suite:
+
+```bash
+pnpm check
+```
+
+Individual commands:
+
+```bash
+pnpm lint
+pnpm format:check
+pnpm test
+pnpm test:coverage
+```
+
+## Git Hooks
+
+This repository uses Husky + lint-staged:
+
+- `pre-commit`: runs `lint-staged` on changed files
+- `pre-push`: runs `pnpm check`
+
+If hooks are not active locally, run:
+
+```bash
+pnpm prepare
+```
+
+## CI on Push
+
+GitHub Actions runs on every push and executes jobs in parallel:
+
+- Lint + format check
+- Unit tests with coverage thresholds
+- Production build
+
+Railway auto-deploy remains independent and unchanged.

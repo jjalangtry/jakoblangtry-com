@@ -1,22 +1,22 @@
 [
   {
     "name": "Website",
-    "url": "https://jakoblangtry.com",
+    "url": "https://jjalangtry.com",
     "description": "This portfolio site and terminal interface"
   },
   {
     "name": "Converter",
-    "url": "https://convert.jakoblangtry.com",
+    "url": "https://convert.jjalangtry.com",
     "description": "Convert links between Apple Music and Spotify"
   },
   {
     "name": "Playlist",
-    "url": "https://playlist.jakoblangtry.com",
+    "url": "https://playlist.jjalangtry.com",
     "description": "Public playlist conversion tool"
   },
   {
     "name": "SSE Jello",
-    "url": "https://sse.jakoblangtry.com",
+    "url": "https://sse.jjalangtry.com",
     "description": "Jello Kanban web app"
   },
   {

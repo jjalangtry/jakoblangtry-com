@@ -8,10 +8,40 @@
     "build": "astro build",
     "prebuild": "node scripts/generate-env.js",
     "preview": "astro preview",
-    "start": "serve -s dist -l ${PORT:-4321}"
+    "start": "serve -s dist -l ${PORT:-4321}",
+    "prepare": "husky",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "check": "pnpm lint && pnpm format:check && pnpm test:coverage && pnpm build"
   },
   "dependencies": {
     "astro": "latest",
     "serve": "^14.2.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^10.0.1",
+    "eslint-plugin-astro": "^1.6.0",
+    "globals": "^17.3.0",
+    "husky": "^9.1.7",
+    "jsdom": "^28.1.0",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.8.1",
+    "prettier-plugin-astro": "^0.14.1",
+    "vitest": "^4.0.18"
+  },
+  "lint-staged": {
+    "*.{js,ts}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{astro,css,json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

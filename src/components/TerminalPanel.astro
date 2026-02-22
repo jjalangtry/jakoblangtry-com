@@ -1,5 +1,18 @@
-<div class="terminal">
-  <div id="cli-output" class="terminal-output">
+<section
+  class="terminal"
+  id="main-terminal"
+  aria-label="Terminal interface"
+  tabindex="-1"
+>
+  <p id="terminal-help-hint" class="sr-only">
+    Type commands such as help, projects, resume, or theme and press Enter.
+  </p>
+  <div
+    id="cli-output"
+    class="terminal-output"
+    aria-live="polite"
+    aria-atomic="false"
+  >
     <!-- ASCII art banner is inserted via script.js -->
   </div>
-</div>
+</section>
