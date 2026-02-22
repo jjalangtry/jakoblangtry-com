@@ -467,7 +467,9 @@ body.light-theme .quick-action-link:hover {
   padding: 5px 10px;
   cursor: pointer;
   gap: 2px;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .chip-cmd {
