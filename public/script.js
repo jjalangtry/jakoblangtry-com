@@ -17,7 +17,7 @@ let cursor; // Global cursor element
 let isMobileDevice = false; // Flag to track if we're on a mobile device
 
 const DEFAULT_SITE_CONFIG = {
-  resumeUrl: "https://resume.jakoblangtry.com",
+  resumeUrl: "https://resume.jjalangtry.com",
 };
 
 const DEFAULT_PROJECTS = [
@@ -903,7 +903,7 @@ function displayCommandHelp(command) {
       desc: "View Jakob's resume in a new browser tab.",
       usage: "resume",
       examples: ["resume"],
-      notes: "Opens resume.jakoblangtry.com in a new tab.",
+      notes: "Opens resume.jjalangtry.com in a new tab.",
     },
     theme: {
       desc: "Toggle between dark and light terminal themes.",
