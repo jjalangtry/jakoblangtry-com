@@ -17,7 +17,7 @@ let cursor; // Global cursor element
 let isMobileDevice = false; // Flag to track if we're on a mobile device
 
 const DEFAULT_SITE_CONFIG = {
-  resumePath: "/resume.pdf",
+  resumeUrl: "https://resume.jakoblangtry.com",
 };
 
 const DEFAULT_PROJECTS = [
@@ -498,31 +498,11 @@ function findProjectByCommand(command) {
   });
 }
 
-async function openResumeFromConfig() {
-  const resumePath =
-    terminalData.siteConfig?.resumePath || DEFAULT_SITE_CONFIG.resumePath;
-
-  try {
-    const response = await fetch(resumePath, {
-      method: "HEAD",
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      appendOutput(
-        `Resume file not found at "${resumePath}". Update data/site-config.json or add that file.`,
-        "error-text",
-      );
-      return;
-    }
-
-    appendOutput("Opening resume...");
-    window.open(resumePath, "_blank");
-  } catch (error) {
-    appendOutput(
-      `Unable to open resume from "${resumePath}": ${error.message}`,
-      "error-text",
-    );
-  }
+function openResume() {
+  const resumeUrl =
+    terminalData.siteConfig?.resumeUrl || DEFAULT_SITE_CONFIG.resumeUrl;
+  appendOutput("Opening resume...");
+  window.open(resumeUrl, "_blank");
 }
 
 /**
@@ -667,7 +647,7 @@ Currently seeking opportunities in software engineering.`,
       }
       break;
     case "resume":
-      openResumeFromConfig();
+      openResume();
       break;
     case "projects":
       appendOutput(buildProjectsListOutput(), "info-text");
@@ -923,8 +903,7 @@ function displayCommandHelp(command) {
       desc: "View Jakob's resume in a new browser tab.",
       usage: "resume",
       examples: ["resume"],
-      notes:
-        "Resume path is loaded from data/site-config.json and defaults to /resume.pdf.",
+      notes: "Opens resume.jakoblangtry.com in a new tab.",
     },
     theme: {
       desc: "Toggle between dark and light terminal themes.",

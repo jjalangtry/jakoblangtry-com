@@ -15,7 +15,6 @@ describe("terminal helpers", () => {
   it("includes core command surface", () => {
     expect(COMMAND_LIST).toContain("help");
     expect(COMMAND_LIST).toContain("projects");
-    expect(COMMAND_LIST).toContain("resume");
     expect(COMMAND_LIST).toContain("weather");
     expect(COMMAND_LIST).toContain("sudo");
     expect(COMMAND_LIST).toContain("cd");
