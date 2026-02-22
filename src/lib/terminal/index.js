@@ -16,6 +16,8 @@ export const COMMAND_LIST = [
   "theme",
   "weather",
   "whoami",
+  "sudo",
+  "cd",
 ];
 
 export function buildProjectsListOutput(projects) {
@@ -73,4 +75,37 @@ export function normalizeThemeCommand(input) {
     }
   }
   return null;
+}
+
+export function autocompleteCommand(input, commandList) {
+  if (!input) return [];
+  const normalized = input.toLowerCase();
+  return commandList.filter((cmd) => cmd.startsWith(normalized));
+}
+
+export function handleHistoryNavigation(
+  key,
+  history,
+  currentIndex,
+  currentBuffer,
+) {
+  if (key === "ArrowUp") {
+    if (currentIndex > 0) {
+      return { index: currentIndex - 1, value: history[currentIndex - 1] };
+    }
+    return null;
+  }
+  if (key === "ArrowDown") {
+    if (currentIndex < history.length - 1) {
+      return { index: currentIndex + 1, value: history[currentIndex + 1] };
+    } else if (currentIndex === history.length - 1) {
+      return { index: history.length, value: currentBuffer };
+    }
+    return null;
+  }
+  return null;
+}
+
+export function shouldUseCompactWeatherLayout(isMobile, windowWidth) {
+  return isMobile || windowWidth <= 900;
 }

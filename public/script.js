@@ -3,7 +3,15 @@ let currentInput;
 let cliOutput;
 let inputLine;
 let commandHistory = [];
-let historyIndex = -1;
+try {
+  const savedHistory = localStorage.getItem("terminal-history");
+  if (savedHistory) {
+    commandHistory = JSON.parse(savedHistory);
+  }
+} catch (e) {
+  // ignore
+}
+let historyIndex = commandHistory.length;
 let currentInputBuffer = "";
 let cursor; // Global cursor element
 let isMobileDevice = false; // Flag to track if we're on a mobile device
@@ -21,6 +29,9 @@ const terminalData = {
   projects: [...DEFAULT_PROJECTS],
 };
 
+// Load terminal logic functions. In a real module setup we would import, but
+// for a vanilla script we need to ensure the logic exists here if not bundled.
+// To keep things simple, we keep the COMMAND_LIST local but synced.
 const commandList = [
   "banner",
   "clear",
@@ -39,6 +50,8 @@ const commandList = [
   "theme",
   "weather",
   "whoami",
+  "sudo",
+  "cd",
 ];
 
 function applyTheme(theme) {
@@ -334,7 +347,7 @@ function displayBanner() {
  */
 function displayWelcomeMessage() {
   appendOutput(
-    "Welcome to Jakob Langtry's terminal interface.\nStart with one of the suggested commands below, or type 'help' for full docs.",
+    "Welcome to Jakob Langtry's terminal interface.\nType 'resume' to view my resume or 'projects' to see my work.\nStart with one of the suggested commands below, or type 'help' for full docs.",
     "info-text",
   );
 }
@@ -590,8 +603,7 @@ For more information about a specific command, type: [command] --help`;
       appendOutput(
         `Jakob Langtry - Software Engineering Student at Rochester Institute of Technology.
 Passionate about web development, backend systems, and creating useful applications.
-Currently seeking opportunities in software engineering.
-Type 'resume' to view my resume or 'projects' to see my work.`,
+Currently seeking opportunities in software engineering.`,
         "info-text",
       );
       break;
@@ -667,6 +679,26 @@ Type 'resume' to view my resume or 'projects' to see my work.`,
           appendOutput(`Switched to ${arg} mode.`, "success-text");
         } else {
           appendOutput("Usage: theme [dark|light]", "info-text");
+        }
+        break;
+      } else if (
+        normalizedCommand.startsWith("sudo ") ||
+        normalizedCommand === "sudo"
+      ) {
+        appendOutput(
+          "guest is not in the sudoers file. This incident will be reported.",
+          "error-text",
+        );
+        break;
+      } else if (
+        normalizedCommand.startsWith("cd ") ||
+        normalizedCommand === "cd"
+      ) {
+        const dir = command.substring(3).trim();
+        if (!dir || dir === "~") {
+          appendOutput("You are already in your home directory.", "info-text");
+        } else {
+          appendOutput(`cd: no such file or directory: ${dir}`, "error-text");
         }
         break;
       } else if (normalizedCommand.startsWith("curl ")) {
@@ -2353,11 +2385,61 @@ function initCLI() {
 
   // Add event listener for navigating command history
   input.addEventListener("keydown", (e) => {
+    // Ctrl+L (Clear screen)
+    if (e.ctrlKey && e.key.toLowerCase() === "l") {
+      e.preventDefault();
+      executeCommand("clear");
+      return;
+    }
+
+    // Ctrl+C (Cancel current input)
+    if (e.ctrlKey && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      const currentText = e.target.value;
+      const commandLine = document.createElement("div");
+      commandLine.textContent = `guest@jjalangtry.com:~$ ${currentText}^C`;
+      cliOutput.insertBefore(commandLine, inputLine);
+
+      e.target.value = "";
+      currentInputBuffer = "";
+      cliOutput.scrollTop = cliOutput.scrollHeight;
+      return;
+    }
+
+    // Tab completion
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const currentText = e.target.value.toLowerCase();
+      if (!currentText) return;
+
+      const matches = commandList.filter((cmd) => cmd.startsWith(currentText));
+
+      if (matches.length === 1) {
+        e.target.value = matches[0] + " ";
+      } else if (matches.length > 1) {
+        const commandLine = document.createElement("div");
+        commandLine.textContent = `guest@jjalangtry.com:~$ ${e.target.value}`;
+        cliOutput.insertBefore(commandLine, inputLine);
+        appendOutput(matches.join("  "), "info-text");
+        cliOutput.scrollTop = cliOutput.scrollHeight;
+      }
+      return;
+    }
+
     if (e.key === "Enter") {
       e.preventDefault();
       const command = e.target.value.trim();
       if (command) {
         commandHistory.push(command);
+        if (commandHistory.length > 50) commandHistory.shift();
+        try {
+          localStorage.setItem(
+            "terminal-history",
+            JSON.stringify(commandHistory),
+          );
+        } catch (err) {
+          // ignore
+        }
         historyIndex = commandHistory.length;
         currentInputBuffer = "";
         executeCommand(command);
@@ -2392,6 +2474,16 @@ function initCLI() {
     setTimeout(() => {
       e.target.selectionStart = e.target.selectionEnd = e.target.value.length;
     }, 0);
+  });
+
+  // Global typing listener
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
+    if (e.key.length !== 1 && e.key !== "Backspace") return;
+    if (currentInput && document.activeElement !== currentInput) {
+      currentInput.focus();
+    }
   });
 }
 

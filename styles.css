@@ -1,9 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap");
 
 :root {
-  --body-bg: #0d0d0d;
-  --terminal-bg: rgba(0, 0, 0, 0.9);
-  --bio-bg: rgba(0, 0, 0, 0.8);
+  --body-bg: #000000;
+  --terminal-bg: #000000;
+  --bio-bg: #000000;
   --text-primary: #98c379;
   --text-prompt: #d19a66;
   --text-info: #61afef;
