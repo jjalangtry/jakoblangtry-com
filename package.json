@@ -8,7 +8,7 @@
     "build": "astro build",
     "prebuild": "node scripts/generate-env.js",
     "preview": "astro preview",
-    "start": "serve -s dist -l ${PORT:-4321}",
+    "start": "serve dist -l ${PORT:-4321}",
     "prepare": "husky",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
