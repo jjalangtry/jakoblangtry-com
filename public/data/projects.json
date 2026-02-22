@@ -1,32 +1,105 @@
-[
-  {
-    "name": "Website",
-    "url": "https://jjalangtry.com",
-    "description": "This portfolio site and terminal interface"
-  },
-  {
-    "name": "Converter",
-    "url": "https://convert.jjalangtry.com",
-    "description": "Convert links between Apple Music and Spotify"
-  },
-  {
-    "name": "Playlist",
-    "url": "https://playlist.jjalangtry.com",
-    "description": "Public playlist conversion tool"
-  },
-  {
-    "name": "SSE Jello",
-    "url": "https://sse.jjalangtry.com",
-    "description": "Jello Kanban web app"
-  },
-  {
-    "name": "BeyondRGB",
-    "url": "https://github.com/BeyondRGB/beyondrgb.github.io",
-    "description": "Project I contributed to heavily"
-  },
-  {
-    "name": "SSE RIT",
-    "url": "https://sse.rit.edu",
-    "description": "Work I contributed to through RIT SSE"
-  }
-]
+{
+  "featured": [
+    {
+      "name": "Link Converter",
+      "url": "https://convert.jjalangtry.com",
+      "repo": "https://github.com/jjalangtry/convert-jakoblangtry-com",
+      "description": "Convert music links between Spotify and Apple Music",
+      "language": "TypeScript",
+      "iframe": true
+    },
+    {
+      "name": "Playlist Converter",
+      "url": "https://playlist.jjalangtry.com",
+      "repo": "https://github.com/jjalangtry/playlist",
+      "description": "Convert and share playlists between Spotify and Apple Music — no sign-in required",
+      "language": "TypeScript",
+      "iframe": true
+    },
+    {
+      "name": "SSE Jello",
+      "url": "https://sse.jjalangtry.com",
+      "repo": "https://github.com/jjalangtry/sse-jakoblangtry-com",
+      "description": "Kanban board web app built for RIT Society of Software Engineers",
+      "language": "TypeScript",
+      "iframe": true
+    }
+  ],
+  "contributions": [
+    {
+      "name": "SSE RIT Website",
+      "url": "https://sse.rit.edu",
+      "repo": "https://github.com/rit-sse/WebsiteTheSSEquel",
+      "description": "The official RIT Society of Software Engineers website — active contributor",
+      "iframe": true
+    },
+    {
+      "name": "BeyondRGB",
+      "url": "https://github.com/BeyondRGB/beyondrgb.github.io",
+      "repo": "https://github.com/BeyondRGB/beyondrgb.github.io",
+      "description": "Open-source multispectral imaging research tool — major contributor"
+    }
+  ],
+  "github": [
+    {
+      "name": "read-faster",
+      "url": "https://github.com/jjalangtry/read-faster",
+      "description": "RSVP speed reading app for Mac and iOS",
+      "language": "Swift"
+    },
+    {
+      "name": "NES-Pong",
+      "url": "https://github.com/jjalangtry/NES-Pong",
+      "description": "Pong written in 6502 assembly for the NES",
+      "language": "Assembly"
+    },
+    {
+      "name": "nudge-app",
+      "url": "https://github.com/jjalangtry/nudge-app",
+      "description": "Native iOS app built with Swift",
+      "language": "Swift"
+    },
+    {
+      "name": "Dice-E-Store",
+      "url": "https://github.com/jjalangtry/Dice-E-Store",
+      "description": "Full-stack e-commerce store — Angular frontend, Java backend",
+      "language": "Java"
+    },
+    {
+      "name": "Unix-Permissions-Game",
+      "url": "https://github.com/jjalangtry/Unix-Permissions-Game",
+      "description": "ncurses quiz game for unix permission strings and octal",
+      "language": "C"
+    },
+    {
+      "name": "wordlehelper",
+      "url": "https://github.com/jjalangtry/wordlehelper",
+      "description": "Wordle solver — an exercise in systems programming",
+      "language": "C"
+    },
+    {
+      "name": "jakobs-ls-remake",
+      "url": "https://github.com/jjalangtry/jakobs-ls-remake",
+      "description": "Reimplementation of ls using low-level C",
+      "language": "C"
+    },
+    {
+      "name": "utmpMangler",
+      "url": "https://github.com/jjalangtry/utmpMangler",
+      "description": "Filter, organize, and search through utmp files",
+      "language": "C"
+    },
+    {
+      "name": "Grade-Figure-Outerer",
+      "url": "https://github.com/jjalangtry/Grade-Figure-Outerer",
+      "description": "Bash script to format grades into a sc spreadsheet",
+      "language": "Shell"
+    },
+    {
+      "name": "python-sim-prototype",
+      "url": "https://github.com/jjalangtry/python-sim-prototype",
+      "description": "Simulation prototype",
+      "language": "Python"
+    }
+  ]
+}

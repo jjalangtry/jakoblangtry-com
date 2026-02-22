@@ -99,9 +99,20 @@ async function loadTerminalData() {
   ]);
 
   terminalData.siteConfig = { ...DEFAULT_SITE_CONFIG, ...(siteConfig || {}) };
+
+  let flatProjects = [];
+  if (projects && typeof projects === "object" && !Array.isArray(projects)) {
+    flatProjects = [
+      ...(projects.featured || []),
+      ...(projects.contributions || []),
+      ...(projects.github || []),
+    ];
+  } else if (Array.isArray(projects)) {
+    flatProjects = projects;
+  }
   terminalData.projects =
-    Array.isArray(projects) && projects.length
-      ? projects.filter((project) => project && project.name && project.url)
+    flatProjects.length > 0
+      ? flatProjects.filter((p) => p && p.name && p.url)
       : [...DEFAULT_PROJECTS];
 }
 

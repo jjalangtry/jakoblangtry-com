@@ -2,12 +2,16 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import ProfilePanel from "../components/ProfilePanel.astro";
 import "../../styles.css";
-import projectsData from "../../public/data/projects.json";
+import raw from "../../public/data/projects.json";
+
+const featured = raw.featured ?? [];
+const contributions = raw.contributions ?? [];
+const github = raw.github ?? [];
 ---
 
 <BaseLayout
   title="Projects | Jakob Langtry"
-  description="A terminal listing of Jakob Langtry's projects."
+  description="Jakob Langtry's projects — deployed apps, open-source contributions, and GitHub repos."
 >
   <a class="skip-link" href="#projects-terminal">Skip to projects</a>
   <main class="page-container" id="main-content">
@@ -18,72 +22,191 @@ import projectsData from "../../public/data/projects.json";
       id="projects-terminal"
       aria-label="Projects terminal"
     >
-      <!-- ASCII banner (mobile-hidden) -->
+      <!-- ASCII banner (desktop) -->
       <div class="ascii-art projects-banner" aria-hidden="true">
         <pre>
      ██╗ █████╗ ██╗  ██╗ ██████╗ ██████╗     ██╗      █████╗ ███╗   ██╗ ██████╗████████╗██████╗ ██╗   ██╗
      ██║██╔══██╗██║ ██╔╝██╔═══██╗██╔══██╗    ██║     ██╔══██╗████╗  ██║██╔════╝╚══██╔══╝██╔══██╗╚██╗ ██╔╝
-     ██║███████║█████╔╝ ██║   ██║██████╔╝    ██║     ███████║██╔██╗ ██║██║  ███╗  ██║   ██████╔╝ ╚████╔╝ 
-██   ██║██╔══██║██╔═██╗ ██║   ██║██╔══██╗    ██║     ██╔══██║██║╚██╗██║██║   ██║  ██║   ██╔══██╗  ╚██╔╝  
-╚█████╔╝██║  ██║██║  ██╗╚██████╔╝██████╔╝    ███████╗██║  ██║██║ ╚████║╚██████╔╝  ██║   ██║  ██║   ██║   
- ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝
-                                                                                                   v1.0.0</pre>
+     ██║███████║█████╔╝ ██║   ██║██████╔╝    ██║     ███████║██╔██╗ ██║██║  ███╗  ██║   ██████╔╝ ╚████╔╝
+██   ██║██╔══██║██╔═██╗ ██║   ██║██╔══██╗    ██║     ██╔══██║██║╚██╗██║██║   ██║  ██║   ██╔══██╗  ╚██╔╝
+╚█████╔╝██║  ██║██║  ██╗╚██████╔╝██████╔╝    ███████╗██║  ██║██║ ╚████║╚██████╔╝  ██║   ██║  ██║   ██║
+ ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝</pre>
       </div>
 
-      <!-- Mobile banner -->
+      <!-- ASCII banner (mobile) -->
       <div class="ascii-art projects-banner-mobile" aria-hidden="true">
         <pre>
  ╔═══════════════════╗
  ║  JAKOB LANGTRY    ║
- ║  Terminal v1.0.0  ║
+ ║     projects/     ║
  ╚═══════════════════╝</pre>
       </div>
 
-      <!-- ls -la invocation -->
+      <!-- ═══ FEATURED / DEPLOYED ═══════════════════════════ -->
       <div class="term-line">
         <span class="prompt">guest@jjalangtry.com:~/projects$</span>
-        <span class="term-cmd"> ls -la</span>
+        <span class="term-cmd"> ls -la ./deployed/</span>
       </div>
+      <div class="section-label info-text">Live web apps</div>
 
-      <!-- header row -->
-      <div class="term-line ls-header info-text" aria-hidden="true">
-        total {projectsData.length}
-      </div>
-
-      <!-- project rows -->
-      <ul class="projects-list" aria-label="Project list">
+      <div class="project-cards">
         {
-          projectsData.map((project, i) => {
-            const displayUrl = project.url
-              .replace("https://", "")
-              .replace("http://", "");
-            return (
-              <li>
+          featured.map((p) => (
+            <article class="project-card">
+              <div class="card-header">
                 <a
-                  href={project.url}
+                  href={p.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="project-row"
-                  aria-label={`Open ${project.name}: ${project.description ?? ""}`}
+                  class="card-title text-command"
                 >
-                  <span class="proj-perms">-rw-r--r--</span>
-                  <span class="proj-index text-prompt">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <span class="proj-name text-command">{project.name}</span>
-                  <span class="proj-desc text-log">
-                    {project.description ?? ""}
-                  </span>
-                  <span class="proj-arrow text-info">→</span>
-                  <span class="proj-url text-info">{displayUrl}</span>
+                  {p.name}
                 </a>
-              </li>
-            );
-          })
+                {p.language && <span class="card-lang">{p.language}</span>}
+              </div>
+              <p class="card-desc text-log">{p.description}</p>
+              <div class="card-links">
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="card-link text-info"
+                >
+                  {p.url.replace("https://", "")}
+                </a>
+                {p.repo && (
+                  <a
+                    href={p.repo}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="card-link card-link-repo text-log"
+                  >
+                    source
+                  </a>
+                )}
+              </div>
+              {p.iframe && (
+                <div class="card-preview">
+                  <iframe
+                    src={p.url}
+                    title={`Preview of ${p.name}`}
+                    loading="lazy"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="preview-overlay"
+                    aria-label={`Open ${p.name} in new tab`}
+                  >
+                    <span class="preview-cta">Open in new tab &rarr;</span>
+                  </a>
+                </div>
+              )}
+            </article>
+          ))
+        }
+      </div>
+
+      <!-- ═══ CONTRIBUTIONS ══════════════════════════════════ -->
+      <div class="term-line section-divider">
+        <span class="prompt">guest@jjalangtry.com:~/projects$</span>
+        <span class="term-cmd"> ls -la ./contributions/</span>
+      </div>
+      <div class="section-label info-text">Open-source contributions</div>
+
+      <div class="project-cards">
+        {
+          contributions.map((p) => (
+            <article class="project-card">
+              <div class="card-header">
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="card-title text-command"
+                >
+                  {p.name}
+                </a>
+              </div>
+              <p class="card-desc text-log">{p.description}</p>
+              <div class="card-links">
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="card-link text-info"
+                >
+                  {p.url.replace("https://", "")}
+                </a>
+                {p.repo && p.repo !== p.url && (
+                  <a
+                    href={p.repo}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="card-link card-link-repo text-log"
+                  >
+                    source
+                  </a>
+                )}
+              </div>
+              {p.iframe && (
+                <div class="card-preview">
+                  <iframe
+                    src={p.url}
+                    title={`Preview of ${p.name}`}
+                    loading="lazy"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="preview-overlay"
+                    aria-label={`Open ${p.name} in new tab`}
+                  >
+                    <span class="preview-cta">Open in new tab &rarr;</span>
+                  </a>
+                </div>
+              )}
+            </article>
+          ))
+        }
+      </div>
+
+      <!-- ═══ GITHUB REPOS ═══════════════════════════════════ -->
+      <div class="term-line section-divider">
+        <span class="prompt">guest@jjalangtry.com:~/projects$</span>
+        <span class="term-cmd"> ls -la ./github/</span>
+      </div>
+      <div class="section-label info-text">GitHub repositories</div>
+
+      <ul class="repo-list" aria-label="GitHub repositories">
+        {
+          github.map((p, i) => (
+            <li>
+              <a
+                href={p.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="repo-row"
+                aria-label={`${p.name}: ${p.description ?? ""}`}
+              >
+                <span class="repo-perms text-log">-rw-r--r--</span>
+                <span class="repo-index text-prompt">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span class="repo-name text-command">{p.name}</span>
+                {p.language && <span class="repo-lang">{p.language}</span>}
+                <span class="repo-desc text-log">{p.description ?? ""}</span>
+              </a>
+            </li>
+          ))
         }
       </ul>
 
-      <!-- back prompt -->
+      <!-- ═══ BACK PROMPT ════════════════════════════════════ -->
       <div class="term-line term-back-line">
         <span class="prompt">guest@jjalangtry.com:~/projects$</span>
         <span class="term-cmd">
@@ -91,7 +214,6 @@ import projectsData from "../../public/data/projects.json";
         </span>
       </div>
 
-      <!-- blinking cursor -->
       <div class="term-line">
         <span class="prompt">guest@jjalangtry.com:~$</span>
         <span class="projects-cursor terminal-cursor-static" aria-hidden="true"
@@ -102,13 +224,12 @@ import projectsData from "../../public/data/projects.json";
 </BaseLayout>
 
 <style>
-  /* ── Projects terminal section ──────────────────────────── */
   .projects-terminal {
     padding: 24px 28px;
     overflow-y: auto;
   }
 
-  /* Banner visibility */
+  /* ── Banners ───────────────────────────────────────── */
   .projects-banner {
     display: block;
     margin-bottom: 12px;
@@ -118,11 +239,9 @@ import projectsData from "../../public/data/projects.json";
     line-height: 1.2;
     overflow-x: auto;
   }
-
   .projects-banner-mobile {
     display: none;
   }
-
   @media (max-width: 900px) {
     .projects-banner {
       display: none;
@@ -133,7 +252,7 @@ import projectsData from "../../public/data/projects.json";
     }
   }
 
-  /* Generic terminal line */
+  /* ── Terminal lines ────────────────────────────────── */
   .term-line {
     display: flex;
     align-items: baseline;
@@ -143,33 +262,130 @@ import projectsData from "../../public/data/projects.json";
     white-space: pre-wrap;
     word-break: break-all;
   }
-
   .term-cmd {
     color: var(--text-command);
   }
-
-  .ls-header {
-    margin: 4px 0 2px;
-    font-size: 13px;
+  .section-label {
+    font-size: 12px;
+    margin: 2px 0 10px 0;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+  .section-divider {
+    margin-top: 28px;
   }
 
-  /* ── Project list ─────────────────────────────────────────── */
-  .projects-list {
+  /* ── Project cards (featured + contributions) ──────── */
+  .project-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .project-card {
+    border: 1px solid var(--border-accent);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color 0.15s;
+  }
+  .project-card:hover {
+    border-color: var(--text-info);
+  }
+  .card-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .card-title:hover {
+    text-decoration: underline;
+  }
+  .card-lang {
+    font-size: 11px;
+    color: var(--text-log);
+    border: 1px solid var(--border-accent);
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+  .card-desc {
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+  }
+  .card-links {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+  }
+  .card-link {
+    text-decoration: underline;
+  }
+  .card-link:hover {
+    color: var(--text-primary);
+  }
+  .card-link-repo::before {
+    content: "⟨";
+    margin-right: 2px;
+  }
+  .card-link-repo::after {
+    content: "⟩";
+    margin-left: 2px;
+  }
+
+  /* ── Iframe preview ────────────────────────────────── */
+  .card-preview {
+    position: relative;
+    margin-top: 4px;
+    border: 1px solid var(--border-accent);
+    overflow: hidden;
+    height: 200px;
+  }
+  .card-preview iframe {
+    width: 200%;
+    height: 400px;
+    transform: scale(0.5);
+    transform-origin: top left;
+    border: none;
+    pointer-events: none;
+  }
+  .preview-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 8px 12px;
+    background: linear-gradient(transparent 60%, rgba(0, 0, 0, 0.6) 100%);
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .card-preview:hover .preview-overlay {
+    opacity: 1;
+  }
+  .preview-cta {
+    font-size: 12px;
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.7);
+    padding: 4px 10px;
+    border: 1px solid var(--border-accent);
+  }
+
+  /* ── GitHub repo list (ls style) ───────────────────── */
+  .repo-list {
     list-style: none;
     margin: 0 0 16px 0;
     padding: 0;
   }
-
-  .project-row {
+  .repo-row {
     display: grid;
-    grid-template-columns:
-      /* perms */
-      80px
-      /* index */ 24px
-      /* name  */ 140px
-      /* desc  */ 1fr
-      /* arrow */ 16px
-      /* url   */ auto;
+    grid-template-columns: 80px 24px minmax(100px, 160px) auto 1fr;
     gap: 0 12px;
     align-items: baseline;
     padding: 2px 0;
@@ -180,75 +396,55 @@ import projectsData from "../../public/data/projects.json";
     border-radius: 2px;
     width: 100%;
   }
-
-  .project-row:hover {
+  .repo-row:hover {
     background: rgba(152, 195, 121, 0.07);
   }
-
-  body.light-theme .project-row:hover {
+  body.light-theme .repo-row:hover {
     background: rgba(45, 80, 22, 0.06);
   }
-
-  .project-row:focus-visible {
+  .repo-row:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
-
-  .proj-perms {
-    color: var(--text-log);
+  .repo-perms {
     font-size: 12px;
     white-space: nowrap;
   }
-
-  .proj-index {
-    color: var(--text-prompt);
+  .repo-index {
     text-align: right;
     white-space: nowrap;
   }
-
-  .proj-name {
-    color: var(--text-command);
+  .repo-name {
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
-  .proj-desc {
+  .repo-lang {
+    font-size: 11px;
     color: var(--text-log);
+    border: 1px solid var(--border-accent);
+    padding: 0 5px;
+    white-space: nowrap;
+    justify-self: start;
+  }
+  .repo-desc {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .proj-arrow {
-    color: var(--text-info);
-    text-align: center;
-  }
-
-  .proj-url {
-    color: var(--text-info);
-    text-decoration: underline;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* back link */
+  /* ── Back link ─────────────────────────────────────── */
   .cd-back {
     color: var(--text-info);
     text-decoration: underline;
   }
-
   .cd-back:hover {
     color: var(--text-primary);
   }
-
   .term-back-line {
     margin-top: 12px;
   }
-
-  /* static blinking cursor */
   .projects-cursor {
     display: inline-block;
     width: 9px;
@@ -259,36 +455,38 @@ import projectsData from "../../public/data/projects.json";
     animation: terminalBlink 1s infinite steps(1);
   }
 
-  /* ── Mobile ─────────────────────────────────────────────── */
+  /* ── Mobile ────────────────────────────────────────── */
   @media (max-width: 768px) {
     .projects-terminal {
       padding: 12px 14px;
     }
-
-    .project-row {
+    .project-cards {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .card-preview {
+      height: 160px;
+    }
+    .repo-row {
       grid-template-columns: 1fr;
       gap: 0;
       padding: 6px 0;
       border-bottom: 1px solid rgba(152, 195, 121, 0.1);
     }
-
-    .proj-perms,
-    .proj-index,
-    .proj-arrow {
+    .repo-perms,
+    .repo-index {
       display: none;
     }
-
-    .proj-name {
+    .repo-name {
       font-size: 14px;
     }
-
-    .proj-desc {
+    .repo-lang {
+      display: inline-block;
+      margin-top: 2px;
+    }
+    .repo-desc {
       font-size: 12px;
       white-space: normal;
-    }
-
-    .proj-url {
-      font-size: 12px;
     }
   }
 </style>
