@@ -36,7 +36,9 @@
     <span class="cursor">|</span>
   </div>
   <div class="quick-actions" aria-label="Quick actions">
-    <a href="/projects" class="quick-action-link">View Projects</a>
+    <a href="/#projects" class="quick-action-link" id="view-projects-link"
+      >View Projects</a
+    >
     <a
       href="https://resume.jjalangtry.com"
       target="_blank"
@@ -74,5 +76,14 @@
       }
       setTimeout(type, 1000);
     }
+  }
+
+  const projLink = document.getElementById("view-projects-link");
+  if (projLink && document.getElementById("main-terminal")) {
+    projLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (typeof window.openProjectsPane === "function")
+        window.openProjectsPane();
+    });
   }
 </script>

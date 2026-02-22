@@ -28,11 +28,13 @@ const DEFAULT_PROJECTS = [
 // Falls back to defaults if the tag is missing (shouldn't happen in normal use).
 function loadTerminalDataFromDOM() {
   const el = document.getElementById("terminal-data");
-  if (!el)
-    return {
-      siteConfig: { ...DEFAULT_SITE_CONFIG },
-      projects: [...DEFAULT_PROJECTS],
-    };
+  const defaults = {
+    siteConfig: { ...DEFAULT_SITE_CONFIG },
+    projects: [...DEFAULT_PROJECTS],
+    projectGroups: { featured: [], contributions: [], github: [] },
+    version: "2.4.6",
+  };
+  if (!el) return defaults;
   try {
     const raw = JSON.parse(el.textContent || "{}");
     return {
@@ -41,12 +43,11 @@ function loadTerminalDataFromDOM() {
         Array.isArray(raw.projects) && raw.projects.length > 0
           ? raw.projects
           : [...DEFAULT_PROJECTS],
+      projectGroups: raw.projectGroups || defaults.projectGroups,
+      version: raw.version || defaults.version,
     };
   } catch {
-    return {
-      siteConfig: { ...DEFAULT_SITE_CONFIG },
-      projects: [...DEFAULT_PROJECTS],
-    };
+    return defaults;
   }
 }
 
@@ -75,6 +76,8 @@ const commandList = [
   "whoami",
   "sudo",
   "cd",
+  "close",
+  "exit",
 ];
 
 function applyTheme(theme) {
@@ -170,6 +173,11 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(focusTerminalInput, 100);
   }
 
+  // Auto-open projects pane if navigated to /#projects
+  if (window.location.hash === "#projects") {
+    setTimeout(openProjectsPane, 300);
+  }
+
   document.addEventListener("click", function (e) {
     const terminal = document.querySelector(".terminal");
     if (!terminal || !currentInput) return;
@@ -237,11 +245,146 @@ function createInputLine() {
   return { inputLine, input };
 }
 
-/**
- * Displays the ASCII art banner based on the operating system.
- */
+// ── Tmux split pane ───────────────────────────────────────────
+
+let tmuxActive = false;
+
+function renderProjectGroup(container, title, projects) {
+  if (!projects || projects.length === 0) return;
+  const section = document.createElement("div");
+  section.className = "proj-section";
+
+  const header = document.createElement("div");
+  header.className = "proj-section-header";
+  header.textContent = `── ${title} ${"─".repeat(Math.max(0, 50 - title.length))}`;
+  section.appendChild(header);
+
+  projects.forEach((p) => {
+    const row = document.createElement("a");
+    row.className = "proj-item";
+    row.href = p.url;
+    row.target = "_blank";
+    row.rel = "noopener noreferrer";
+
+    const name = document.createElement("span");
+    name.className = "proj-item-name";
+    name.textContent = p.name;
+    row.appendChild(name);
+
+    if (p.language) {
+      const lang = document.createElement("span");
+      lang.className = "proj-item-lang";
+      lang.textContent = p.language;
+      row.appendChild(lang);
+    }
+
+    if (p.description) {
+      const desc = document.createElement("span");
+      desc.className = "proj-item-desc";
+      desc.textContent = p.description;
+      row.appendChild(desc);
+    }
+
+    const url = document.createElement("span");
+    url.className = "proj-item-url";
+    url.textContent = p.url.replace("https://", "").replace("http://", "");
+    row.appendChild(url);
+
+    section.appendChild(row);
+  });
+
+  container.appendChild(section);
+}
+
+function openProjectsPane() {
+  if (tmuxActive) return;
+  tmuxActive = true;
+
+  const terminal = document.getElementById("main-terminal");
+  if (!terminal) return;
+
+  terminal.classList.add("tmux-active");
+
+  const layout = document.createElement("div");
+  layout.className = "tmux-layout";
+  layout.id = "tmux-layout";
+
+  // Move existing terminal content into the top pane
+  const topPane = document.createElement("div");
+  topPane.className = "tmux-pane tmux-pane-terminal";
+  while (terminal.firstChild) {
+    topPane.appendChild(terminal.firstChild);
+  }
+  layout.appendChild(topPane);
+
+  // Bottom pane: projects
+  const bottomPane = document.createElement("div");
+  bottomPane.className = "tmux-pane tmux-pane-projects";
+
+  const groups = terminalData.projectGroups;
+  renderProjectGroup(bottomPane, "Deployed", groups.featured);
+  renderProjectGroup(bottomPane, "Contributions", groups.contributions);
+  renderProjectGroup(bottomPane, "GitHub Repos", groups.github);
+
+  const hint = document.createElement("div");
+  hint.className = "proj-hint";
+  hint.textContent = "Type 'close' or press Ctrl+B then q to close this pane";
+  bottomPane.appendChild(hint);
+
+  layout.appendChild(bottomPane);
+
+  // Status bar
+  const statusBar = document.createElement("div");
+  statusBar.className = "tmux-status-bar";
+  statusBar.innerHTML =
+    `<span class="tmux-win">0:terminal</span>` +
+    `<span class="tmux-win tmux-win-active">1:projects</span>` +
+    `<span class="tmux-spacer"></span>` +
+    `<span class="tmux-right">"jjalangtry.com" v${terminalData.version}</span>`;
+  layout.appendChild(statusBar);
+
+  terminal.appendChild(layout);
+
+  // Scroll terminal pane to bottom
+  topPane.scrollTop = topPane.scrollHeight;
+
+  // Refocus input
+  if (currentInput) currentInput.focus();
+}
+
+function closeProjectsPane() {
+  if (!tmuxActive) return;
+  tmuxActive = false;
+
+  const terminal = document.getElementById("main-terminal");
+  const layout = document.getElementById("tmux-layout");
+  if (!terminal || !layout) return;
+
+  terminal.classList.remove("tmux-active");
+
+  // Move terminal content back out of the top pane
+  const topPane = layout.querySelector(".tmux-pane-terminal");
+  if (topPane) {
+    while (topPane.firstChild) {
+      terminal.appendChild(topPane.firstChild);
+    }
+  }
+  layout.remove();
+
+  // Scroll to bottom and refocus
+  const output = document.getElementById("cli-output");
+  if (output) output.scrollTop = output.scrollHeight;
+  if (currentInput) currentInput.focus();
+}
+
+// Expose for use by ProfilePanel's "View Projects" button
+window.openProjectsPane = openProjectsPane;
+
+// ── Banner ────────────────────────────────────────────────────
+
 function displayBanner() {
-  // Full ASCII art banner for desktop
+  const v = terminalData.version;
+  const vTag = `v${v}`;
   const desktopBanner = `
      ██╗ █████╗ ██╗  ██╗ ██████╗ ██████╗     ██╗      █████╗ ███╗   ██╗ ██████╗████████╗██████╗ ██╗   ██╗
      ██║██╔══██╗██║ ██╔╝██╔═══██╗██╔══██╗    ██║     ██╔══██╗████╗  ██║██╔════╝╚══██╔══╝██╔══██╗╚██╗ ██╔╝
@@ -249,21 +392,17 @@ function displayBanner() {
 ██   ██║██╔══██║██╔═██╗ ██║   ██║██╔══██╗    ██║     ██╔══██║██║╚██╗██║██║   ██║  ██║   ██╔══██╗  ╚██╔╝  
 ╚█████╔╝██║  ██║██║  ██╗╚██████╔╝██████╔╝    ███████╗██║  ██║██║ ╚████║╚██████╔╝  ██║   ██║  ██║   ██║   
  ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝   
-                                                                                                    v1.0.0
+${vTag.padStart(100)}
 `;
 
-  // Simplified banner for mobile devices
   const mobileBanner = `
  ╔═══════════════════╗
  ║  JAKOB LANGTRY    ║
- ║  Terminal v1.0.0  ║
+ ║  Terminal ${vTag.padEnd(8)}║
  ╚═══════════════════╝
 `;
 
-  // Choose the appropriate banner based on device type
-  const banner = isMobileDevice ? mobileBanner : desktopBanner;
-
-  appendOutput(banner, "ascii-art");
+  appendOutput(isMobileDevice ? mobileBanner : desktopBanner, "ascii-art");
 }
 
 /**
@@ -484,8 +623,11 @@ AVAILABLE COMMANDS:
   ls         List available commands
              Usage: ls
 
-  projects   List available projects with URLs
+  projects   Open projects in a tmux-style split pane
              Usage: projects
+
+  close      Close the projects split pane
+             Usage: close (alias: exit, Ctrl+B q)
 
   resume     View Jakob's resume
              Usage: resume
@@ -576,10 +718,24 @@ Currently seeking opportunities in software engineering.`,
       openResume();
       break;
     case "projects":
-      appendOutput("Opening projects page...", "info-text");
-      setTimeout(() => {
-        window.location.href = "/projects";
-      }, 400);
+      if (tmuxActive) {
+        appendOutput(
+          "Projects pane is already open. Type 'close' to dismiss.",
+          "info-text",
+        );
+      } else {
+        appendOutput("Opening projects pane...", "info-text");
+        setTimeout(openProjectsPane, 150);
+      }
+      break;
+    case "close":
+    case "exit":
+      if (tmuxActive) {
+        closeProjectsPane();
+        appendOutput("Closed projects pane.", "info-text");
+      } else {
+        appendOutput("No pane to close.", "info-text");
+      }
       break;
     case "repo":
       // Alias for github command
@@ -812,11 +968,18 @@ function displayCommandHelp(command) {
         "This terminal-style ls command lists supported commands rather than filesystem entries.",
     },
     projects: {
-      desc: "List available projects with URLs.",
+      desc: "Open projects in a tmux-style split pane showing deployed apps, contributions, and repos.",
       usage: "projects",
       examples: ["projects"],
       notes:
-        "Project entries are loaded from data/projects.json. Type a project name to open it.",
+        "Click any project to open it. Type 'close' or press Ctrl+B then q to dismiss the pane.",
+    },
+    close: {
+      desc: "Close the tmux-style projects split pane.",
+      usage: "close",
+      examples: ["close", "exit"],
+      notes:
+        "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
       desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
@@ -2334,6 +2497,23 @@ function initCLI() {
       e.target.value = "";
       currentInputBuffer = "";
       cliOutput.scrollTop = cliOutput.scrollHeight;
+      return;
+    }
+
+    // Ctrl+B prefix for tmux-style shortcuts
+    if (e.ctrlKey && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      const handler = (ev) => {
+        input.removeEventListener("keydown", handler);
+        if (ev.key === "q" || ev.key === "x") {
+          ev.preventDefault();
+          if (tmuxActive) {
+            closeProjectsPane();
+            appendOutput("Closed projects pane.", "info-text");
+          }
+        }
+      };
+      input.addEventListener("keydown", handler, { once: true });
       return;
     }
 

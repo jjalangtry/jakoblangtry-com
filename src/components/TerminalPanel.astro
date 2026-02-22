@@ -1,15 +1,24 @@
 ---
 import siteConfig from "../../public/data/site-config.json";
 import projectsRaw from "../../public/data/projects.json";
+import pkg from "../../package.json";
 
-// Flatten grouped projects into a single array for the terminal
 const allProjects = [
   ...(projectsRaw.featured ?? []),
   ...(projectsRaw.contributions ?? []),
   ...(projectsRaw.github ?? []),
 ].filter((p) => p && p.name && p.url);
 
-const terminalData = JSON.stringify({ siteConfig, projects: allProjects });
+const terminalData = JSON.stringify({
+  siteConfig,
+  projects: allProjects,
+  projectGroups: {
+    featured: projectsRaw.featured ?? [],
+    contributions: projectsRaw.contributions ?? [],
+    github: projectsRaw.github ?? [],
+  },
+  version: pkg.version,
+});
 ---
 
 <section

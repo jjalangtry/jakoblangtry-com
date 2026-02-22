@@ -18,6 +18,8 @@ export const COMMAND_LIST = [
   "whoami",
   "sudo",
   "cd",
+  "close",
+  "exit",
 ];
 
 export function buildProjectsListOutput(projects) {
