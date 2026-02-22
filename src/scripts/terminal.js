@@ -361,6 +361,7 @@ const ONBOARDING_COMMANDS = [
 ];
 
 function displayOnboardingCommands() {
+  // Section header
   const header = document.createElement("div");
   header.className = "onboarding-header info-text";
   header.textContent = "Quick start:";
@@ -398,6 +399,7 @@ function displayOnboardingCommands() {
     row.appendChild(chip);
   });
 
+  // Keyboard hints line
   const hints = document.createElement("div");
   hints.className = "keyboard-hints log-text";
   hints.textContent =
@@ -670,11 +672,10 @@ Currently seeking opportunities in software engineering.`,
       openResumeFromConfig();
       break;
     case "projects":
-      appendOutput(buildProjectsListOutput(), "info-text");
-      appendOutput(
-        "Click on a project URL or type its name to open it.",
-        "info-text",
-      );
+      appendOutput("Opening projects page...", "info-text");
+      setTimeout(() => {
+        window.location.href = "/projects";
+      }, 400);
       break;
     case "repo":
       // Alias for github command

@@ -1,158 +1,294 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import ProfilePanel from "../components/ProfilePanel.astro";
+import "../../styles.css";
 import projectsData from "../../public/data/projects.json";
 ---
 
 <BaseLayout
   title="Projects | Jakob Langtry"
-  description="Check out my recent projects and applications."
+  description="A terminal listing of Jakob Langtry's projects."
 >
+  <a class="skip-link" href="#projects-terminal">Skip to projects</a>
   <main class="page-container" id="main-content">
-    <a class="skip-link" href="#projects-grid">Skip to projects</a>
-
     <ProfilePanel />
 
-    <section class="projects-section" id="projects-grid" aria-label="Projects">
-      <div class="projects-header">
-        <h1>My Projects</h1>
-        <a href="/" class="back-link">&larr; Back to Terminal</a>
+    <section
+      class="terminal projects-terminal"
+      id="projects-terminal"
+      aria-label="Projects terminal"
+    >
+      <!-- ASCII banner (mobile-hidden) -->
+      <div class="ascii-art projects-banner" aria-hidden="true">
+        <pre>
+     ██╗ █████╗ ██╗  ██╗ ██████╗ ██████╗     ██╗      █████╗ ███╗   ██╗ ██████╗████████╗██████╗ ██╗   ██╗
+     ██║██╔══██╗██║ ██╔╝██╔═══██╗██╔══██╗    ██║     ██╔══██╗████╗  ██║██╔════╝╚══██╔══╝██╔══██╗╚██╗ ██╔╝
+     ██║███████║█████╔╝ ██║   ██║██████╔╝    ██║     ███████║██╔██╗ ██║██║  ███╗  ██║   ██████╔╝ ╚████╔╝ 
+██   ██║██╔══██║██╔═██╗ ██║   ██║██╔══██╗    ██║     ██╔══██║██║╚██╗██║██║   ██║  ██║   ██╔══██╗  ╚██╔╝  
+╚█████╔╝██║  ██║██║  ██╗╚██████╔╝██████╔╝    ███████╗██║  ██║██║ ╚████║╚██████╔╝  ██║   ██║  ██║   ██║   
+ ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝
+                                                                                                   v1.0.0</pre>
       </div>
 
-      <div class="projects-grid">
+      <!-- Mobile banner -->
+      <div class="ascii-art projects-banner-mobile" aria-hidden="true">
+        <pre>
+ ╔═══════════════════╗
+ ║  JAKOB LANGTRY    ║
+ ║  Terminal v1.0.0  ║
+ ╚═══════════════════╝</pre>
+      </div>
+
+      <!-- ls -la invocation -->
+      <div class="term-line">
+        <span class="prompt">guest@jjalangtry.com:~/projects$</span>
+        <span class="term-cmd"> ls -la</span>
+      </div>
+
+      <!-- header row -->
+      <div class="term-line ls-header info-text" aria-hidden="true">
+        total {projectsData.length}
+      </div>
+
+      <!-- project rows -->
+      <ul class="projects-list" aria-label="Project list">
         {
-          projectsData.map((project) => (
-            <a
-              href={project.url}
-              class="project-card"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`View ${project.name} (opens in a new tab)`}
-            >
-              <h2>{project.name}</h2>
-              {project.description && <p>{project.description}</p>}
-              <span class="view-link">Visit Project &rarr;</span>
-            </a>
-          ))
+          projectsData.map((project, i) => {
+            const displayUrl = project.url
+              .replace("https://", "")
+              .replace("http://", "");
+            return (
+              <li>
+                <a
+                  href={project.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="project-row"
+                  aria-label={`Open ${project.name}: ${project.description ?? ""}`}
+                >
+                  <span class="proj-perms">-rw-r--r--</span>
+                  <span class="proj-index text-prompt">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span class="proj-name text-command">{project.name}</span>
+                  <span class="proj-desc text-log">
+                    {project.description ?? ""}
+                  </span>
+                  <span class="proj-arrow text-info">→</span>
+                  <span class="proj-url text-info">{displayUrl}</span>
+                </a>
+              </li>
+            );
+          })
         }
+      </ul>
+
+      <!-- back prompt -->
+      <div class="term-line term-back-line">
+        <span class="prompt">guest@jjalangtry.com:~/projects$</span>
+        <span class="term-cmd">
+          {" "}<a href="/" class="cd-back">cd ..</a>
+        </span>
+      </div>
+
+      <!-- blinking cursor -->
+      <div class="term-line">
+        <span class="prompt">guest@jjalangtry.com:~$</span>
+        <span class="projects-cursor terminal-cursor-static" aria-hidden="true"
+        ></span>
       </div>
     </section>
   </main>
 </BaseLayout>
 
 <style>
-  .projects-section {
-    flex: 1;
-    background-color: var(--terminal-bg);
-    padding: 32px 40px;
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    min-height: 100dvh;
-    color: var(--text-primary);
+  /* ── Projects terminal section ──────────────────────────── */
+  .projects-terminal {
+    padding: 24px 28px;
     overflow-y: auto;
   }
 
-  .projects-header {
+  /* Banner visibility */
+  .projects-banner {
+    display: block;
+    margin-bottom: 12px;
+  }
+  .projects-banner pre {
+    font-size: 11px;
+    line-height: 1.2;
+    overflow-x: auto;
+  }
+
+  .projects-banner-mobile {
+    display: none;
+  }
+
+  @media (max-width: 900px) {
+    .projects-banner {
+      display: none;
+    }
+    .projects-banner-mobile {
+      display: block;
+      margin-bottom: 12px;
+    }
+  }
+
+  /* Generic terminal line */
+  .term-line {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 32px;
-    border-bottom: 1px solid var(--border-accent);
-    padding-bottom: 16px;
-  }
-
-  h1 {
-    font-size: 24px;
-    color: var(--text-info);
-    margin: 0;
-  }
-
-  .back-link {
-    color: var(--text-command);
-    text-decoration: none;
+    align-items: baseline;
+    gap: 0;
     font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
   }
 
-  .back-link:hover {
-    text-decoration: underline;
+  .term-cmd {
+    color: var(--text-command);
   }
 
-  .projects-grid {
+  .ls-header {
+    margin: 4px 0 2px;
+    font-size: 13px;
+  }
+
+  /* ── Project list ─────────────────────────────────────────── */
+  .projects-list {
+    list-style: none;
+    margin: 0 0 16px 0;
+    padding: 0;
+  }
+
+  .project-row {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 24px;
-  }
-
-  .project-card {
-    display: flex;
-    flex-direction: column;
-    background: var(--bio-bg);
-    border: 1px solid var(--border-accent);
-    padding: 24px;
-    border-radius: 8px;
+    grid-template-columns:
+      /* perms */
+      80px
+      /* index */ 24px
+      /* name  */ 140px
+      /* desc  */ 1fr
+      /* arrow */ 16px
+      /* url   */ auto;
+    gap: 0 12px;
+    align-items: baseline;
+    padding: 2px 0;
     text-decoration: none;
-    transition:
-      transform 0.2s ease,
-      box-shadow 0.2s ease;
-    height: 100%;
+    font-size: 13px;
+    line-height: 1.7;
+    transition: background 0.1s;
+    border-radius: 2px;
+    width: 100%;
   }
 
-  .project-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    border-color: var(--text-info);
+  .project-row:hover {
+    background: rgba(152, 195, 121, 0.07);
   }
 
-  body.light-theme .project-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  body.light-theme .project-row:hover {
+    background: rgba(45, 80, 22, 0.06);
   }
 
-  .project-card h2 {
-    color: var(--text-command);
-    font-size: 20px;
-    margin: 0 0 12px 0;
-  }
-
-  .project-card p {
-    color: var(--text-primary);
-    font-size: 14px;
-    line-height: 1.5;
-    margin: 0 0 20px 0;
-    flex-grow: 1;
-  }
-
-  .view-link {
-    color: var(--text-info);
-    font-size: 14px;
-    font-weight: bold;
-    align-self: flex-start;
-  }
-
-  /* Focus states */
-  .back-link:focus-visible,
-  .project-card:focus-visible {
+  .project-row:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
 
-  /* Responsive */
-  @media (max-width: 1024px) {
-    .projects-section {
-      padding: 24px 20px;
-      min-height: auto;
-    }
+  .proj-perms {
+    color: var(--text-log);
+    font-size: 12px;
+    white-space: nowrap;
   }
 
+  .proj-index {
+    color: var(--text-prompt);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .proj-name {
+    color: var(--text-command);
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .proj-desc {
+    color: var(--text-log);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .proj-arrow {
+    color: var(--text-info);
+    text-align: center;
+  }
+
+  .proj-url {
+    color: var(--text-info);
+    text-decoration: underline;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* back link */
+  .cd-back {
+    color: var(--text-info);
+    text-decoration: underline;
+  }
+
+  .cd-back:hover {
+    color: var(--text-primary);
+  }
+
+  .term-back-line {
+    margin-top: 12px;
+  }
+
+  /* static blinking cursor */
+  .projects-cursor {
+    display: inline-block;
+    width: 9px;
+    height: 16px;
+    background-color: var(--cursor-color);
+    margin-left: 8px;
+    vertical-align: middle;
+    animation: terminalBlink 1s infinite steps(1);
+  }
+
+  /* ── Mobile ─────────────────────────────────────────────── */
   @media (max-width: 768px) {
-    .projects-header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 12px;
+    .projects-terminal {
+      padding: 12px 14px;
     }
 
-    .projects-grid {
+    .project-row {
       grid-template-columns: 1fr;
+      gap: 0;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(152, 195, 121, 0.1);
+    }
+
+    .proj-perms,
+    .proj-index,
+    .proj-arrow {
+      display: none;
+    }
+
+    .proj-name {
+      font-size: 14px;
+    }
+
+    .proj-desc {
+      font-size: 12px;
+      white-space: normal;
+    }
+
+    .proj-url {
+      font-size: 12px;
     }
   }
 </style>
