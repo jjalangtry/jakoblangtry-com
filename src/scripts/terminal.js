@@ -2975,8 +2975,9 @@ function startSnakeGame() {
   const W = 30;
   const H = 15;
   let snake = [{ x: Math.floor(W / 2), y: Math.floor(H / 2) }];
-  let dir = { x: 1, y: 0 };
-  let nextDir = { x: 1, y: 0 };
+  let dir = { x: 0, y: 0 };
+  let nextDir = { x: 0, y: 0 };
+  let started = false;
   let food = placeFood();
   let score = 0;
   let gameOver = false;
@@ -3022,13 +3023,15 @@ function startSnakeGame() {
         "\n\n  GAME OVER! Score: " +
         score +
         "\n  Press any key to return to terminal.";
+    else if (!started)
+      frame += "\n  Press an arrow key or WASD to start · q / Esc to quit";
     else frame += "\n  Arrow keys / WASD to move · q / Esc to quit";
     gameEl.textContent = frame;
     cliOutput.scrollTop = cliOutput.scrollHeight;
   }
 
   function tick() {
-    if (gameOver || !snakeActive) return;
+    if (gameOver || !snakeActive || !started) return;
     dir = { ...nextDir };
     const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
@@ -3070,14 +3073,25 @@ function startSnakeGame() {
       cleanUp();
       return;
     }
-    if ((key === "arrowup" || key === "w") && dir.y !== 1) {
-      nextDir = { x: 0, y: -1 };
-    } else if ((key === "arrowdown" || key === "s") && dir.y !== -1) {
-      nextDir = { x: 0, y: 1 };
-    } else if ((key === "arrowleft" || key === "a") && dir.x !== 1) {
-      nextDir = { x: -1, y: 0 };
-    } else if ((key === "arrowright" || key === "d") && dir.x !== -1) {
-      nextDir = { x: 1, y: 0 };
+    let newDir = null;
+    if (key === "arrowup" || key === "w") newDir = { x: 0, y: -1 };
+    else if (key === "arrowdown" || key === "s") newDir = { x: 0, y: 1 };
+    else if (key === "arrowleft" || key === "a") newDir = { x: -1, y: 0 };
+    else if (key === "arrowright" || key === "d") newDir = { x: 1, y: 0 };
+    if (newDir) {
+      if (started) {
+        if (
+          (newDir.x !== 0 && newDir.x !== -dir.x) ||
+          (newDir.y !== 0 && newDir.y !== -dir.y)
+        ) {
+          nextDir = newDir;
+        }
+      } else {
+        nextDir = newDir;
+        started = true;
+        dir = { ...nextDir };
+        snakeInterval = setInterval(tick, speed);
+      }
     }
     e.preventDefault();
   }
@@ -3096,7 +3110,6 @@ function startSnakeGame() {
 
   document.addEventListener("keydown", handleKey, true);
   render();
-  snakeInterval = setInterval(tick, speed);
 }
 
 // ── Pipe support ──────────────────────────────────────────────
