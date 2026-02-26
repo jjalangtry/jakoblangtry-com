@@ -21,23 +21,23 @@
 }
 
 body.light-theme {
-  --body-bg: #f5f5f0;
-  --terminal-bg: #ffffff;
-  --bio-bg: #f0ede8;
-  --text-primary: #2d5016;
-  --text-prompt: #8a5a1e;
-  --text-info: #1a5fa0;
-  --text-error: #b3303a;
-  --text-warning: #8a6d1e;
-  --text-command: #6b5500;
-  --text-log: #4a4a4a;
-  --text-success: #2d5016;
-  --border-accent: #2d5016;
-  --cursor-color: #2d5016;
-  --scrollbar-track: #e8e8e8;
-  --scrollbar-thumb: #bbbbbb;
+  --body-bg: #fafaf7;
+  --terminal-bg: #fafaf7;
+  --bio-bg: #f0ede6;
+  --text-primary: #1a1a2e;
+  --text-prompt: #c45100;
+  --text-info: #0969da;
+  --text-error: #cf222e;
+  --text-warning: #9a6700;
+  --text-command: #8250df;
+  --text-log: #656d76;
+  --text-success: #1a7f37;
+  --border-accent: #d0d7de;
+  --cursor-color: #1a1a2e;
+  --scrollbar-track: #f0f0ec;
+  --scrollbar-thumb: #afb8c1;
   --input-bg: transparent;
-  --focus-ring: #1a5fa0;
+  --focus-ring: #0969da;
 }
 
 * {
@@ -228,7 +228,8 @@ body.mobile-device .weather-container {
 }
 
 body.light-theme .quick-action-link:hover {
-  background: rgba(45, 80, 22, 0.1);
+  background: rgba(9, 105, 218, 0.08);
+  border-color: var(--text-info);
 }
 
 .github {
@@ -404,7 +405,7 @@ body.light-theme .quick-action-link:hover {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #000000;
+  background: var(--text-log);
 }
 
 /* ASCII art and command output styling */
@@ -494,7 +495,7 @@ body.light-theme .quick-action-link:hover {
 }
 
 body.light-theme .command-chip:hover {
-  background: rgba(45, 80, 22, 0.08);
+  background: rgba(9, 105, 218, 0.06);
 }
 
 .keyboard-hints {
@@ -686,17 +687,18 @@ pre {
 }
 
 body.light-theme .tmux-status-bar {
-  background: #d7ffd7;
-  color: #005f00;
+  background: #e8f5e9;
+  color: #2e7d32;
 }
 
 body.light-theme .tmux-status-bar .tmux-win-active {
-  background: #005f00;
-  color: #d7ffd7;
+  background: #2e7d32;
+  color: #ffffff;
+  font-weight: 700;
 }
 
 body.light-theme .tmux-pane-terminal {
-  border-bottom-color: #005f00;
+  border-bottom-color: #c8e6c9;
 }
 
 /* Media Queries */
@@ -755,7 +757,7 @@ body.light-theme .tmux-pane-terminal {
     overflow-y: visible;
     background: var(--bio-bg);
     border-bottom: 1.5px solid var(--border-accent);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
   .profile-image-container {
     width: 100px;
@@ -852,5 +854,42 @@ body.light-theme .tmux-pane-terminal {
 }
 
 body.light-theme .qr-download-btn:hover {
-  background: rgba(45, 80, 22, 0.1);
+  background: rgba(9, 105, 218, 0.08);
+}
+
+body.light-theme .bio-container {
+  border-left-color: #d0d7de;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.04);
+}
+
+body.light-theme .profile-image-container {
+  border-color: #d0d7de;
+  border-radius: 6px;
+}
+
+body.light-theme .social-link {
+  border-color: #d0d7de;
+}
+
+body.light-theme .github {
+  border-color: #6e5494;
+  color: #6e5494;
+}
+
+body.light-theme .linkedin {
+  border-color: #0a66c2;
+  color: #0a66c2;
+}
+
+body.light-theme .instagram {
+  border-color: #e1306c;
+  color: #e1306c;
+}
+
+body.light-theme .tmux-pane-projects .proj-item:hover {
+  background: rgba(9, 105, 218, 0.05);
+}
+
+body.light-theme .ascii-art {
+  color: #1a7f37;
 }

@@ -1,11 +1,54 @@
 // Global variables for managing input and command history
 const sessionStartTime = Date.now();
+let sessionCommandCount = 0;
 let currentInput;
 let cliOutput;
 let inputLine;
 let commandHistory = [];
 let captureMode = false;
 let capturedLines = [];
+let snakeActive = false;
+let snakeInterval = null;
+
+// Stats persistence
+function loadStats() {
+  try {
+    const raw = localStorage.getItem("terminal-stats");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function saveStats(stats) {
+  try {
+    localStorage.setItem("terminal-stats", JSON.stringify(stats));
+  } catch {
+    // ignore
+  }
+}
+function trackCommand(cmd) {
+  sessionCommandCount++;
+  const stats = loadStats() || {
+    totalCommands: 0,
+    sessions: 0,
+    firstVisit: new Date().toISOString().split("T")[0],
+    commandCounts: {},
+  };
+  stats.totalCommands++;
+  const base = cmd.split(" ")[0].toLowerCase();
+  stats.commandCounts[base] = (stats.commandCounts[base] || 0) + 1;
+  saveStats(stats);
+}
+function bumpSession() {
+  const stats = loadStats() || {
+    totalCommands: 0,
+    sessions: 0,
+    firstVisit: new Date().toISOString().split("T")[0],
+    commandCounts: {},
+  };
+  stats.sessions++;
+  saveStats(stats);
+}
 try {
   const savedHistory = localStorage.getItem("terminal-history");
   if (savedHistory) {
@@ -35,6 +78,9 @@ function loadTerminalDataFromDOM() {
     siteConfig: { ...DEFAULT_SITE_CONFIG },
     projects: [...DEFAULT_PROJECTS],
     projectGroups: { featured: [], contributions: [], github: [] },
+    skills: [],
+    experience: [],
+    posts: [],
     version: "2.4.6",
   };
   if (!el) return defaults;
@@ -47,6 +93,9 @@ function loadTerminalDataFromDOM() {
           ? raw.projects
           : [...DEFAULT_PROJECTS],
       projectGroups: raw.projectGroups || defaults.projectGroups,
+      skills: raw.skills || [],
+      experience: raw.experience || [],
+      posts: raw.posts || [],
       version: raw.version || defaults.version,
     };
   } catch {
@@ -61,13 +110,16 @@ const terminalData = loadTerminalDataFromDOM();
 // To keep things simple, we keep the COMMAND_LIST local but synced.
 const commandList = [
   "banner",
+  "blog",
   "clear",
+  "contact",
   "converter",
   "curl",
   "qr",
   "date",
   "echo",
   "email",
+  "experience",
   "github",
   "grep",
   "help",
@@ -78,6 +130,9 @@ const commandList = [
   "projects",
   "repo",
   "resume",
+  "skills",
+  "snake",
+  "stats",
   "theme",
   "uptime",
   "weather",
@@ -172,6 +227,7 @@ function prefersReducedMotion() {
 // Theme, bio typing, and mobile detection are handled by BaseLayout and ProfilePanel.
 document.addEventListener("DOMContentLoaded", function () {
   isMobileDevice = isMobile();
+  bumpSession();
 
   enableTextSelection();
 
@@ -609,8 +665,14 @@ AVAILABLE COMMANDS:
   banner     Display the terminal banner
              Usage: banner
 
+  blog       Read blog posts
+             Usage: blog [slug]
+
   clear      Clear the terminal screen
              Usage: clear
+
+  contact    Display contact information
+             Usage: contact
 
   converter  Open Link Converter tool
              Usage: converter
@@ -629,6 +691,9 @@ AVAILABLE COMMANDS:
 
   email      Open email client to contact Jakob
              Usage: email
+
+  experience Display work and education timeline
+             Usage: experience
 
   github     Open Jakob's GitHub profile
              (alias: repo)
@@ -661,6 +726,15 @@ AVAILABLE COMMANDS:
 
   resume     View Jakob's resume
              Usage: resume
+
+  skills     Display skills with proficiency bars
+             Usage: skills [--category name]
+
+  snake      Play Snake in the terminal
+             Usage: snake
+
+  stats      Show visitor and session statistics
+             Usage: stats
 
   theme      Toggle between dark and light mode
              Usage: theme [dark|light]
@@ -730,6 +804,24 @@ Currently seeking opportunities in software engineering.`,
       break;
     case "neofetch":
       displayNeofetch();
+      break;
+    case "contact":
+      displayContact();
+      break;
+    case "skills":
+      displaySkills();
+      break;
+    case "experience":
+      displayExperience();
+      break;
+    case "blog":
+      displayBlogList();
+      break;
+    case "stats":
+      displayStats();
+      break;
+    case "snake":
+      startSnakeGame();
       break;
     case "grep":
       appendOutput(
@@ -927,6 +1019,28 @@ Currently seeking opportunities in software engineering.`,
             appendOutput("Usage: history [clear|N]", "info-text");
           }
         }
+        break;
+      } else if (normalizedCommand.startsWith("blog ")) {
+        const slug = command.substring(5).trim();
+        if (!slug) {
+          displayBlogList();
+          break;
+        }
+        displayBlogPost(slug);
+        break;
+      } else if (
+        normalizedCommand.startsWith("skills ") &&
+        normalizedCommand.substring(7).trim() === "--category"
+      ) {
+        appendOutput(
+          "Usage: skills [--category name]\nAvailable categories: " +
+            (terminalData.skills || []).map((c) => c.name).join(", "),
+          "info-text",
+        );
+        break;
+      } else if (normalizedCommand.startsWith("skills --category ")) {
+        const catName = command.substring(18).trim();
+        displaySkills(catName);
         break;
       } else if (normalizedCommand.startsWith("grep ")) {
         const pattern = command.substring(5).trim();
@@ -2492,12 +2606,25 @@ function getHelpDetails() {
       notes:
         "The banner is automatically displayed when the terminal starts or when the screen is cleared.",
     },
+    blog: {
+      desc: "Read blog posts about projects and engineering.",
+      usage: "blog [slug]",
+      examples: ["blog", "blog terminal-portfolio", "blog nes-pong"],
+      notes:
+        "Without arguments, lists all available posts. With a slug, displays the full post.",
+    },
     clear: {
       desc: "Clear the terminal screen, preserving command history.",
       usage: "clear",
       examples: ["clear"],
       notes:
         "This command preserves your command history, so you can still use up/down arrows to access previous commands.",
+    },
+    contact: {
+      desc: "Display all contact information in one place.",
+      usage: "contact",
+      examples: ["contact"],
+      notes: "Shows email, GitHub, LinkedIn, and website links.",
     },
     converter: {
       desc: "Open the Link Converter tool in a new browser tab.",
@@ -2541,6 +2668,12 @@ function getHelpDetails() {
       examples: ["email"],
       notes:
         "This will open your system's default email client with jjalangtry@gmail.com as the recipient.",
+    },
+    experience: {
+      desc: "Display work experience and education timeline.",
+      usage: "experience",
+      examples: ["experience"],
+      notes: "Shows a timeline of education, roles, and notable contributions.",
     },
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
@@ -2622,6 +2755,25 @@ function getHelpDetails() {
       examples: ["resume"],
       notes: "Opens resume.jjalangtry.com in a new tab.",
     },
+    skills: {
+      desc: "Display skills with proficiency bar charts.",
+      usage: "skills [--category name]",
+      examples: ["skills", "skills --category Languages"],
+      notes: "Shows all skill categories by default. Use --category to filter.",
+    },
+    snake: {
+      desc: "Play a Snake game in the terminal.",
+      usage: "snake",
+      examples: ["snake"],
+      notes:
+        "Use arrow keys or WASD to move. Press q or Esc to quit. Score increases with each food item.",
+    },
+    stats: {
+      desc: "Show visitor and session statistics.",
+      usage: "stats",
+      examples: ["stats"],
+      notes: "Tracks commands, sessions, and visit history in localStorage.",
+    },
     theme: {
       desc: "Toggle between dark and light terminal themes.",
       usage: "theme [dark|light]",
@@ -2655,6 +2807,296 @@ function getHelpDetails() {
         "This provides a brief biography and professional information about Jakob.",
     },
   };
+}
+
+// ── Content commands ──────────────────────────────────────────
+
+function displayContact() {
+  const output = [
+    "┌────────────────────────────────────────┐",
+    "│          CONTACT INFORMATION           │",
+    "├────────────────────────────────────────┤",
+    "│  Email     jjalangtry@gmail.com        │",
+    "│  GitHub    github.com/JJALANGTRY       │",
+    "│  LinkedIn  linkedin.com/in/jjalangtry  │",
+    "│  Website   jakoblangtry.com            │",
+    "└────────────────────────────────────────┘",
+  ].join("\n");
+  appendOutput(output, "info-text");
+}
+
+function displaySkills(categoryFilter) {
+  const categories = terminalData.skills || [];
+  if (categories.length === 0) {
+    appendOutput("No skills data available.", "info-text");
+    return;
+  }
+  const barWidth = 20;
+  const filtered = categoryFilter
+    ? categories.filter(
+        (c) => c.name.toLowerCase() === categoryFilter.toLowerCase(),
+      )
+    : categories;
+  if (filtered.length === 0) {
+    appendOutput(
+      `Category "${categoryFilter}" not found. Available: ${categories.map((c) => c.name).join(", ")}`,
+      "error-text",
+    );
+    return;
+  }
+  const lines = [];
+  filtered.forEach((cat) => {
+    lines.push(
+      `\u2500\u2500 ${cat.name} ${"\u2500".repeat(Math.max(0, 40 - cat.name.length))}`,
+    );
+    (cat.skills || []).forEach((s) => {
+      const filled = Math.round((s.level / 100) * barWidth);
+      const empty = barWidth - filled;
+      const bar = "\u2588".repeat(filled) + "\u2591".repeat(empty);
+      const name = s.name.padEnd(16);
+      lines.push(`  ${name} ${bar} ${s.level}%`);
+    });
+    lines.push("");
+  });
+  appendOutput(lines.join("\n").trimEnd(), "info-text");
+}
+
+function displayExperience() {
+  const entries = terminalData.experience || [];
+  if (entries.length === 0) {
+    appendOutput("No experience data available.", "info-text");
+    return;
+  }
+  const lines = [];
+  entries.forEach((e, i) => {
+    const prefix = i === entries.length - 1 ? "\u2514" : "\u251C";
+    const cont = i === entries.length - 1 ? " " : "\u2502";
+    lines.push(`${prefix}\u2500 ${e.title}`);
+    lines.push(`${cont}  ${e.org}  \u00B7  ${e.period}`);
+    if (e.description) lines.push(`${cont}  ${e.description}`);
+    if (e.tags && e.tags.length > 0)
+      lines.push(`${cont}  [${e.tags.join("] [")}]`);
+    if (i < entries.length - 1) lines.push("\u2502");
+  });
+  appendOutput(lines.join("\n"), "info-text");
+}
+
+function displayBlogList() {
+  const posts = terminalData.posts || [];
+  if (posts.length === 0) {
+    appendOutput("No blog posts yet.", "info-text");
+    return;
+  }
+  const lines = ["Available posts:\n"];
+  posts.forEach((p) => {
+    lines.push(`  ${p.date}  ${p.title}`);
+    lines.push(`  ${"".padEnd(12)}${p.summary}`);
+    lines.push(`  ${"".padEnd(12)}\u2192 blog ${p.slug}\n`);
+  });
+  lines.push("Read a post with: blog [slug]");
+  appendOutput(lines.join("\n"), "info-text");
+}
+
+function displayBlogPost(slug) {
+  const posts = terminalData.posts || [];
+  const post = posts.find((p) => p.slug === slug.toLowerCase());
+  if (!post) {
+    appendOutput(
+      `Post "${slug}" not found. Type 'blog' to see available posts.`,
+      "error-text",
+    );
+    return;
+  }
+  const width = 60;
+  const border = "\u2500".repeat(width);
+  let output = `\u250C${border}\u2510\n`;
+  output += `\u2502 ${post.title.padEnd(width - 1)}\u2502\n`;
+  output += `\u2502 ${post.date.padEnd(width - 1)}\u2502\n`;
+  output += `\u2514${border}\u2518\n\n`;
+  output += post.content;
+  appendOutput(output, "info-text");
+}
+
+function displayStats() {
+  const raw = loadStats() || {
+    totalCommands: 0,
+    sessions: 1,
+    firstVisit: new Date().toISOString().split("T")[0],
+    commandCounts: {},
+  };
+  const ms = Date.now() - sessionStartTime;
+  const sec = Math.floor(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const uptimeStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+
+  const sorted = Object.entries(raw.commandCounts || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  const lines = [];
+  lines.push(
+    "\u2500\u2500 Session Stats \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+  );
+  lines.push(`  Commands this session:  ${sessionCommandCount}`);
+  lines.push(`  Session uptime:        ${uptimeStr}`);
+  lines.push("");
+  lines.push(
+    "\u2500\u2500 All-Time Stats \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+  );
+  lines.push(`  Total commands:        ${raw.totalCommands}`);
+  lines.push(`  Sessions:              ${raw.sessions}`);
+  lines.push(`  First visit:           ${raw.firstVisit}`);
+  if (sorted.length > 0) {
+    lines.push("");
+    lines.push(
+      "\u2500\u2500 Top Commands \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    );
+    sorted.forEach(([name, count]) => {
+      lines.push(`  ${name.padEnd(16)} ${count} times`);
+    });
+  }
+  appendOutput(lines.join("\n"), "info-text");
+}
+
+// ── Snake game ────────────────────────────────────────────────
+
+function startSnakeGame() {
+  if (snakeActive) {
+    appendOutput(
+      "Snake is already running! Press q or Esc to quit.",
+      "info-text",
+    );
+    return;
+  }
+  snakeActive = true;
+  if (inputLine) inputLine.style.display = "none";
+
+  const W = 30;
+  const H = 15;
+  let snake = [{ x: Math.floor(W / 2), y: Math.floor(H / 2) }];
+  let dir = { x: 1, y: 0 };
+  let nextDir = { x: 1, y: 0 };
+  let food = placeFood();
+  let score = 0;
+  let gameOver = false;
+  let speed = 150;
+
+  function placeFood() {
+    let pos;
+    do {
+      pos = {
+        x: Math.floor(Math.random() * W),
+        y: Math.floor(Math.random() * H),
+      };
+    } while (snake.some((s) => s.x === pos.x && s.y === pos.y));
+    return pos;
+  }
+
+  const gameEl = document.createElement("div");
+  gameEl.className = "info-text";
+  gameEl.style.whiteSpace = "pre";
+  gameEl.style.lineHeight = "1.15";
+  if (inputLine && inputLine.parentNode === cliOutput) {
+    cliOutput.insertBefore(gameEl, inputLine);
+  } else {
+    cliOutput.appendChild(gameEl);
+  }
+
+  function render() {
+    let frame = `┌${"─".repeat(W)}┐  Score: ${score}\n`;
+    for (let y = 0; y < H; y++) {
+      let row = "│";
+      for (let x = 0; x < W; x++) {
+        if (snake[0].x === x && snake[0].y === y) row += "█";
+        else if (snake.some((s) => s.x === x && s.y === y)) row += "▓";
+        else if (food.x === x && food.y === y) row += "●";
+        else row += " ";
+      }
+      row += "│";
+      frame += row + "\n";
+    }
+    frame += `└${"─".repeat(W)}┘`;
+    if (gameOver)
+      frame +=
+        "\n\n  GAME OVER! Score: " +
+        score +
+        "\n  Press any key to return to terminal.";
+    else frame += "\n  Arrow keys / WASD to move · q / Esc to quit";
+    gameEl.textContent = frame;
+    cliOutput.scrollTop = cliOutput.scrollHeight;
+  }
+
+  function tick() {
+    if (gameOver || !snakeActive) return;
+    dir = { ...nextDir };
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    if (
+      head.x < 0 ||
+      head.x >= W ||
+      head.y < 0 ||
+      head.y >= H ||
+      snake.some((s) => s.x === head.x && s.y === head.y)
+    ) {
+      gameOver = true;
+      render();
+      clearInterval(snakeInterval);
+      return;
+    }
+
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      food = placeFood();
+      if (speed > 60) speed -= 5;
+      clearInterval(snakeInterval);
+      snakeInterval = setInterval(tick, speed);
+    } else {
+      snake.pop();
+    }
+    render();
+  }
+
+  function handleKey(e) {
+    if (gameOver) {
+      cleanUp();
+      e.preventDefault();
+      return;
+    }
+    const key = e.key.toLowerCase();
+    if (key === "escape" || key === "q") {
+      e.preventDefault();
+      cleanUp();
+      return;
+    }
+    if ((key === "arrowup" || key === "w") && dir.y !== 1) {
+      nextDir = { x: 0, y: -1 };
+    } else if ((key === "arrowdown" || key === "s") && dir.y !== -1) {
+      nextDir = { x: 0, y: 1 };
+    } else if ((key === "arrowleft" || key === "a") && dir.x !== 1) {
+      nextDir = { x: -1, y: 0 };
+    } else if ((key === "arrowright" || key === "d") && dir.x !== -1) {
+      nextDir = { x: 1, y: 0 };
+    }
+    e.preventDefault();
+  }
+
+  function cleanUp() {
+    snakeActive = false;
+    clearInterval(snakeInterval);
+    document.removeEventListener("keydown", handleKey, true);
+    if (inputLine) inputLine.style.display = "";
+    if (!gameOver) {
+      gameEl.textContent += `\n\n  Quit. Score: ${score}`;
+    }
+    appendOutput("", "");
+    if (currentInput) currentInput.focus();
+  }
+
+  document.addEventListener("keydown", handleKey, true);
+  render();
+  snakeInterval = setInterval(tick, speed);
 }
 
 // ── Pipe support ──────────────────────────────────────────────
@@ -2932,6 +3374,7 @@ function initCLI() {
         }
         historyIndex = commandHistory.length;
         currentInputBuffer = "";
+        trackCommand(command);
         if (command.includes("|")) {
           executePipeline(command);
         } else {

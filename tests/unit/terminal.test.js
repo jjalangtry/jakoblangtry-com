@@ -15,6 +15,12 @@ import {
   parsePipeline,
   buildNeofetchOutput,
   formatManPage,
+  buildSkillsOutput,
+  buildExperienceOutput,
+  buildBlogListOutput,
+  buildBlogPostOutput,
+  buildContactOutput,
+  buildStatsOutput,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -29,6 +35,12 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("man");
     expect(COMMAND_LIST).toContain("neofetch");
     expect(COMMAND_LIST).toContain("uptime");
+    expect(COMMAND_LIST).toContain("blog");
+    expect(COMMAND_LIST).toContain("contact");
+    expect(COMMAND_LIST).toContain("experience");
+    expect(COMMAND_LIST).toContain("skills");
+    expect(COMMAND_LIST).toContain("snake");
+    expect(COMMAND_LIST).toContain("stats");
   });
 
   it("builds projects output with numbered entries", () => {
@@ -334,10 +346,130 @@ describe("terminal helpers", () => {
     expect(autocompleteCommand("ne", COMMAND_LIST)).toEqual(["neofetch"]);
     expect(autocompleteCommand("up", COMMAND_LIST)).toEqual(["uptime"]);
     expect(autocompleteCommand("ma", COMMAND_LIST)).toEqual(["man"]);
-    // 'h' matches help and history
+    expect(autocompleteCommand("bl", COMMAND_LIST)).toEqual(["blog"]);
+    expect(autocompleteCommand("sk", COMMAND_LIST)).toEqual(["skills"]);
+    expect(autocompleteCommand("sn", COMMAND_LIST)).toEqual(["snake"]);
+    expect(autocompleteCommand("con", COMMAND_LIST)).toEqual([
+      "contact",
+      "converter",
+    ]);
     const hMatches = autocompleteCommand("h", COMMAND_LIST);
     expect(hMatches).toContain("help");
     expect(hMatches).toContain("history");
     expect(hMatches.length).toBe(2);
+  });
+
+  it("builds skills output with ASCII bar charts", () => {
+    const cats = [
+      {
+        name: "Languages",
+        skills: [
+          { name: "JavaScript", level: 90 },
+          { name: "Python", level: 50 },
+        ],
+      },
+    ];
+    const output = buildSkillsOutput(cats);
+    expect(output).toContain("Languages");
+    expect(output).toContain("JavaScript");
+    expect(output).toContain("90%");
+    expect(output).toContain("Python");
+    expect(output).toContain("50%");
+    expect(output).toContain("█");
+    expect(output).toContain("░");
+
+    expect(buildSkillsOutput([])).toBe("No skills data available.");
+    expect(buildSkillsOutput(null)).toBe("No skills data available.");
+  });
+
+  it("builds experience timeline output", () => {
+    const entries = [
+      {
+        title: "Engineer",
+        org: "Acme",
+        period: "2023-2024",
+        description: "Built things.",
+        tags: ["TypeScript"],
+      },
+      {
+        title: "Student",
+        org: "University",
+        period: "2020-2023",
+        description: "Studied.",
+        tags: ["Education"],
+      },
+    ];
+    const output = buildExperienceOutput(entries);
+    expect(output).toContain("├─ Engineer");
+    expect(output).toContain("Acme");
+    expect(output).toContain("└─ Student");
+    expect(output).toContain("[TypeScript]");
+    expect(output).toContain("[Education]");
+
+    expect(buildExperienceOutput([])).toBe("No experience data available.");
+  });
+
+  it("builds blog list output", () => {
+    const posts = [
+      {
+        slug: "hello",
+        title: "Hello World",
+        date: "2025-01-01",
+        summary: "First post.",
+      },
+    ];
+    const output = buildBlogListOutput(posts);
+    expect(output).toContain("Hello World");
+    expect(output).toContain("2025-01-01");
+    expect(output).toContain("First post.");
+    expect(output).toContain("blog hello");
+
+    expect(buildBlogListOutput([])).toBe("No blog posts yet.");
+  });
+
+  it("builds blog post output", () => {
+    const post = {
+      title: "My Post",
+      date: "2025-01-01",
+      content: "Body text here.",
+    };
+    const output = buildBlogPostOutput(post);
+    expect(output).toContain("My Post");
+    expect(output).toContain("2025-01-01");
+    expect(output).toContain("Body text here.");
+    expect(output).toContain("┌");
+    expect(output).toContain("└");
+
+    expect(buildBlogPostOutput(null)).toBeNull();
+  });
+
+  it("builds contact output", () => {
+    const output = buildContactOutput();
+    expect(output).toContain("jjalangtry@gmail.com");
+    expect(output).toContain("JJALANGTRY");
+    expect(output).toContain("linkedin.com/in/jjalangtry");
+    expect(output).toContain("jakoblangtry.com");
+  });
+
+  it("builds stats output", () => {
+    const stats = {
+      sessionCommands: 5,
+      uptime: "2m 30s",
+      totalCommands: 42,
+      sessions: 3,
+      firstVisit: "2025-01-01",
+      topCommands: [
+        { name: "help", count: 10 },
+        { name: "ls", count: 8 },
+      ],
+    };
+    const output = buildStatsOutput(stats);
+    expect(output).toContain("5");
+    expect(output).toContain("2m 30s");
+    expect(output).toContain("42");
+    expect(output).toContain("3");
+    expect(output).toContain("2025-01-01");
+    expect(output).toContain("help");
+    expect(output).toContain("10 times");
   });
 });
