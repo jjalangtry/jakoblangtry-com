@@ -1,6 +1,9 @@
 ---
 import siteConfig from "../../public/data/site-config.json";
 import projectsRaw from "../../public/data/projects.json";
+import skillsData from "../../public/data/skills.json";
+import experienceData from "../../public/data/experience.json";
+import postsData from "../../public/data/posts.json";
 import pkg from "../../package.json";
 
 const allProjects = [
@@ -17,6 +20,9 @@ const terminalData = JSON.stringify({
     contributions: projectsRaw.contributions ?? [],
     github: projectsRaw.github ?? [],
   },
+  skills: skillsData.categories ?? [],
+  experience: experienceData.entries ?? [],
+  posts: postsData.posts ?? [],
   version: pkg.version,
 });
 ---

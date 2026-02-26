@@ -1,0 +1,25 @@
+{
+  "entries": [
+    {
+      "title": "BS Software Engineering",
+      "org": "Rochester Institute of Technology",
+      "period": "2021 — Present",
+      "description": "Pursuing a Bachelor of Science in Software Engineering with coursework in systems programming, web development, and software design.",
+      "tags": ["Education"]
+    },
+    {
+      "title": "Active Contributor",
+      "org": "Society of Software Engineers (SSE)",
+      "period": "2022 — Present",
+      "description": "Built and maintain the SSE Jello kanban board. Active contributor to the official SSE website (WebsiteTheSSEquel).",
+      "tags": ["Open Source", "TypeScript"]
+    },
+    {
+      "title": "Contributor",
+      "org": "BeyondRGB",
+      "period": "2023",
+      "description": "Major contributor to an open-source multispectral imaging research tool used in cultural heritage preservation.",
+      "tags": ["Research", "Open Source"]
+    }
+  ]
+}

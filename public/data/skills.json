@@ -1,0 +1,63 @@
+{
+  "categories": [
+    {
+      "name": "C & Systems Programming",
+      "skills": [
+        {
+          "name": "C",
+          "level": 90,
+          "note": "4 projects: ls remake, ncurses game, Wordle solver, utmp tool"
+        },
+        {
+          "name": "Linux/Unix",
+          "level": 85,
+          "note": "Unix permissions, utmp files, low-level file I/O"
+        },
+        { "name": "ncurses", "level": 75, "note": "Unix-Permissions-Game" },
+        {
+          "name": "6502 Assembly",
+          "level": 70,
+          "note": "NES-Pong — wrote Pong for the NES from scratch"
+        }
+      ]
+    },
+    {
+      "name": "TypeScript & Web",
+      "skills": [
+        {
+          "name": "TypeScript",
+          "level": 90,
+          "note": "3 deployed apps: Link Converter, Playlist Converter, SSE Jello"
+        },
+        {
+          "name": "JavaScript",
+          "level": 90,
+          "note": "This terminal site, vanilla JS"
+        },
+        { "name": "Astro", "level": 80, "note": "jakoblangtry.com" },
+        { "name": "Angular", "level": 70, "note": "Dice-E-Store frontend" },
+        { "name": "HTML/CSS", "level": 85 }
+      ]
+    },
+    {
+      "name": "Swift & Mobile",
+      "skills": [
+        {
+          "name": "Swift",
+          "level": 80,
+          "note": "read-faster (RSVP reader), nudge-app (native iOS)"
+        },
+        { "name": "iOS Development", "level": 75, "note": "2 native apps" }
+      ]
+    },
+    {
+      "name": "Other Languages & Tools",
+      "skills": [
+        { "name": "Java", "level": 70, "note": "Dice-E-Store backend" },
+        { "name": "Git", "level": 85 },
+        { "name": "Python", "level": 55, "note": "python-sim-prototype" },
+        { "name": "Shell/Bash", "level": 60, "note": "Grade-Figure-Outerer" }
+      ]
+    }
+  ]
+}

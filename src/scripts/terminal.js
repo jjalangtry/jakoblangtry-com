@@ -1,8 +1,69 @@
+import {
+  formatUptime,
+  formatHistoryOutput,
+  grepFilter,
+  parsePipeline,
+  buildNeofetchOutput,
+  formatManPage,
+  buildSkillsOutput,
+  buildExperienceOutput,
+  buildBlogListOutput,
+  buildBlogPostOutput,
+  buildContactOutput,
+  buildStatsOutput,
+} from "../lib/terminal/index.js";
+
 // Global variables for managing input and command history
+const sessionStartTime = Date.now();
+let sessionCommandCount = 0;
 let currentInput;
 let cliOutput;
 let inputLine;
 let commandHistory = [];
+let captureMode = false;
+let capturedLines = [];
+let snakeActive = false;
+let snakeInterval = null;
+
+// Stats persistence
+function loadStats() {
+  try {
+    const raw = localStorage.getItem("terminal-stats");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function saveStats(stats) {
+  try {
+    localStorage.setItem("terminal-stats", JSON.stringify(stats));
+  } catch {
+    // ignore
+  }
+}
+function trackCommand(cmd) {
+  sessionCommandCount++;
+  const stats = loadStats() || {
+    totalCommands: 0,
+    sessions: 0,
+    firstVisit: new Date().toISOString().split("T")[0],
+    commandCounts: {},
+  };
+  stats.totalCommands++;
+  const base = cmd.split(" ")[0].toLowerCase();
+  stats.commandCounts[base] = (stats.commandCounts[base] || 0) + 1;
+  saveStats(stats);
+}
+function bumpSession() {
+  const stats = loadStats() || {
+    totalCommands: 0,
+    sessions: 0,
+    firstVisit: new Date().toISOString().split("T")[0],
+    commandCounts: {},
+  };
+  stats.sessions++;
+  saveStats(stats);
+}
 try {
   const savedHistory = localStorage.getItem("terminal-history");
   if (savedHistory) {
@@ -32,6 +93,9 @@ function loadTerminalDataFromDOM() {
     siteConfig: { ...DEFAULT_SITE_CONFIG },
     projects: [...DEFAULT_PROJECTS],
     projectGroups: { featured: [], contributions: [], github: [] },
+    skills: [],
+    experience: [],
+    posts: [],
     version: "2.4.6",
   };
   if (!el) return defaults;
@@ -44,6 +108,9 @@ function loadTerminalDataFromDOM() {
           ? raw.projects
           : [...DEFAULT_PROJECTS],
       projectGroups: raw.projectGroups || defaults.projectGroups,
+      skills: raw.skills || [],
+      experience: raw.experience || [],
+      posts: raw.posts || [],
       version: raw.version || defaults.version,
     };
   } catch {
@@ -58,20 +125,31 @@ const terminalData = loadTerminalDataFromDOM();
 // To keep things simple, we keep the COMMAND_LIST local but synced.
 const commandList = [
   "banner",
+  "blog",
   "clear",
+  "contact",
   "converter",
   "curl",
   "qr",
   "date",
   "echo",
   "email",
+  "experience",
   "github",
+  "grep",
   "help",
+  "history",
   "ls",
+  "man",
+  "neofetch",
   "projects",
   "repo",
   "resume",
+  "skills",
+  "snake",
+  "stats",
   "theme",
+  "uptime",
   "weather",
   "whoami",
   "sudo",
@@ -164,6 +242,7 @@ function prefersReducedMotion() {
 // Theme, bio typing, and mobile detection are handled by BaseLayout and ProfilePanel.
 document.addEventListener("DOMContentLoaded", function () {
   isMobileDevice = isMobile();
+  bumpSession();
 
   enableTextSelection();
 
@@ -487,6 +566,11 @@ function displayOnboardingCommands() {
  * @param {string} [className=''] - The class name to apply to the output element.
  */
 function appendOutput(text, className = "") {
+  if (captureMode) {
+    capturedLines.push({ text, className });
+    return;
+  }
+
   // Save the current selection state
   const selection = window.getSelection();
   const selectedText = selection.toString();
@@ -573,11 +657,15 @@ function openResume() {
 /**
  * Executes a command entered in the terminal interface.
  * @param {string} command - The command to execute.
+ * @param {Object} [options] - Execution options.
+ * @param {boolean} [options.skipEcho] - Skip echoing the command line.
  */
-function executeCommand(command) {
-  const commandLine = document.createElement("div");
-  commandLine.textContent = `guest@jjalangtry.com:~$ ${command}`;
-  cliOutput.insertBefore(commandLine, inputLine);
+function executeCommand(command, options = {}) {
+  if (!options.skipEcho) {
+    const commandLine = document.createElement("div");
+    commandLine.textContent = `guest@jjalangtry.com:~$ ${command}`;
+    cliOutput.insertBefore(commandLine, inputLine);
+  }
 
   const normalizedCommand = command.toLowerCase();
   switch (normalizedCommand) {
@@ -592,8 +680,14 @@ AVAILABLE COMMANDS:
   banner     Display the terminal banner
              Usage: banner
 
+  blog       Read blog posts
+             Usage: blog [slug]
+
   clear      Clear the terminal screen
              Usage: clear
+
+  contact    Display contact information
+             Usage: contact
 
   converter  Open Link Converter tool
              Usage: converter
@@ -613,15 +707,31 @@ AVAILABLE COMMANDS:
   email      Open email client to contact Jakob
              Usage: email
 
+  experience Display work and education timeline
+             Usage: experience
+
   github     Open Jakob's GitHub profile
              (alias: repo)
              Usage: github
 
+  grep       Search across projects and commands, or filter piped output
+             Usage: grep [pattern]
+             Pipe:  help | grep weather
+
   help       Display this help information
              Usage: help
 
+  history    Show command history
+             Usage: history [clear|N]
+
   ls         List available commands
              Usage: ls
+
+  man        Display manual page for a command
+             Usage: man [command]
+
+  neofetch   Display system information
+             Usage: neofetch
 
   projects   Open projects in a tmux-style split pane
              Usage: projects
@@ -632,8 +742,20 @@ AVAILABLE COMMANDS:
   resume     View Jakob's resume
              Usage: resume
 
+  skills     Display skills with proficiency bars
+             Usage: skills [--category name]
+
+  snake      Play Snake in the terminal
+             Usage: snake
+
+  stats      Show visitor and session statistics
+             Usage: stats
+
   theme      Toggle between dark and light mode
              Usage: theme [dark|light]
+
+  uptime     Show session uptime
+             Usage: uptime
 
   weather    Display weather forecast for a location
              Usage: weather [city or location]
@@ -644,7 +766,11 @@ AVAILABLE COMMANDS:
   whoami     Display information about Jakob
              Usage: whoami
 
-For more information about a specific command, type: [command] --help`;
+PIPES:
+  Use | to pipe output through grep:  help | grep weather
+
+For more information about a specific command, type: [command] --help
+                                                  or: man [command]`;
 
       // Create a div with pre-formatted text for help output
       appendOutput(helpText, "info-text");
@@ -684,6 +810,45 @@ Currently seeking opportunities in software engineering.`,
       break;
     case "date":
       appendOutput(new Date().toLocaleString());
+      break;
+    case "history":
+      displayHistory();
+      break;
+    case "uptime":
+      displayUptime();
+      break;
+    case "neofetch":
+      displayNeofetch();
+      break;
+    case "contact":
+      displayContact();
+      break;
+    case "skills":
+      displaySkills();
+      break;
+    case "experience":
+      displayExperience();
+      break;
+    case "blog":
+      displayBlogList();
+      break;
+    case "stats":
+      displayStats();
+      break;
+    case "snake":
+      startSnakeGame();
+      break;
+    case "grep":
+      appendOutput(
+        "Usage: grep [pattern]\nSearches across projects and commands.\nCan also be used as a pipe filter: help | grep weather",
+        "info-text",
+      );
+      break;
+    case "man":
+      appendOutput(
+        "Usage: man [command]\nDisplays the manual page for a command.",
+        "info-text",
+      );
       break;
     case "banner":
       displayBanner();
@@ -850,8 +1015,62 @@ Currently seeking opportunities in software engineering.`,
           }, 0);
         }
         break;
+      } else if (normalizedCommand.startsWith("history ")) {
+        const arg = command.substring(8).trim();
+        if (arg.toLowerCase() === "clear") {
+          commandHistory = [];
+          historyIndex = 0;
+          try {
+            localStorage.removeItem("terminal-history");
+          } catch (err) {
+            // ignore
+          }
+          appendOutput("History cleared.", "success-text");
+        } else {
+          const n = parseInt(arg, 10);
+          if (!isNaN(n) && n > 0) {
+            displayHistory(n);
+          } else {
+            appendOutput("Usage: history [clear|N]", "info-text");
+          }
+        }
+        break;
+      } else if (normalizedCommand.startsWith("blog ")) {
+        const slug = command.substring(5).trim();
+        if (!slug) {
+          displayBlogList();
+          break;
+        }
+        displayBlogPost(slug);
+        break;
+      } else if (
+        normalizedCommand.startsWith("skills ") &&
+        normalizedCommand.substring(7).trim() === "--category"
+      ) {
+        appendOutput(
+          "Usage: skills [--category name]\nAvailable categories: " +
+            (terminalData.skills || []).map((c) => c.name).join(", "),
+          "info-text",
+        );
+        break;
+      } else if (normalizedCommand.startsWith("skills --category ")) {
+        const catName = command.substring(18).trim();
+        displaySkills(catName);
+        break;
+      } else if (normalizedCommand.startsWith("grep ")) {
+        const pattern = command.substring(5).trim();
+        if (!pattern) {
+          appendOutput("Usage: grep [pattern]", "info-text");
+          break;
+        }
+        executeStandaloneGrep(pattern);
+        break;
+      } else if (normalizedCommand.startsWith("man ")) {
+        const cmd = normalizedCommand.substring(4).trim();
+        displayManPage(cmd);
+        break;
       } else if (normalizedCommand.startsWith("weather ")) {
-        const city = command.substring(8).trim(); // Get everything after "weather "
+        const city = command.substring(8).trim();
 
         // We're now handling the formatting in fetchWeather function
         fetchWeather(city);
@@ -888,138 +1107,7 @@ Currently seeking opportunities in software engineering.`,
  * @param {string} command - The command to display help for
  */
 function displayCommandHelp(command) {
-  const helpDetails = {
-    banner: {
-      desc: "Display the ASCII art banner for the terminal.",
-      usage: "banner",
-      examples: ["banner"],
-      notes:
-        "The banner is automatically displayed when the terminal starts or when the screen is cleared.",
-    },
-    clear: {
-      desc: "Clear the terminal screen, preserving command history.",
-      usage: "clear",
-      examples: ["clear"],
-      notes:
-        "This command preserves your command history, so you can still use up/down arrows to access previous commands.",
-    },
-    converter: {
-      desc: "Open the Link Converter tool in a new browser tab.",
-      usage: "converter",
-      examples: ["converter"],
-      notes:
-        "This project was created by Jakob to help convert links between different formats.",
-    },
-    curl: {
-      desc: "Make HTTP requests to web servers, APIs, and other web resources.",
-      usage: "curl [options] [URL]",
-      examples: [
-        "curl https://example.com",
-        "curl -I https://api.example.org/data",
-        'curl -X POST -H "Content-Type: application/json" -d \'{"key":"value"}\' https://api.example.org/data',
-      ],
-      notes:
-        "Supports common options like -X, -H, -d, -I, -o, -v. Browser CORS policy still applies.",
-    },
-    qr: {
-      desc: "Generate a QR code image for a given URL and provide a download button.",
-      usage: "qr [URL]",
-      examples: ["qr https://jjalangtry.com", "qr github.com/JJALANGTRY"],
-      notes: "Uses a public QR API. Ensure the URL is correct before sharing.",
-    },
-    date: {
-      desc: "Display the current date and time based on your local timezone.",
-      usage: "date",
-      examples: ["date"],
-      notes: "The date format follows your browser's locale settings.",
-    },
-    echo: {
-      desc: "Display a line of text in the terminal.",
-      usage: "echo [text]",
-      examples: ["echo Hello, World!", "echo This is a test"],
-      notes: "If no text is provided, usage information will be displayed.",
-    },
-    email: {
-      desc: "Open your default email client to contact Jakob.",
-      usage: "email",
-      examples: ["email"],
-      notes:
-        "This will open your system's default email client with jjalangtry@gmail.com as the recipient.",
-    },
-    github: {
-      desc: "Open Jakob's GitHub profile in a new browser tab.",
-      usage: "github",
-      examples: ["github", "repo"],
-      notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
-    },
-    help: {
-      desc: "Display a list of available commands with brief descriptions.",
-      usage: "help",
-      examples: ["help", "command --help"],
-      notes:
-        "For detailed help on a specific command, type the command name followed by --help.",
-    },
-    ls: {
-      desc: "List available terminal commands.",
-      usage: "ls",
-      examples: ["ls"],
-      notes:
-        "This terminal-style ls command lists supported commands rather than filesystem entries.",
-    },
-    projects: {
-      desc: "Open projects in a tmux-style split pane showing deployed apps, contributions, and repos.",
-      usage: "projects",
-      examples: ["projects"],
-      notes:
-        "Click any project to open it. Type 'close' or press Ctrl+B then q to dismiss the pane.",
-    },
-    close: {
-      desc: "Close the tmux-style projects split pane.",
-      usage: "close",
-      examples: ["close", "exit"],
-      notes:
-        "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
-    },
-    repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
-    },
-    resume: {
-      desc: "View Jakob's resume in a new browser tab.",
-      usage: "resume",
-      examples: ["resume"],
-      notes: "Opens resume.jjalangtry.com in a new tab.",
-    },
-    theme: {
-      desc: "Toggle between dark and light terminal themes.",
-      usage: "theme [dark|light]",
-      examples: ["theme", "theme dark", "theme light"],
-      notes:
-        "Without arguments, toggles to the opposite theme. Preference is saved in your browser.",
-    },
-    weather: {
-      desc: "Display weather forecast for a specified location.",
-      usage: "weather [city or location]",
-      examples: [
-        "weather New York",
-        "weather Syracuse NY",
-        "weather London, UK",
-        "weather Paris France",
-      ],
-      notes:
-        "Weather data is retrieved in real-time. The display format will adapt based on your device type.",
-    },
-    whoami: {
-      desc: "Display information about Jakob Langtry.",
-      usage: "whoami",
-      examples: ["whoami"],
-      notes:
-        "This provides a brief biography and professional information about Jakob.",
-    },
-  };
+  const helpDetails = getHelpDetails();
 
   if (helpDetails[command]) {
     const help = helpDetails[command];
@@ -2367,6 +2455,617 @@ function getWeatherAscii(forecast, isCurrent = false, boxWidth = 46) {
   );
 }
 
+// ── New terminal emulation commands ───────────────────────────
+
+function displayHistory(limit) {
+  const history = limit ? commandHistory.slice(-limit) : commandHistory;
+  if (history.length === 0) {
+    appendOutput("No commands in history.", "info-text");
+    return;
+  }
+  const offset = limit ? Math.max(0, commandHistory.length - limit) : 0;
+  const output = history
+    .map((cmd, i) => `  ${String(i + 1 + offset).padStart(4)}  ${cmd}`)
+    .join("\n");
+  appendOutput(output, "info-text");
+}
+
+function displayUptime() {
+  appendOutput(
+    `up ${formatUptime(Date.now() - sessionStartTime)}`,
+    "info-text",
+  );
+}
+
+function displayNeofetch() {
+  const theme = getCurrentTheme() === "light" ? "Light" : "Dark";
+  const ms = Date.now() - sessionStartTime;
+  const sec = Math.floor(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const uptimeStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+  appendOutput(
+    buildNeofetchOutput(
+      terminalData.version,
+      theme,
+      commandList.length,
+      uptimeStr,
+    ),
+    "info-text",
+  );
+}
+
+function executeStandaloneGrep(pattern) {
+  const lower = pattern.toLowerCase();
+  const results = [];
+
+  // Search projects
+  const groups = terminalData.projectGroups || {};
+  const allProjects = [
+    ...(groups.featured || []),
+    ...(groups.contributions || []),
+    ...(groups.github || []),
+  ];
+  const matchedProjects = allProjects.filter((p) => {
+    const searchable = [
+      p.name || "",
+      p.description || "",
+      p.language || "",
+      p.url || "",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return searchable.includes(lower);
+  });
+
+  if (matchedProjects.length > 0) {
+    results.push("\u2500\u2500 Projects " + "\u2500".repeat(40));
+    matchedProjects.forEach((p) => {
+      const lang = p.language ? ` [${p.language}]` : "";
+      const desc = p.description ? `  ${p.description}` : "";
+      results.push(`  ${p.name}${lang}${desc}`);
+    });
+  }
+
+  // Search commands
+  const matchedCmds = commandList.filter((cmd) =>
+    cmd.toLowerCase().includes(lower),
+  );
+  if (matchedCmds.length > 0) {
+    results.push("\u2500\u2500 Commands " + "\u2500".repeat(40));
+    matchedCmds.forEach((cmd) => {
+      results.push(`  ${cmd}`);
+    });
+  }
+
+  if (results.length === 0) {
+    appendOutput(`No matches found for "${pattern}".`, "info-text");
+  } else {
+    appendOutput(results.join("\n"), "info-text");
+  }
+}
+
+function displayManPage(cmd) {
+  const helpDetails = getHelpDetails();
+  const entry = helpDetails[cmd];
+  if (!entry) {
+    appendOutput(
+      `No manual entry for '${cmd}'. Type 'help' to see all available commands.`,
+      "error-text",
+    );
+    return;
+  }
+  appendOutput(formatManPage(cmd, entry), "info-text");
+}
+
+function getHelpDetails() {
+  return {
+    banner: {
+      desc: "Display the ASCII art banner for the terminal.",
+      usage: "banner",
+      examples: ["banner"],
+      notes:
+        "The banner is automatically displayed when the terminal starts or when the screen is cleared.",
+    },
+    blog: {
+      desc: "Read blog posts about projects and engineering.",
+      usage: "blog [slug]",
+      examples: ["blog", "blog terminal-portfolio", "blog nes-pong"],
+      notes:
+        "Without arguments, lists all available posts. With a slug, displays the full post.",
+    },
+    clear: {
+      desc: "Clear the terminal screen, preserving command history.",
+      usage: "clear",
+      examples: ["clear"],
+      notes:
+        "This command preserves your command history, so you can still use up/down arrows to access previous commands.",
+    },
+    contact: {
+      desc: "Display all contact information in one place.",
+      usage: "contact",
+      examples: ["contact"],
+      notes: "Shows email, GitHub, LinkedIn, and website links.",
+    },
+    converter: {
+      desc: "Open the Link Converter tool in a new browser tab.",
+      usage: "converter",
+      examples: ["converter"],
+      notes:
+        "This project was created by Jakob to help convert links between different formats.",
+    },
+    curl: {
+      desc: "Make HTTP requests to web servers, APIs, and other web resources.",
+      usage: "curl [options] [URL]",
+      examples: [
+        "curl https://example.com",
+        "curl -I https://api.example.org/data",
+        'curl -X POST -H "Content-Type: application/json" -d \'{"key":"value"}\' https://api.example.org/data',
+      ],
+      notes:
+        "Supports common options like -X, -H, -d, -I, -o, -v. Browser CORS policy still applies.",
+    },
+    qr: {
+      desc: "Generate a QR code image for a given URL and provide a download button.",
+      usage: "qr [URL]",
+      examples: ["qr https://jjalangtry.com", "qr github.com/JJALANGTRY"],
+      notes: "Uses a public QR API. Ensure the URL is correct before sharing.",
+    },
+    date: {
+      desc: "Display the current date and time based on your local timezone.",
+      usage: "date",
+      examples: ["date"],
+      notes: "The date format follows your browser's locale settings.",
+    },
+    echo: {
+      desc: "Display a line of text in the terminal.",
+      usage: "echo [text]",
+      examples: ["echo Hello, World!", "echo This is a test"],
+      notes: "If no text is provided, usage information will be displayed.",
+    },
+    email: {
+      desc: "Open your default email client to contact Jakob.",
+      usage: "email",
+      examples: ["email"],
+      notes:
+        "This will open your system's default email client with jjalangtry@gmail.com as the recipient.",
+    },
+    experience: {
+      desc: "Display work experience and education timeline.",
+      usage: "experience",
+      examples: ["experience"],
+      notes: "Shows a timeline of education, roles, and notable contributions.",
+    },
+    github: {
+      desc: "Open Jakob's GitHub profile in a new browser tab.",
+      usage: "github",
+      examples: ["github", "repo"],
+      notes:
+        'The command "repo" is an alias for "github" and performs the same action.',
+    },
+    grep: {
+      desc: "Search across projects and commands, or filter piped output.",
+      usage: "grep [pattern]",
+      examples: [
+        "grep python",
+        "grep TypeScript",
+        "help | grep weather",
+        "ls | grep pro",
+      ],
+      notes:
+        "As a standalone command, searches projects and command names. In a pipe, filters the output line-by-line.",
+    },
+    help: {
+      desc: "Display a list of available commands with brief descriptions.",
+      usage: "help",
+      examples: ["help", "command --help"],
+      notes:
+        "For detailed help on a specific command, type the command name followed by --help.",
+    },
+    history: {
+      desc: "Show command history for the current and previous sessions.",
+      usage: "history [clear|N]",
+      examples: ["history", "history 10", "history clear"],
+      notes:
+        "History is persisted in localStorage (up to 50 commands). Use 'history clear' to reset.",
+    },
+    ls: {
+      desc: "List available terminal commands.",
+      usage: "ls",
+      examples: ["ls"],
+      notes:
+        "This terminal-style ls command lists supported commands rather than filesystem entries.",
+    },
+    man: {
+      desc: "Display the manual page for a command.",
+      usage: "man [command]",
+      examples: ["man curl", "man weather", "man grep"],
+      notes:
+        "Man pages provide detailed usage, examples, and notes for each command.",
+    },
+    neofetch: {
+      desc: "Display system information in a neofetch-style layout.",
+      usage: "neofetch",
+      examples: ["neofetch"],
+      notes:
+        "Shows site version, engine, theme, uptime, and other terminal metadata.",
+    },
+    projects: {
+      desc: "Open projects in a tmux-style split pane showing deployed apps, contributions, and repos.",
+      usage: "projects",
+      examples: ["projects"],
+      notes:
+        "Click any project to open it. Type 'close' or press Ctrl+B then q to dismiss the pane.",
+    },
+    close: {
+      desc: "Close the tmux-style projects split pane.",
+      usage: "close",
+      examples: ["close", "exit"],
+      notes:
+        "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
+    },
+    repo: {
+      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
+      usage: "repo",
+      examples: ["repo", "github"],
+      notes: "This is just an alternative way to access the github command.",
+    },
+    resume: {
+      desc: "View Jakob's resume in a new browser tab.",
+      usage: "resume",
+      examples: ["resume"],
+      notes: "Opens resume.jjalangtry.com in a new tab.",
+    },
+    skills: {
+      desc: "Display skills with proficiency bar charts.",
+      usage: "skills [--category name]",
+      examples: ["skills", "skills --category Languages"],
+      notes: "Shows all skill categories by default. Use --category to filter.",
+    },
+    snake: {
+      desc: "Play a Snake game in the terminal.",
+      usage: "snake",
+      examples: ["snake"],
+      notes:
+        "Use arrow keys or WASD to move. Press q or Esc to quit. Score increases with each food item.",
+    },
+    stats: {
+      desc: "Show visitor and session statistics.",
+      usage: "stats",
+      examples: ["stats"],
+      notes: "Tracks commands, sessions, and visit history in localStorage.",
+    },
+    theme: {
+      desc: "Toggle between dark and light terminal themes.",
+      usage: "theme [dark|light]",
+      examples: ["theme", "theme dark", "theme light"],
+      notes:
+        "Without arguments, toggles to the opposite theme. Preference is saved in your browser.",
+    },
+    uptime: {
+      desc: "Display how long the current terminal session has been active.",
+      usage: "uptime",
+      examples: ["uptime"],
+      notes: "Tracks time since the page was loaded.",
+    },
+    weather: {
+      desc: "Display weather forecast for a specified location.",
+      usage: "weather [city or location]",
+      examples: [
+        "weather New York",
+        "weather Syracuse NY",
+        "weather London, UK",
+        "weather Paris France",
+      ],
+      notes:
+        "Weather data is retrieved in real-time. The display format will adapt based on your device type.",
+    },
+    whoami: {
+      desc: "Display information about Jakob Langtry.",
+      usage: "whoami",
+      examples: ["whoami"],
+      notes:
+        "This provides a brief biography and professional information about Jakob.",
+    },
+  };
+}
+
+// ── Content commands ──────────────────────────────────────────
+
+function displayContact() {
+  appendOutput(buildContactOutput(), "info-text");
+}
+
+function displaySkills(categoryFilter) {
+  const categories = terminalData.skills || [];
+  if (categories.length === 0) {
+    appendOutput("No skills data available.", "info-text");
+    return;
+  }
+  const filtered = categoryFilter
+    ? categories.filter(
+        (c) => c.name.toLowerCase() === categoryFilter.toLowerCase(),
+      )
+    : categories;
+  if (filtered.length === 0) {
+    appendOutput(
+      `Category "${categoryFilter}" not found. Available: ${categories.map((c) => c.name).join(", ")}`,
+      "error-text",
+    );
+    return;
+  }
+  appendOutput(buildSkillsOutput(filtered), "info-text");
+}
+
+function displayExperience() {
+  const entries = terminalData.experience || [];
+  appendOutput(buildExperienceOutput(entries), "info-text");
+}
+
+function displayBlogList() {
+  appendOutput(buildBlogListOutput(terminalData.posts || []), "info-text");
+}
+
+function displayBlogPost(slug) {
+  const posts = terminalData.posts || [];
+  const post = posts.find((p) => p.slug === slug.toLowerCase());
+  if (!post) {
+    appendOutput(
+      `Post "${slug}" not found. Type 'blog' to see available posts.`,
+      "error-text",
+    );
+    return;
+  }
+  appendOutput(buildBlogPostOutput(post), "info-text");
+}
+
+function displayStats() {
+  const raw = loadStats() || {
+    totalCommands: 0,
+    sessions: 1,
+    firstVisit: new Date().toISOString().split("T")[0],
+    commandCounts: {},
+  };
+  const ms = Date.now() - sessionStartTime;
+  const sec = Math.floor(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  const uptimeStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+
+  const sorted = Object.entries(raw.commandCounts || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  appendOutput(
+    buildStatsOutput({
+      sessionCommands: sessionCommandCount,
+      uptime: uptimeStr,
+      totalCommands: raw.totalCommands,
+      sessions: raw.sessions,
+      firstVisit: raw.firstVisit,
+      topCommands: sorted.map(([name, count]) => ({ name, count })),
+    }),
+    "info-text",
+  );
+}
+
+// ── Snake game ────────────────────────────────────────────────
+
+function startSnakeGame() {
+  if (snakeActive) {
+    appendOutput(
+      "Snake is already running! Press q or Esc to quit.",
+      "info-text",
+    );
+    return;
+  }
+  snakeActive = true;
+  if (inputLine) inputLine.style.display = "none";
+
+  const W = 30;
+  const H = 15;
+  let snake = [{ x: Math.floor(W / 2), y: Math.floor(H / 2) }];
+  let dir = { x: 0, y: 0 };
+  let nextDir = { x: 0, y: 0 };
+  let started = false;
+  let food = placeFood();
+  let score = 0;
+  let gameOver = false;
+  let speed = 150;
+
+  function placeFood() {
+    let pos;
+    do {
+      pos = {
+        x: Math.floor(Math.random() * W),
+        y: Math.floor(Math.random() * H),
+      };
+    } while (snake.some((s) => s.x === pos.x && s.y === pos.y));
+    return pos;
+  }
+
+  const gameEl = document.createElement("div");
+  gameEl.className = "info-text";
+  gameEl.style.whiteSpace = "pre";
+  gameEl.style.lineHeight = "1.15";
+  if (inputLine && inputLine.parentNode === cliOutput) {
+    cliOutput.insertBefore(gameEl, inputLine);
+  } else {
+    cliOutput.appendChild(gameEl);
+  }
+
+  function render() {
+    let frame = `┌${"─".repeat(W)}┐  Score: ${score}\n`;
+    for (let y = 0; y < H; y++) {
+      let row = "│";
+      for (let x = 0; x < W; x++) {
+        if (snake[0].x === x && snake[0].y === y) row += "█";
+        else if (snake.some((s) => s.x === x && s.y === y)) row += "▓";
+        else if (food.x === x && food.y === y) row += "●";
+        else row += " ";
+      }
+      row += "│";
+      frame += row + "\n";
+    }
+    frame += `└${"─".repeat(W)}┘`;
+    if (gameOver)
+      frame +=
+        "\n\n  GAME OVER! Score: " +
+        score +
+        "\n  Press any key to return to terminal.";
+    else if (!started)
+      frame += "\n  Press an arrow key or WASD to start · q / Esc to quit";
+    else frame += "\n  Arrow keys / WASD to move · q / Esc to quit";
+    gameEl.textContent = frame;
+    cliOutput.scrollTop = cliOutput.scrollHeight;
+  }
+
+  function tick() {
+    if (gameOver || !snakeActive || !started) return;
+    dir = { ...nextDir };
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    if (
+      head.x < 0 ||
+      head.x >= W ||
+      head.y < 0 ||
+      head.y >= H ||
+      snake.some((s) => s.x === head.x && s.y === head.y)
+    ) {
+      gameOver = true;
+      render();
+      clearInterval(snakeInterval);
+      return;
+    }
+
+    snake.unshift(head);
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      food = placeFood();
+      if (speed > 60) speed -= 5;
+      clearInterval(snakeInterval);
+      snakeInterval = setInterval(tick, speed);
+    } else {
+      snake.pop();
+    }
+    render();
+  }
+
+  function handleKey(e) {
+    if (gameOver) {
+      cleanUp();
+      e.preventDefault();
+      return;
+    }
+    const key = e.key.toLowerCase();
+    if (key === "escape" || key === "q") {
+      e.preventDefault();
+      cleanUp();
+      return;
+    }
+    let newDir = null;
+    if (key === "arrowup" || key === "w") newDir = { x: 0, y: -1 };
+    else if (key === "arrowdown" || key === "s") newDir = { x: 0, y: 1 };
+    else if (key === "arrowleft" || key === "a") newDir = { x: -1, y: 0 };
+    else if (key === "arrowright" || key === "d") newDir = { x: 1, y: 0 };
+    if (newDir) {
+      if (started) {
+        if (
+          (newDir.x !== 0 && newDir.x !== -dir.x) ||
+          (newDir.y !== 0 && newDir.y !== -dir.y)
+        ) {
+          nextDir = newDir;
+        }
+      } else {
+        nextDir = newDir;
+        started = true;
+        dir = { ...nextDir };
+        snakeInterval = setInterval(tick, speed);
+      }
+    }
+    e.preventDefault();
+  }
+
+  function cleanUp() {
+    snakeActive = false;
+    clearInterval(snakeInterval);
+    document.removeEventListener("keydown", handleKey, true);
+    if (inputLine) inputLine.style.display = "";
+    if (!gameOver) {
+      gameEl.textContent += `\n\n  Quit. Score: ${score}`;
+    }
+    appendOutput("", "");
+    if (currentInput) currentInput.focus();
+  }
+
+  document.addEventListener("keydown", handleKey, true);
+  render();
+}
+
+// ── Pipe support ──────────────────────────────────────────────
+
+function executePipeline(input) {
+  const filtered = parsePipeline(input);
+
+  if (filtered.length <= 1) {
+    executeCommand(input);
+    return;
+  }
+
+  // Echo the full pipeline
+  const echoLine = document.createElement("div");
+  echoLine.textContent = `guest@jjalangtry.com:~$ ${input}`;
+  cliOutput.insertBefore(echoLine, inputLine);
+
+  const firstCmd = filtered[0].trim().toLowerCase();
+  if (firstCmd.startsWith("weather ") || firstCmd.startsWith("curl ")) {
+    appendOutput(
+      "Pipe is not supported for async commands (weather, curl).",
+      "error-text",
+    );
+    return;
+  }
+
+  // Capture output from first command
+  captureMode = true;
+  capturedLines = [];
+  executeCommand(filtered[0], { skipEcho: true });
+  captureMode = false;
+
+  // Combine captured text
+  let output = capturedLines.map((l) => l.text).join("\n");
+
+  // Process pipe segments
+  for (let i = 1; i < filtered.length; i++) {
+    const pipeCmd = filtered[i].trim();
+    const pipeCmdLower = pipeCmd.toLowerCase();
+
+    if (pipeCmdLower.startsWith("grep ")) {
+      const pattern = pipeCmd.substring(5).trim();
+      if (!pattern) {
+        appendOutput("grep: missing pattern", "error-text");
+        return;
+      }
+      output = grepFilter(output, pattern).join("\n");
+    } else if (pipeCmdLower === "grep") {
+      appendOutput("grep: missing pattern", "error-text");
+      return;
+    } else {
+      appendOutput(
+        `Pipe error: unsupported pipe command '${pipeCmd}'. Only 'grep' is supported after |.`,
+        "error-text",
+      );
+      return;
+    }
+  }
+
+  if (output.trim()) {
+    appendOutput(output, "info-text");
+  } else {
+    appendOutput("(no matches)", "info-text");
+  }
+}
+
 /**
  * Initializes the command-line interface (CLI) functionality.
  * Sets up the output area, displays initial messages, creates the input line,
@@ -2553,7 +3252,12 @@ function initCLI() {
         }
         historyIndex = commandHistory.length;
         currentInputBuffer = "";
-        executeCommand(command);
+        trackCommand(command);
+        if (command.includes("|")) {
+          executePipeline(command);
+        } else {
+          executeCommand(command);
+        }
         e.target.value = "";
       }
       return;

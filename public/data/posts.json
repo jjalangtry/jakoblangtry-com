@@ -1,0 +1,25 @@
+{
+  "posts": [
+    {
+      "slug": "terminal-portfolio",
+      "title": "Why I Built a Terminal Portfolio",
+      "date": "2025-01-15",
+      "summary": "How a CLI interface became the best way to show off my work.",
+      "content": "Most portfolio sites are static pages with a grid of cards. I wanted something that felt more like me — someone who spends most of their day in a terminal.\n\nThis site is built with Astro and vanilla JavaScript. Every command you type is parsed and executed client-side. There's no backend, no database, just static files served from a CDN.\n\nThe terminal supports tab completion, command history (persisted in localStorage), Ctrl+L to clear, Ctrl+C to cancel, and even a tmux-style split pane for the projects view.\n\nThe hardest part was getting the weather command right. It uses the OpenWeatherMap API with geocoding to handle city names, state abbreviations, and country codes. The ASCII art weather display adapts between desktop and mobile layouts.\n\nIf you're thinking about building something similar — do it. Recruiters remember the portfolio that felt different."
+    },
+    {
+      "slug": "nes-pong",
+      "title": "Writing Pong in 6502 Assembly",
+      "date": "2024-11-03",
+      "summary": "What I learned building a game for 40-year-old hardware.",
+      "content": "The NES has 2KB of RAM, an 8-bit CPU running at 1.79 MHz, and no operating system. Writing Pong for it taught me more about computers than any class.\n\nYou write everything in 6502 assembly — there's no compiler, no standard library, no malloc. You manually manage the PPU (Picture Processing Unit) by writing to memory-mapped registers during the vertical blank interval.\n\nThe game loop is driven by NMI (Non-Maskable Interrupt) which fires 60 times per second. You get about 2,270 CPU cycles during vblank to update the screen. Miss that window and you get visual glitches.\n\nPaddle collision detection uses simple bounding-box checks. The ball direction is stored as two signed bytes (dx, dy). When the ball hits a paddle, dy gets negated and the angle changes based on where it hit.\n\nI tested everything on the FCEUX emulator, then verified on actual NES hardware via a flash cart. The satisfaction of seeing your own code run on a real NES is hard to describe."
+    },
+    {
+      "slug": "open-source",
+      "title": "Getting Into Open Source at RIT",
+      "date": "2024-08-20",
+      "summary": "How contributing to SSE and BeyondRGB leveled up my engineering.",
+      "content": "My first open source contribution was to the Society of Software Engineers website at RIT. I was terrified of submitting a PR to a codebase I didn't write. The code review was thorough but kind, and I learned more from those comments than from weeks of solo coding.\n\nThat led to building SSE Jello, a kanban board for the club. It started as a weekend project and grew into something the whole org uses. Writing software that real people depend on changes how you think about error handling, accessibility, and documentation.\n\nBeyondRGB was a different beast entirely — a research tool for multispectral imaging. The codebase was large, the domain was unfamiliar, and the stakes were higher (researchers depend on accurate color science). I spent the first two weeks just reading code and papers before writing a single line.\n\nMy advice: find a project you actually use, start with documentation or tests, and don't be afraid of looking stupid in code review. Everyone was new once."
+    }
+  ]
+}
