@@ -319,7 +319,8 @@ export function formatManPage(command, helpEntry) {
   if (!helpEntry) return null;
   const header = `${command.toUpperCase()}(1)`;
   const center = "jakoblangtry.com";
-  const topLine = `${header}${" ".repeat(Math.max(1, 60 - header.length * 2 - center.length))}${center}${" ".repeat(Math.max(1, 60 - header.length * 2 - center.length))}${header}`;
+  const pad = Math.max(1, 30 - header.length);
+  const topLine = `${header}${" ".repeat(pad)}${center}${" ".repeat(pad)}${header}`;
 
   let page = `${topLine}\n\n`;
   page += `NAME\n       ${command} - ${helpEntry.desc}\n\n`;

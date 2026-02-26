@@ -1,3 +1,18 @@
+import {
+  formatUptime,
+  formatHistoryOutput,
+  grepFilter,
+  parsePipeline,
+  buildNeofetchOutput,
+  formatManPage,
+  buildSkillsOutput,
+  buildExperienceOutput,
+  buildBlogListOutput,
+  buildBlogPostOutput,
+  buildContactOutput,
+  buildStatsOutput,
+} from "../lib/terminal/index.js";
+
 // Global variables for managing input and command history
 const sessionStartTime = Date.now();
 let sessionCommandCount = 0;
@@ -2456,58 +2471,28 @@ function displayHistory(limit) {
 }
 
 function displayUptime() {
-  const ms = Date.now() - sessionStartTime;
-  const totalSeconds = Math.floor(ms / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const parts = [];
-  if (days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
-  if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? "s" : ""}`);
-  if (minutes > 0) parts.push(`${minutes} min${minutes !== 1 ? "s" : ""}`);
-  parts.push(`${seconds} sec${seconds !== 1 ? "s" : ""}`);
-  appendOutput(`up ${parts.join(", ")}`, "info-text");
+  appendOutput(
+    `up ${formatUptime(Date.now() - sessionStartTime)}`,
+    "info-text",
+  );
 }
 
 function displayNeofetch() {
-  const version = terminalData.version;
   const theme = getCurrentTheme() === "light" ? "Light" : "Dark";
-  const uptimeMs = Date.now() - sessionStartTime;
-  const totalSec = Math.floor(uptimeMs / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
+  const ms = Date.now() - sessionStartTime;
+  const sec = Math.floor(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
   const uptimeStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
-
-  const info = [
-    "guest@jjalangtry.com",
-    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
-    `Site:     jakoblangtry.com v${version}`,
-    "Engine:   Astro",
-    "Shell:    terminal.js",
-    `Theme:    ${theme}`,
-    `Uptime:   ${uptimeStr}`,
-    `Commands: ${commandList.length} available`,
-    "Font:     JetBrains Mono",
-  ];
-
-  const art = [
-    "  \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
-    "  \u2502 >_      \u2502",
-    "  \u2502         \u2502",
-    "  \u2502         \u2502",
-    "  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
-  ];
-
-  const lines = [];
-  const maxLines = Math.max(art.length, info.length);
-  for (let i = 0; i < maxLines; i++) {
-    const artLine = (i < art.length ? art[i] : "").padEnd(17);
-    const infoLine = i < info.length ? info[i] : "";
-    lines.push(`${artLine}${infoLine}`);
-  }
-  appendOutput(lines.join("\n"), "info-text");
+  appendOutput(
+    buildNeofetchOutput(
+      terminalData.version,
+      theme,
+      commandList.length,
+      uptimeStr,
+    ),
+    "info-text",
+  );
 }
 
 function executeStandaloneGrep(pattern) {
@@ -2570,31 +2555,7 @@ function displayManPage(cmd) {
     );
     return;
   }
-
-  const header = `${cmd.toUpperCase()}(1)`;
-  const center = "jakoblangtry.com";
-  const pad = Math.max(1, 30 - header.length);
-  const topLine = `${header}${" ".repeat(pad)}${center}${" ".repeat(pad)}${header}`;
-
-  let page = `${topLine}\n\n`;
-  page += `NAME\n       ${cmd} - ${entry.desc}\n\n`;
-  page += `SYNOPSIS\n       ${entry.usage}\n\n`;
-  page += `DESCRIPTION\n       ${entry.desc}\n\n`;
-
-  if (entry.examples && entry.examples.length > 0) {
-    page += "EXAMPLES\n";
-    entry.examples.forEach((ex) => {
-      page += `       ${ex}\n`;
-    });
-    page += "\n";
-  }
-
-  if (entry.notes) {
-    page += `NOTES\n       ${entry.notes}\n\n`;
-  }
-
-  page += "SEE ALSO\n       help(1), man(1)";
-  appendOutput(page, "info-text");
+  appendOutput(formatManPage(cmd, entry), "info-text");
 }
 
 function getHelpDetails() {
@@ -2812,17 +2773,7 @@ function getHelpDetails() {
 // ── Content commands ──────────────────────────────────────────
 
 function displayContact() {
-  const output = [
-    "┌────────────────────────────────────────┐",
-    "│          CONTACT INFORMATION           │",
-    "├────────────────────────────────────────┤",
-    "│  Email     jjalangtry@gmail.com        │",
-    "│  GitHub    github.com/JJALANGTRY       │",
-    "│  LinkedIn  linkedin.com/in/jjalangtry  │",
-    "│  Website   jakoblangtry.com            │",
-    "└────────────────────────────────────────┘",
-  ].join("\n");
-  appendOutput(output, "info-text");
+  appendOutput(buildContactOutput(), "info-text");
 }
 
 function displaySkills(categoryFilter) {
@@ -2831,7 +2782,6 @@ function displaySkills(categoryFilter) {
     appendOutput("No skills data available.", "info-text");
     return;
   }
-  const barWidth = 20;
   const filtered = categoryFilter
     ? categories.filter(
         (c) => c.name.toLowerCase() === categoryFilter.toLowerCase(),
@@ -2844,60 +2794,16 @@ function displaySkills(categoryFilter) {
     );
     return;
   }
-  const lines = [];
-  filtered.forEach((cat) => {
-    lines.push(
-      `\u2500\u2500 ${cat.name} ${"\u2500".repeat(Math.max(0, 50 - cat.name.length))}`,
-    );
-    (cat.skills || []).forEach((s) => {
-      const filled = Math.round((s.level / 100) * barWidth);
-      const empty = barWidth - filled;
-      const bar = "\u2588".repeat(filled) + "\u2591".repeat(empty);
-      const name = s.name.padEnd(16);
-      lines.push(`  ${name} ${bar} ${s.level}%`);
-      if (s.note) {
-        lines.push(`  ${"".padEnd(16)} \u2514 ${s.note}`);
-      }
-    });
-    lines.push("");
-  });
-  appendOutput(lines.join("\n").trimEnd(), "info-text");
+  appendOutput(buildSkillsOutput(filtered), "info-text");
 }
 
 function displayExperience() {
   const entries = terminalData.experience || [];
-  if (entries.length === 0) {
-    appendOutput("No experience data available.", "info-text");
-    return;
-  }
-  const lines = [];
-  entries.forEach((e, i) => {
-    const prefix = i === entries.length - 1 ? "\u2514" : "\u251C";
-    const cont = i === entries.length - 1 ? " " : "\u2502";
-    lines.push(`${prefix}\u2500 ${e.title}`);
-    lines.push(`${cont}  ${e.org}  \u00B7  ${e.period}`);
-    if (e.description) lines.push(`${cont}  ${e.description}`);
-    if (e.tags && e.tags.length > 0)
-      lines.push(`${cont}  [${e.tags.join("] [")}]`);
-    if (i < entries.length - 1) lines.push("\u2502");
-  });
-  appendOutput(lines.join("\n"), "info-text");
+  appendOutput(buildExperienceOutput(entries), "info-text");
 }
 
 function displayBlogList() {
-  const posts = terminalData.posts || [];
-  if (posts.length === 0) {
-    appendOutput("No blog posts yet.", "info-text");
-    return;
-  }
-  const lines = ["Available posts:\n"];
-  posts.forEach((p) => {
-    lines.push(`  ${p.date}  ${p.title}`);
-    lines.push(`  ${"".padEnd(12)}${p.summary}`);
-    lines.push(`  ${"".padEnd(12)}\u2192 blog ${p.slug}\n`);
-  });
-  lines.push("Read a post with: blog [slug]");
-  appendOutput(lines.join("\n"), "info-text");
+  appendOutput(buildBlogListOutput(terminalData.posts || []), "info-text");
 }
 
 function displayBlogPost(slug) {
@@ -2910,14 +2816,7 @@ function displayBlogPost(slug) {
     );
     return;
   }
-  const width = 60;
-  const border = "\u2500".repeat(width);
-  let output = `\u250C${border}\u2510\n`;
-  output += `\u2502 ${post.title.padEnd(width - 1)}\u2502\n`;
-  output += `\u2502 ${post.date.padEnd(width - 1)}\u2502\n`;
-  output += `\u2514${border}\u2518\n\n`;
-  output += post.content;
-  appendOutput(output, "info-text");
+  appendOutput(buildBlogPostOutput(post), "info-text");
 }
 
 function displayStats() {
@@ -2937,29 +2836,17 @@ function displayStats() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
-  const lines = [];
-  lines.push(
-    "\u2500\u2500 Session Stats \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+  appendOutput(
+    buildStatsOutput({
+      sessionCommands: sessionCommandCount,
+      uptime: uptimeStr,
+      totalCommands: raw.totalCommands,
+      sessions: raw.sessions,
+      firstVisit: raw.firstVisit,
+      topCommands: sorted.map(([name, count]) => ({ name, count })),
+    }),
+    "info-text",
   );
-  lines.push(`  Commands this session:  ${sessionCommandCount}`);
-  lines.push(`  Session uptime:        ${uptimeStr}`);
-  lines.push("");
-  lines.push(
-    "\u2500\u2500 All-Time Stats \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
-  );
-  lines.push(`  Total commands:        ${raw.totalCommands}`);
-  lines.push(`  Sessions:              ${raw.sessions}`);
-  lines.push(`  First visit:           ${raw.firstVisit}`);
-  if (sorted.length > 0) {
-    lines.push("");
-    lines.push(
-      "\u2500\u2500 Top Commands \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
-    );
-    sorted.forEach(([name, count]) => {
-      lines.push(`  ${name.padEnd(16)} ${count} times`);
-    });
-  }
-  appendOutput(lines.join("\n"), "info-text");
 }
 
 // ── Snake game ────────────────────────────────────────────────
@@ -3118,28 +3005,7 @@ function startSnakeGame() {
 // ── Pipe support ──────────────────────────────────────────────
 
 function executePipeline(input) {
-  // Parse into pipeline segments respecting quotes
-  const segments = [];
-  let current = "";
-  let inSingle = false;
-  let inDouble = false;
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-    if (ch === "'" && !inDouble) {
-      inSingle = !inSingle;
-      current += ch;
-    } else if (ch === '"' && !inSingle) {
-      inDouble = !inDouble;
-      current += ch;
-    } else if (ch === "|" && !inSingle && !inDouble) {
-      segments.push(current.trim());
-      current = "";
-    } else {
-      current += ch;
-    }
-  }
-  if (current.trim()) segments.push(current.trim());
-  const filtered = segments.filter(Boolean);
+  const filtered = parsePipeline(input);
 
   if (filtered.length <= 1) {
     executeCommand(input);
@@ -3180,11 +3046,7 @@ function executePipeline(input) {
         appendOutput("grep: missing pattern", "error-text");
         return;
       }
-      const lines = output.split("\n");
-      const matched = lines.filter((l) =>
-        l.toLowerCase().includes(pattern.toLowerCase()),
-      );
-      output = matched.join("\n");
+      output = grepFilter(output, pattern).join("\n");
     } else if (pipeCmdLower === "grep") {
       appendOutput("grep: missing pattern", "error-text");
       return;
