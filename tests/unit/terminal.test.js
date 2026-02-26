@@ -171,6 +171,21 @@ describe("terminal helpers", () => {
     expect(formatUptime(90061000)).toBe("1 day, 1 hour, 1 min, 1 sec");
   });
 
+  it("formats uptime boundary values correctly", () => {
+    // exactly 60 seconds = 1 min, 0 secs
+    expect(formatUptime(60000)).toBe("1 min, 0 secs");
+    // exactly 1 hour
+    expect(formatUptime(3600000)).toBe("1 hour, 0 secs");
+    // exactly 1 day
+    expect(formatUptime(86400000)).toBe("1 day, 0 secs");
+    // plural boundaries: 2 of everything
+    expect(formatUptime(2 * 86400000 + 2 * 3600000 + 2 * 60000 + 2000)).toBe(
+      "2 days, 2 hours, 2 mins, 2 secs",
+    );
+    // sub-second is floored to 0
+    expect(formatUptime(500)).toBe("0 secs");
+  });
+
   it("formats command history output", () => {
     expect(formatHistoryOutput([])).toBe("No commands in history.");
     expect(formatHistoryOutput(null)).toBe("No commands in history.");
@@ -178,6 +193,16 @@ describe("terminal helpers", () => {
     expect(output).toContain("1  ls");
     expect(output).toContain("2  help");
     expect(output).toContain("3  whoami");
+  });
+
+  it("formats single-item history and pads indices", () => {
+    expect(formatHistoryOutput(["solo"])).toBe("     1  solo");
+
+    // double-digit indices stay right-aligned
+    const items = Array.from({ length: 12 }, (_, i) => `cmd${i}`);
+    const output = formatHistoryOutput(items);
+    expect(output).toContain("   1  cmd0");
+    expect(output).toContain("  12  cmd11");
   });
 
   it("filters text with grepFilter", () => {
@@ -194,6 +219,13 @@ describe("terminal helpers", () => {
       "abc",
       "abcdef",
     ]);
+  });
+
+  it("grepFilter handles no-match and single-line input", () => {
+    expect(grepFilter("hello\nworld", "xyz")).toEqual([]);
+    expect(grepFilter("single line", "single")).toEqual(["single line"]);
+    // null text
+    expect(grepFilter(null, "pattern")).toEqual([]);
   });
 
   it("parses pipeline segments", () => {
@@ -215,6 +247,18 @@ describe("terminal helpers", () => {
     expect(parsePipeline(null)).toEqual([""]);
   });
 
+  it("parsePipeline handles trailing pipes and empty segments", () => {
+    // trailing pipe produces only the non-empty segment
+    expect(parsePipeline("help |")).toEqual(["help"]);
+    expect(parsePipeline("help |  ")).toEqual(["help"]);
+    // leading pipe
+    expect(parsePipeline("| grep foo")).toEqual(["grep foo"]);
+    // double pipe (empty segment between)
+    expect(parsePipeline("a || b")).toEqual(["a", "b"]);
+    // whitespace-only input
+    expect(parsePipeline("   ")).toEqual([]);
+  });
+
   it("builds neofetch output with site info", () => {
     const output = buildNeofetchOutput("2.4.7", "Dark", 26, "3m 22s");
     expect(output).toContain("guest@jjalangtry.com");
@@ -227,6 +271,19 @@ describe("terminal helpers", () => {
     expect(output).toContain("JetBrains Mono");
     // Contains ASCII art
     expect(output).toContain(">_");
+  });
+
+  it("neofetch output has correct line count and alignment", () => {
+    const output = buildNeofetchOutput("1.0.0", "Light", 10, "0s");
+    const lines = output.split("\n");
+    // 9 info lines > 5 art lines, so 9 lines total
+    expect(lines.length).toBe(9);
+    // Every line should have the art column padded to 17 chars
+    lines.forEach((line) => {
+      expect(line.length).toBeGreaterThanOrEqual(17);
+    });
+    // Light theme shows up
+    expect(output).toContain("Theme:    Light");
   });
 
   it("formats man pages for commands", () => {
@@ -250,5 +307,37 @@ describe("terminal helpers", () => {
 
     // null entry
     expect(formatManPage("unknown", null)).toBeNull();
+  });
+
+  it("formats man page with missing optional fields", () => {
+    // no examples, no notes
+    const minimal = { desc: "A command.", usage: "cmd" };
+    const page = formatManPage("cmd", minimal);
+    expect(page).toContain("CMD(1)");
+    expect(page).toContain("NAME");
+    expect(page).toContain("cmd - A command.");
+    expect(page).toContain("SYNOPSIS");
+    expect(page).not.toContain("EXAMPLES");
+    expect(page).not.toContain("NOTES");
+    expect(page).toContain("SEE ALSO");
+
+    // empty examples array
+    const emptyEx = { desc: "X.", usage: "x", examples: [], notes: "N." };
+    const page2 = formatManPage("x", emptyEx);
+    expect(page2).not.toContain("EXAMPLES");
+    expect(page2).toContain("NOTES");
+  });
+
+  it("autocompletes new commands from real COMMAND_LIST", () => {
+    expect(autocompleteCommand("gr", COMMAND_LIST)).toEqual(["grep"]);
+    expect(autocompleteCommand("hi", COMMAND_LIST)).toEqual(["history"]);
+    expect(autocompleteCommand("ne", COMMAND_LIST)).toEqual(["neofetch"]);
+    expect(autocompleteCommand("up", COMMAND_LIST)).toEqual(["uptime"]);
+    expect(autocompleteCommand("ma", COMMAND_LIST)).toEqual(["man"]);
+    // 'h' matches help and history
+    const hMatches = autocompleteCommand("h", COMMAND_LIST);
+    expect(hMatches).toContain("help");
+    expect(hMatches).toContain("history");
+    expect(hMatches.length).toBe(2);
   });
 });
