@@ -9,6 +9,12 @@ import {
   autocompleteCommand,
   handleHistoryNavigation,
   shouldUseCompactWeatherLayout,
+  formatUptime,
+  formatHistoryOutput,
+  grepFilter,
+  parsePipeline,
+  buildNeofetchOutput,
+  formatManPage,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -18,6 +24,11 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("weather");
     expect(COMMAND_LIST).toContain("sudo");
     expect(COMMAND_LIST).toContain("cd");
+    expect(COMMAND_LIST).toContain("grep");
+    expect(COMMAND_LIST).toContain("history");
+    expect(COMMAND_LIST).toContain("man");
+    expect(COMMAND_LIST).toContain("neofetch");
+    expect(COMMAND_LIST).toContain("uptime");
   });
 
   it("builds projects output with numbered entries", () => {
@@ -149,5 +160,95 @@ describe("terminal helpers", () => {
     expect(shouldUseCompactWeatherLayout(false, 800)).toBe(true); // < 900
     expect(shouldUseCompactWeatherLayout(false, 900)).toBe(true); // <= 900
     expect(shouldUseCompactWeatherLayout(false, 901)).toBe(false); // > 900
+  });
+
+  it("formats uptime from milliseconds", () => {
+    expect(formatUptime(0)).toBe("0 secs");
+    expect(formatUptime(1000)).toBe("1 sec");
+    expect(formatUptime(5000)).toBe("5 secs");
+    expect(formatUptime(65000)).toBe("1 min, 5 secs");
+    expect(formatUptime(3661000)).toBe("1 hour, 1 min, 1 sec");
+    expect(formatUptime(90061000)).toBe("1 day, 1 hour, 1 min, 1 sec");
+  });
+
+  it("formats command history output", () => {
+    expect(formatHistoryOutput([])).toBe("No commands in history.");
+    expect(formatHistoryOutput(null)).toBe("No commands in history.");
+    const output = formatHistoryOutput(["ls", "help", "whoami"]);
+    expect(output).toContain("1  ls");
+    expect(output).toContain("2  help");
+    expect(output).toContain("3  whoami");
+  });
+
+  it("filters text with grepFilter", () => {
+    expect(grepFilter("", "foo")).toEqual([]);
+    expect(grepFilter("hello\nworld", "")).toEqual([]);
+    expect(grepFilter("hello\nworld\nhello world", "hello")).toEqual([
+      "hello",
+      "hello world",
+    ]);
+    // case insensitive
+    expect(grepFilter("Hello\nWORLD", "hello")).toEqual(["Hello"]);
+    // array input
+    expect(grepFilter(["abc", "def", "abcdef"], "abc")).toEqual([
+      "abc",
+      "abcdef",
+    ]);
+  });
+
+  it("parses pipeline segments", () => {
+    expect(parsePipeline("help")).toEqual(["help"]);
+    expect(parsePipeline("help | grep weather")).toEqual([
+      "help",
+      "grep weather",
+    ]);
+    expect(parsePipeline("ls | grep pro | grep ject")).toEqual([
+      "ls",
+      "grep pro",
+      "grep ject",
+    ]);
+    // respects quotes
+    expect(parsePipeline('echo "a | b"')).toEqual(['echo "a | b"']);
+    expect(parsePipeline("echo 'a | b'")).toEqual(["echo 'a | b'"]);
+    // empty/null input
+    expect(parsePipeline("")).toEqual([""]);
+    expect(parsePipeline(null)).toEqual([""]);
+  });
+
+  it("builds neofetch output with site info", () => {
+    const output = buildNeofetchOutput("2.4.7", "Dark", 26, "3m 22s");
+    expect(output).toContain("guest@jjalangtry.com");
+    expect(output).toContain("jakoblangtry.com v2.4.7");
+    expect(output).toContain("Astro");
+    expect(output).toContain("terminal.js");
+    expect(output).toContain("Dark");
+    expect(output).toContain("3m 22s");
+    expect(output).toContain("26 available");
+    expect(output).toContain("JetBrains Mono");
+    // Contains ASCII art
+    expect(output).toContain(">_");
+  });
+
+  it("formats man pages for commands", () => {
+    const entry = {
+      desc: "Display a line of text in the terminal.",
+      usage: "echo [text]",
+      examples: ["echo Hello, World!"],
+      notes: "If no text is provided, usage information will be displayed.",
+    };
+    const page = formatManPage("echo", entry);
+    expect(page).toContain("ECHO(1)");
+    expect(page).toContain("jakoblangtry.com");
+    expect(page).toContain("NAME");
+    expect(page).toContain("echo - Display a line of text");
+    expect(page).toContain("SYNOPSIS");
+    expect(page).toContain("echo [text]");
+    expect(page).toContain("EXAMPLES");
+    expect(page).toContain("echo Hello, World!");
+    expect(page).toContain("NOTES");
+    expect(page).toContain("SEE ALSO");
+
+    // null entry
+    expect(formatManPage("unknown", null)).toBeNull();
   });
 });

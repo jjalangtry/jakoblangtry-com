@@ -1,8 +1,11 @@
 // Global variables for managing input and command history
+const sessionStartTime = Date.now();
 let currentInput;
 let cliOutput;
 let inputLine;
 let commandHistory = [];
+let captureMode = false;
+let capturedLines = [];
 try {
   const savedHistory = localStorage.getItem("terminal-history");
   if (savedHistory) {
@@ -66,12 +69,17 @@ const commandList = [
   "echo",
   "email",
   "github",
+  "grep",
   "help",
+  "history",
   "ls",
+  "man",
+  "neofetch",
   "projects",
   "repo",
   "resume",
   "theme",
+  "uptime",
   "weather",
   "whoami",
   "sudo",
@@ -487,6 +495,11 @@ function displayOnboardingCommands() {
  * @param {string} [className=''] - The class name to apply to the output element.
  */
 function appendOutput(text, className = "") {
+  if (captureMode) {
+    capturedLines.push({ text, className });
+    return;
+  }
+
   // Save the current selection state
   const selection = window.getSelection();
   const selectedText = selection.toString();
@@ -573,11 +586,15 @@ function openResume() {
 /**
  * Executes a command entered in the terminal interface.
  * @param {string} command - The command to execute.
+ * @param {Object} [options] - Execution options.
+ * @param {boolean} [options.skipEcho] - Skip echoing the command line.
  */
-function executeCommand(command) {
-  const commandLine = document.createElement("div");
-  commandLine.textContent = `guest@jjalangtry.com:~$ ${command}`;
-  cliOutput.insertBefore(commandLine, inputLine);
+function executeCommand(command, options = {}) {
+  if (!options.skipEcho) {
+    const commandLine = document.createElement("div");
+    commandLine.textContent = `guest@jjalangtry.com:~$ ${command}`;
+    cliOutput.insertBefore(commandLine, inputLine);
+  }
 
   const normalizedCommand = command.toLowerCase();
   switch (normalizedCommand) {
@@ -617,11 +634,24 @@ AVAILABLE COMMANDS:
              (alias: repo)
              Usage: github
 
+  grep       Search across projects and commands, or filter piped output
+             Usage: grep [pattern]
+             Pipe:  help | grep weather
+
   help       Display this help information
              Usage: help
 
+  history    Show command history
+             Usage: history [clear|N]
+
   ls         List available commands
              Usage: ls
+
+  man        Display manual page for a command
+             Usage: man [command]
+
+  neofetch   Display system information
+             Usage: neofetch
 
   projects   Open projects in a tmux-style split pane
              Usage: projects
@@ -635,6 +665,9 @@ AVAILABLE COMMANDS:
   theme      Toggle between dark and light mode
              Usage: theme [dark|light]
 
+  uptime     Show session uptime
+             Usage: uptime
+
   weather    Display weather forecast for a location
              Usage: weather [city or location]
              Examples: weather New York
@@ -644,7 +677,11 @@ AVAILABLE COMMANDS:
   whoami     Display information about Jakob
              Usage: whoami
 
-For more information about a specific command, type: [command] --help`;
+PIPES:
+  Use | to pipe output through grep:  help | grep weather
+
+For more information about a specific command, type: [command] --help
+                                                  or: man [command]`;
 
       // Create a div with pre-formatted text for help output
       appendOutput(helpText, "info-text");
@@ -684,6 +721,27 @@ Currently seeking opportunities in software engineering.`,
       break;
     case "date":
       appendOutput(new Date().toLocaleString());
+      break;
+    case "history":
+      displayHistory();
+      break;
+    case "uptime":
+      displayUptime();
+      break;
+    case "neofetch":
+      displayNeofetch();
+      break;
+    case "grep":
+      appendOutput(
+        "Usage: grep [pattern]\nSearches across projects and commands.\nCan also be used as a pipe filter: help | grep weather",
+        "info-text",
+      );
+      break;
+    case "man":
+      appendOutput(
+        "Usage: man [command]\nDisplays the manual page for a command.",
+        "info-text",
+      );
       break;
     case "banner":
       displayBanner();
@@ -850,8 +908,40 @@ Currently seeking opportunities in software engineering.`,
           }, 0);
         }
         break;
+      } else if (normalizedCommand.startsWith("history ")) {
+        const arg = command.substring(8).trim();
+        if (arg.toLowerCase() === "clear") {
+          commandHistory = [];
+          historyIndex = 0;
+          try {
+            localStorage.removeItem("terminal-history");
+          } catch (err) {
+            // ignore
+          }
+          appendOutput("History cleared.", "success-text");
+        } else {
+          const n = parseInt(arg, 10);
+          if (!isNaN(n) && n > 0) {
+            displayHistory(n);
+          } else {
+            appendOutput("Usage: history [clear|N]", "info-text");
+          }
+        }
+        break;
+      } else if (normalizedCommand.startsWith("grep ")) {
+        const pattern = command.substring(5).trim();
+        if (!pattern) {
+          appendOutput("Usage: grep [pattern]", "info-text");
+          break;
+        }
+        executeStandaloneGrep(pattern);
+        break;
+      } else if (normalizedCommand.startsWith("man ")) {
+        const cmd = normalizedCommand.substring(4).trim();
+        displayManPage(cmd);
+        break;
       } else if (normalizedCommand.startsWith("weather ")) {
-        const city = command.substring(8).trim(); // Get everything after "weather "
+        const city = command.substring(8).trim();
 
         // We're now handling the formatting in fetchWeather function
         fetchWeather(city);
@@ -888,138 +978,7 @@ Currently seeking opportunities in software engineering.`,
  * @param {string} command - The command to display help for
  */
 function displayCommandHelp(command) {
-  const helpDetails = {
-    banner: {
-      desc: "Display the ASCII art banner for the terminal.",
-      usage: "banner",
-      examples: ["banner"],
-      notes:
-        "The banner is automatically displayed when the terminal starts or when the screen is cleared.",
-    },
-    clear: {
-      desc: "Clear the terminal screen, preserving command history.",
-      usage: "clear",
-      examples: ["clear"],
-      notes:
-        "This command preserves your command history, so you can still use up/down arrows to access previous commands.",
-    },
-    converter: {
-      desc: "Open the Link Converter tool in a new browser tab.",
-      usage: "converter",
-      examples: ["converter"],
-      notes:
-        "This project was created by Jakob to help convert links between different formats.",
-    },
-    curl: {
-      desc: "Make HTTP requests to web servers, APIs, and other web resources.",
-      usage: "curl [options] [URL]",
-      examples: [
-        "curl https://example.com",
-        "curl -I https://api.example.org/data",
-        'curl -X POST -H "Content-Type: application/json" -d \'{"key":"value"}\' https://api.example.org/data',
-      ],
-      notes:
-        "Supports common options like -X, -H, -d, -I, -o, -v. Browser CORS policy still applies.",
-    },
-    qr: {
-      desc: "Generate a QR code image for a given URL and provide a download button.",
-      usage: "qr [URL]",
-      examples: ["qr https://jjalangtry.com", "qr github.com/JJALANGTRY"],
-      notes: "Uses a public QR API. Ensure the URL is correct before sharing.",
-    },
-    date: {
-      desc: "Display the current date and time based on your local timezone.",
-      usage: "date",
-      examples: ["date"],
-      notes: "The date format follows your browser's locale settings.",
-    },
-    echo: {
-      desc: "Display a line of text in the terminal.",
-      usage: "echo [text]",
-      examples: ["echo Hello, World!", "echo This is a test"],
-      notes: "If no text is provided, usage information will be displayed.",
-    },
-    email: {
-      desc: "Open your default email client to contact Jakob.",
-      usage: "email",
-      examples: ["email"],
-      notes:
-        "This will open your system's default email client with jjalangtry@gmail.com as the recipient.",
-    },
-    github: {
-      desc: "Open Jakob's GitHub profile in a new browser tab.",
-      usage: "github",
-      examples: ["github", "repo"],
-      notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
-    },
-    help: {
-      desc: "Display a list of available commands with brief descriptions.",
-      usage: "help",
-      examples: ["help", "command --help"],
-      notes:
-        "For detailed help on a specific command, type the command name followed by --help.",
-    },
-    ls: {
-      desc: "List available terminal commands.",
-      usage: "ls",
-      examples: ["ls"],
-      notes:
-        "This terminal-style ls command lists supported commands rather than filesystem entries.",
-    },
-    projects: {
-      desc: "Open projects in a tmux-style split pane showing deployed apps, contributions, and repos.",
-      usage: "projects",
-      examples: ["projects"],
-      notes:
-        "Click any project to open it. Type 'close' or press Ctrl+B then q to dismiss the pane.",
-    },
-    close: {
-      desc: "Close the tmux-style projects split pane.",
-      usage: "close",
-      examples: ["close", "exit"],
-      notes:
-        "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
-    },
-    repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
-    },
-    resume: {
-      desc: "View Jakob's resume in a new browser tab.",
-      usage: "resume",
-      examples: ["resume"],
-      notes: "Opens resume.jjalangtry.com in a new tab.",
-    },
-    theme: {
-      desc: "Toggle between dark and light terminal themes.",
-      usage: "theme [dark|light]",
-      examples: ["theme", "theme dark", "theme light"],
-      notes:
-        "Without arguments, toggles to the opposite theme. Preference is saved in your browser.",
-    },
-    weather: {
-      desc: "Display weather forecast for a specified location.",
-      usage: "weather [city or location]",
-      examples: [
-        "weather New York",
-        "weather Syracuse NY",
-        "weather London, UK",
-        "weather Paris France",
-      ],
-      notes:
-        "Weather data is retrieved in real-time. The display format will adapt based on your device type.",
-    },
-    whoami: {
-      desc: "Display information about Jakob Langtry.",
-      usage: "whoami",
-      examples: ["whoami"],
-      notes:
-        "This provides a brief biography and professional information about Jakob.",
-    },
-  };
+  const helpDetails = getHelpDetails();
 
   if (helpDetails[command]) {
     const help = helpDetails[command];
@@ -2367,6 +2326,426 @@ function getWeatherAscii(forecast, isCurrent = false, boxWidth = 46) {
   );
 }
 
+// ── New terminal emulation commands ───────────────────────────
+
+function displayHistory(limit) {
+  const history = limit ? commandHistory.slice(-limit) : commandHistory;
+  if (history.length === 0) {
+    appendOutput("No commands in history.", "info-text");
+    return;
+  }
+  const offset = limit ? Math.max(0, commandHistory.length - limit) : 0;
+  const output = history
+    .map((cmd, i) => `  ${String(i + 1 + offset).padStart(4)}  ${cmd}`)
+    .join("\n");
+  appendOutput(output, "info-text");
+}
+
+function displayUptime() {
+  const ms = Date.now() - sessionStartTime;
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
+  if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? "s" : ""}`);
+  if (minutes > 0) parts.push(`${minutes} min${minutes !== 1 ? "s" : ""}`);
+  parts.push(`${seconds} sec${seconds !== 1 ? "s" : ""}`);
+  appendOutput(`up ${parts.join(", ")}`, "info-text");
+}
+
+function displayNeofetch() {
+  const version = terminalData.version;
+  const theme = getCurrentTheme() === "light" ? "Light" : "Dark";
+  const uptimeMs = Date.now() - sessionStartTime;
+  const totalSec = Math.floor(uptimeMs / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  const uptimeStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+
+  const info = [
+    "guest@jjalangtry.com",
+    "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+    `Site:     jakoblangtry.com v${version}`,
+    "Engine:   Astro",
+    "Shell:    terminal.js",
+    `Theme:    ${theme}`,
+    `Uptime:   ${uptimeStr}`,
+    `Commands: ${commandList.length} available`,
+    "Font:     JetBrains Mono",
+  ];
+
+  const art = [
+    "  \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
+    "  \u2502 >_      \u2502",
+    "  \u2502         \u2502",
+    "  \u2502         \u2502",
+    "  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518",
+  ];
+
+  const lines = [];
+  const maxLines = Math.max(art.length, info.length);
+  for (let i = 0; i < maxLines; i++) {
+    const artLine = (i < art.length ? art[i] : "").padEnd(17);
+    const infoLine = i < info.length ? info[i] : "";
+    lines.push(`${artLine}${infoLine}`);
+  }
+  appendOutput(lines.join("\n"), "info-text");
+}
+
+function executeStandaloneGrep(pattern) {
+  const lower = pattern.toLowerCase();
+  const results = [];
+
+  // Search projects
+  const groups = terminalData.projectGroups || {};
+  const allProjects = [
+    ...(groups.featured || []),
+    ...(groups.contributions || []),
+    ...(groups.github || []),
+  ];
+  const matchedProjects = allProjects.filter((p) => {
+    const searchable = [
+      p.name || "",
+      p.description || "",
+      p.language || "",
+      p.url || "",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return searchable.includes(lower);
+  });
+
+  if (matchedProjects.length > 0) {
+    results.push("\u2500\u2500 Projects " + "\u2500".repeat(40));
+    matchedProjects.forEach((p) => {
+      const lang = p.language ? ` [${p.language}]` : "";
+      const desc = p.description ? `  ${p.description}` : "";
+      results.push(`  ${p.name}${lang}${desc}`);
+    });
+  }
+
+  // Search commands
+  const matchedCmds = commandList.filter((cmd) =>
+    cmd.toLowerCase().includes(lower),
+  );
+  if (matchedCmds.length > 0) {
+    results.push("\u2500\u2500 Commands " + "\u2500".repeat(40));
+    matchedCmds.forEach((cmd) => {
+      results.push(`  ${cmd}`);
+    });
+  }
+
+  if (results.length === 0) {
+    appendOutput(`No matches found for "${pattern}".`, "info-text");
+  } else {
+    appendOutput(results.join("\n"), "info-text");
+  }
+}
+
+function displayManPage(cmd) {
+  const helpDetails = getHelpDetails();
+  const entry = helpDetails[cmd];
+  if (!entry) {
+    appendOutput(
+      `No manual entry for '${cmd}'. Type 'help' to see all available commands.`,
+      "error-text",
+    );
+    return;
+  }
+
+  const header = `${cmd.toUpperCase()}(1)`;
+  const center = "jakoblangtry.com";
+  const pad = Math.max(1, 30 - header.length);
+  const topLine = `${header}${" ".repeat(pad)}${center}${" ".repeat(pad)}${header}`;
+
+  let page = `${topLine}\n\n`;
+  page += `NAME\n       ${cmd} - ${entry.desc}\n\n`;
+  page += `SYNOPSIS\n       ${entry.usage}\n\n`;
+  page += `DESCRIPTION\n       ${entry.desc}\n\n`;
+
+  if (entry.examples && entry.examples.length > 0) {
+    page += "EXAMPLES\n";
+    entry.examples.forEach((ex) => {
+      page += `       ${ex}\n`;
+    });
+    page += "\n";
+  }
+
+  if (entry.notes) {
+    page += `NOTES\n       ${entry.notes}\n\n`;
+  }
+
+  page += "SEE ALSO\n       help(1), man(1)";
+  appendOutput(page, "info-text");
+}
+
+function getHelpDetails() {
+  return {
+    banner: {
+      desc: "Display the ASCII art banner for the terminal.",
+      usage: "banner",
+      examples: ["banner"],
+      notes:
+        "The banner is automatically displayed when the terminal starts or when the screen is cleared.",
+    },
+    clear: {
+      desc: "Clear the terminal screen, preserving command history.",
+      usage: "clear",
+      examples: ["clear"],
+      notes:
+        "This command preserves your command history, so you can still use up/down arrows to access previous commands.",
+    },
+    converter: {
+      desc: "Open the Link Converter tool in a new browser tab.",
+      usage: "converter",
+      examples: ["converter"],
+      notes:
+        "This project was created by Jakob to help convert links between different formats.",
+    },
+    curl: {
+      desc: "Make HTTP requests to web servers, APIs, and other web resources.",
+      usage: "curl [options] [URL]",
+      examples: [
+        "curl https://example.com",
+        "curl -I https://api.example.org/data",
+        'curl -X POST -H "Content-Type: application/json" -d \'{"key":"value"}\' https://api.example.org/data',
+      ],
+      notes:
+        "Supports common options like -X, -H, -d, -I, -o, -v. Browser CORS policy still applies.",
+    },
+    qr: {
+      desc: "Generate a QR code image for a given URL and provide a download button.",
+      usage: "qr [URL]",
+      examples: ["qr https://jjalangtry.com", "qr github.com/JJALANGTRY"],
+      notes: "Uses a public QR API. Ensure the URL is correct before sharing.",
+    },
+    date: {
+      desc: "Display the current date and time based on your local timezone.",
+      usage: "date",
+      examples: ["date"],
+      notes: "The date format follows your browser's locale settings.",
+    },
+    echo: {
+      desc: "Display a line of text in the terminal.",
+      usage: "echo [text]",
+      examples: ["echo Hello, World!", "echo This is a test"],
+      notes: "If no text is provided, usage information will be displayed.",
+    },
+    email: {
+      desc: "Open your default email client to contact Jakob.",
+      usage: "email",
+      examples: ["email"],
+      notes:
+        "This will open your system's default email client with jjalangtry@gmail.com as the recipient.",
+    },
+    github: {
+      desc: "Open Jakob's GitHub profile in a new browser tab.",
+      usage: "github",
+      examples: ["github", "repo"],
+      notes:
+        'The command "repo" is an alias for "github" and performs the same action.',
+    },
+    grep: {
+      desc: "Search across projects and commands, or filter piped output.",
+      usage: "grep [pattern]",
+      examples: [
+        "grep python",
+        "grep TypeScript",
+        "help | grep weather",
+        "ls | grep pro",
+      ],
+      notes:
+        "As a standalone command, searches projects and command names. In a pipe, filters the output line-by-line.",
+    },
+    help: {
+      desc: "Display a list of available commands with brief descriptions.",
+      usage: "help",
+      examples: ["help", "command --help"],
+      notes:
+        "For detailed help on a specific command, type the command name followed by --help.",
+    },
+    history: {
+      desc: "Show command history for the current and previous sessions.",
+      usage: "history [clear|N]",
+      examples: ["history", "history 10", "history clear"],
+      notes:
+        "History is persisted in localStorage (up to 50 commands). Use 'history clear' to reset.",
+    },
+    ls: {
+      desc: "List available terminal commands.",
+      usage: "ls",
+      examples: ["ls"],
+      notes:
+        "This terminal-style ls command lists supported commands rather than filesystem entries.",
+    },
+    man: {
+      desc: "Display the manual page for a command.",
+      usage: "man [command]",
+      examples: ["man curl", "man weather", "man grep"],
+      notes:
+        "Man pages provide detailed usage, examples, and notes for each command.",
+    },
+    neofetch: {
+      desc: "Display system information in a neofetch-style layout.",
+      usage: "neofetch",
+      examples: ["neofetch"],
+      notes:
+        "Shows site version, engine, theme, uptime, and other terminal metadata.",
+    },
+    projects: {
+      desc: "Open projects in a tmux-style split pane showing deployed apps, contributions, and repos.",
+      usage: "projects",
+      examples: ["projects"],
+      notes:
+        "Click any project to open it. Type 'close' or press Ctrl+B then q to dismiss the pane.",
+    },
+    close: {
+      desc: "Close the tmux-style projects split pane.",
+      usage: "close",
+      examples: ["close", "exit"],
+      notes:
+        "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
+    },
+    repo: {
+      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
+      usage: "repo",
+      examples: ["repo", "github"],
+      notes: "This is just an alternative way to access the github command.",
+    },
+    resume: {
+      desc: "View Jakob's resume in a new browser tab.",
+      usage: "resume",
+      examples: ["resume"],
+      notes: "Opens resume.jjalangtry.com in a new tab.",
+    },
+    theme: {
+      desc: "Toggle between dark and light terminal themes.",
+      usage: "theme [dark|light]",
+      examples: ["theme", "theme dark", "theme light"],
+      notes:
+        "Without arguments, toggles to the opposite theme. Preference is saved in your browser.",
+    },
+    uptime: {
+      desc: "Display how long the current terminal session has been active.",
+      usage: "uptime",
+      examples: ["uptime"],
+      notes: "Tracks time since the page was loaded.",
+    },
+    weather: {
+      desc: "Display weather forecast for a specified location.",
+      usage: "weather [city or location]",
+      examples: [
+        "weather New York",
+        "weather Syracuse NY",
+        "weather London, UK",
+        "weather Paris France",
+      ],
+      notes:
+        "Weather data is retrieved in real-time. The display format will adapt based on your device type.",
+    },
+    whoami: {
+      desc: "Display information about Jakob Langtry.",
+      usage: "whoami",
+      examples: ["whoami"],
+      notes:
+        "This provides a brief biography and professional information about Jakob.",
+    },
+  };
+}
+
+// ── Pipe support ──────────────────────────────────────────────
+
+function executePipeline(input) {
+  // Parse into pipeline segments respecting quotes
+  const segments = [];
+  let current = "";
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      current += ch;
+    } else if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      current += ch;
+    } else if (ch === "|" && !inSingle && !inDouble) {
+      segments.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) segments.push(current.trim());
+  const filtered = segments.filter(Boolean);
+
+  if (filtered.length <= 1) {
+    executeCommand(input);
+    return;
+  }
+
+  // Echo the full pipeline
+  const echoLine = document.createElement("div");
+  echoLine.textContent = `guest@jjalangtry.com:~$ ${input}`;
+  cliOutput.insertBefore(echoLine, inputLine);
+
+  const firstCmd = filtered[0].trim().toLowerCase();
+  if (firstCmd.startsWith("weather ") || firstCmd.startsWith("curl ")) {
+    appendOutput(
+      "Pipe is not supported for async commands (weather, curl).",
+      "error-text",
+    );
+    return;
+  }
+
+  // Capture output from first command
+  captureMode = true;
+  capturedLines = [];
+  executeCommand(filtered[0], { skipEcho: true });
+  captureMode = false;
+
+  // Combine captured text
+  let output = capturedLines.map((l) => l.text).join("\n");
+
+  // Process pipe segments
+  for (let i = 1; i < filtered.length; i++) {
+    const pipeCmd = filtered[i].trim();
+    const pipeCmdLower = pipeCmd.toLowerCase();
+
+    if (pipeCmdLower.startsWith("grep ")) {
+      const pattern = pipeCmd.substring(5).trim();
+      if (!pattern) {
+        appendOutput("grep: missing pattern", "error-text");
+        return;
+      }
+      const lines = output.split("\n");
+      const matched = lines.filter((l) =>
+        l.toLowerCase().includes(pattern.toLowerCase()),
+      );
+      output = matched.join("\n");
+    } else if (pipeCmdLower === "grep") {
+      appendOutput("grep: missing pattern", "error-text");
+      return;
+    } else {
+      appendOutput(
+        `Pipe error: unsupported pipe command '${pipeCmd}'. Only 'grep' is supported after |.`,
+        "error-text",
+      );
+      return;
+    }
+  }
+
+  if (output.trim()) {
+    appendOutput(output, "info-text");
+  } else {
+    appendOutput("(no matches)", "info-text");
+  }
+}
+
 /**
  * Initializes the command-line interface (CLI) functionality.
  * Sets up the output area, displays initial messages, creates the input line,
@@ -2553,7 +2932,11 @@ function initCLI() {
         }
         historyIndex = commandHistory.length;
         currentInputBuffer = "";
-        executeCommand(command);
+        if (command.includes("|")) {
+          executePipeline(command);
+        } else {
+          executeCommand(command);
+        }
         e.target.value = "";
       }
       return;

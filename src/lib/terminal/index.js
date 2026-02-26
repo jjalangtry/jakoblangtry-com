@@ -8,12 +8,17 @@ export const COMMAND_LIST = [
   "echo",
   "email",
   "github",
+  "grep",
   "help",
+  "history",
   "ls",
+  "man",
+  "neofetch",
   "projects",
   "repo",
   "resume",
   "theme",
+  "uptime",
   "weather",
   "whoami",
   "sudo",
@@ -110,4 +115,118 @@ export function handleHistoryNavigation(
 
 export function shouldUseCompactWeatherLayout(isMobile, windowWidth) {
   return isMobile || windowWidth <= 900;
+}
+
+export function formatUptime(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
+  if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? "s" : ""}`);
+  if (minutes > 0) parts.push(`${minutes} min${minutes !== 1 ? "s" : ""}`);
+  parts.push(`${seconds} sec${seconds !== 1 ? "s" : ""}`);
+  return parts.join(", ");
+}
+
+export function formatHistoryOutput(history) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return "No commands in history.";
+  }
+  return history
+    .map((cmd, i) => `  ${String(i + 1).padStart(4)}  ${cmd}`)
+    .join("\n");
+}
+
+export function grepFilter(text, pattern) {
+  if (!text || !pattern) return [];
+  const lines = typeof text === "string" ? text.split("\n") : text;
+  const lower = pattern.toLowerCase();
+  return lines.filter((line) => line.toLowerCase().includes(lower));
+}
+
+export function parsePipeline(input) {
+  if (!input || typeof input !== "string") return [input || ""];
+  const segments = [];
+  let current = "";
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+      current += ch;
+    } else if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+      current += ch;
+    } else if (ch === "|" && !inSingle && !inDouble) {
+      segments.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) segments.push(current.trim());
+  return segments.filter(Boolean);
+}
+
+export function buildNeofetchOutput(version, theme, commandCount, uptimeStr) {
+  const info = [
+    "guest@jjalangtry.com",
+    "─────────────────────",
+    `Site:     jakoblangtry.com v${version}`,
+    "Engine:   Astro",
+    "Shell:    terminal.js",
+    `Theme:    ${theme}`,
+    `Uptime:   ${uptimeStr}`,
+    `Commands: ${commandCount} available`,
+    "Font:     JetBrains Mono",
+  ];
+
+  const art = [
+    "  ┌─────────┐",
+    "  │ >_      │",
+    "  │         │",
+    "  │         │",
+    "  └─────────┘",
+  ];
+
+  const lines = [];
+  const maxLines = Math.max(art.length, info.length);
+  for (let i = 0; i < maxLines; i++) {
+    const artLine = (i < art.length ? art[i] : "").padEnd(17);
+    const infoLine = i < info.length ? info[i] : "";
+    lines.push(`${artLine}${infoLine}`);
+  }
+  return lines.join("\n");
+}
+
+export function formatManPage(command, helpEntry) {
+  if (!helpEntry) return null;
+  const header = `${command.toUpperCase()}(1)`;
+  const center = "jakoblangtry.com";
+  const topLine = `${header}${" ".repeat(Math.max(1, 60 - header.length * 2 - center.length))}${center}${" ".repeat(Math.max(1, 60 - header.length * 2 - center.length))}${header}`;
+
+  let page = `${topLine}\n\n`;
+  page += `NAME\n       ${command} - ${helpEntry.desc}\n\n`;
+  page += `SYNOPSIS\n       ${helpEntry.usage}\n\n`;
+  page += `DESCRIPTION\n       ${helpEntry.desc}\n\n`;
+
+  if (helpEntry.examples && helpEntry.examples.length > 0) {
+    page += "EXAMPLES\n";
+    helpEntry.examples.forEach((ex) => {
+      page += `       ${ex}\n`;
+    });
+    page += "\n";
+  }
+
+  if (helpEntry.notes) {
+    page += `NOTES\n       ${helpEntry.notes}\n\n`;
+  }
+
+  page += "SEE ALSO\n       help(1), man(1)";
+  return page;
 }
