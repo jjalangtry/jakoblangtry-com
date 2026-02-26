@@ -2847,7 +2847,7 @@ function displaySkills(categoryFilter) {
   const lines = [];
   filtered.forEach((cat) => {
     lines.push(
-      `\u2500\u2500 ${cat.name} ${"\u2500".repeat(Math.max(0, 40 - cat.name.length))}`,
+      `\u2500\u2500 ${cat.name} ${"\u2500".repeat(Math.max(0, 50 - cat.name.length))}`,
     );
     (cat.skills || []).forEach((s) => {
       const filled = Math.round((s.level / 100) * barWidth);
@@ -2855,6 +2855,9 @@ function displaySkills(categoryFilter) {
       const bar = "\u2588".repeat(filled) + "\u2591".repeat(empty);
       const name = s.name.padEnd(16);
       lines.push(`  ${name} ${bar} ${s.level}%`);
+      if (s.note) {
+        lines.push(`  ${"".padEnd(16)} \u2514 ${s.note}`);
+      }
     });
     lines.push("");
   });

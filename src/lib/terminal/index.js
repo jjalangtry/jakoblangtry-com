@@ -218,7 +218,7 @@ export function buildSkillsOutput(categories) {
   const lines = [];
   categories.forEach((cat) => {
     lines.push(
-      `── ${cat.name} ${"─".repeat(Math.max(0, 40 - cat.name.length))}`,
+      `── ${cat.name} ${"─".repeat(Math.max(0, 50 - cat.name.length))}`,
     );
     (cat.skills || []).forEach((s) => {
       const filled = Math.round((s.level / 100) * barWidth);
@@ -226,6 +226,9 @@ export function buildSkillsOutput(categories) {
       const bar = "█".repeat(filled) + "░".repeat(empty);
       const name = s.name.padEnd(16);
       lines.push(`  ${name} ${bar} ${s.level}%`);
+      if (s.note) {
+        lines.push(`  ${"".padEnd(16)} └ ${s.note}`);
+      }
     });
     lines.push("");
   });

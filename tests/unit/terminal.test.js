@@ -359,24 +359,27 @@ describe("terminal helpers", () => {
     expect(hMatches.length).toBe(2);
   });
 
-  it("builds skills output with ASCII bar charts", () => {
+  it("builds skills output with ASCII bar charts and notes", () => {
     const cats = [
       {
         name: "Languages",
         skills: [
-          { name: "JavaScript", level: 90 },
+          { name: "C", level: 90, note: "4 projects including ls remake" },
           { name: "Python", level: 50 },
         ],
       },
     ];
     const output = buildSkillsOutput(cats);
     expect(output).toContain("Languages");
-    expect(output).toContain("JavaScript");
+    expect(output).toContain("C");
     expect(output).toContain("90%");
+    expect(output).toContain("└ 4 projects including ls remake");
     expect(output).toContain("Python");
     expect(output).toContain("50%");
     expect(output).toContain("█");
     expect(output).toContain("░");
+    // Python has no note, so no extra line
+    expect(output).not.toContain("└ undefined");
 
     expect(buildSkillsOutput([])).toBe("No skills data available.");
     expect(buildSkillsOutput(null)).toBe("No skills data available.");
