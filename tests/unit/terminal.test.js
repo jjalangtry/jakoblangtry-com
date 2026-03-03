@@ -12,6 +12,7 @@ import {
   formatUptime,
   formatHistoryOutput,
   grepFilter,
+  parseGrepArgs,
   parsePipeline,
   buildNeofetchOutput,
   formatManPage,
@@ -224,27 +225,94 @@ describe("terminal helpers", () => {
     expect(output).toContain("  12  cmd11");
   });
 
-  it("filters text with grepFilter", () => {
+  it("grepFilter matches with simple substring (default)", () => {
     expect(grepFilter("", "foo")).toEqual([]);
     expect(grepFilter("hello\nworld", "")).toEqual([]);
     expect(grepFilter("hello\nworld\nhello world", "hello")).toEqual([
       "hello",
       "hello world",
     ]);
-    // case insensitive
     expect(grepFilter("Hello\nWORLD", "hello")).toEqual(["Hello"]);
-    // array input
     expect(grepFilter(["abc", "def", "abcdef"], "abc")).toEqual([
       "abc",
       "abcdef",
     ]);
+    expect(grepFilter(null, "pattern")).toEqual([]);
   });
 
-  it("grepFilter handles no-match and single-line input", () => {
-    expect(grepFilter("hello\nworld", "xyz")).toEqual([]);
-    expect(grepFilter("single line", "single")).toEqual(["single line"]);
-    // null text
-    expect(grepFilter(null, "pattern")).toEqual([]);
+  it("grepFilter supports regex patterns", () => {
+    expect(grepFilter("foo\nbar\nfoobar", "^foo")).toEqual(["foo", "foobar"]);
+    expect(grepFilter("foo\nbar\nfoobar", "bar$")).toEqual(["bar", "foobar"]);
+    expect(grepFilter("cat\ncar\ncap", "ca[rt]")).toEqual(["cat", "car"]);
+    expect(grepFilter("abc\ndef\nabc123", "abc.*\\d")).toEqual(["abc123"]);
+    expect(grepFilter("js\nts\njava", "(js|ts)")).toEqual(["js", "ts"]);
+    // dot matches any
+    expect(grepFilter("cat\ncut\ncot", "c.t")).toEqual(["cat", "cut", "cot"]);
+    // star quantifier
+    expect(grepFilter("a\nab\nabb\nabbb", "ab*")).toEqual([
+      "a",
+      "ab",
+      "abb",
+      "abbb",
+    ]);
+  });
+
+  it("grepFilter supports invert flag", () => {
+    const lines = "apple\nbanana\ncherry";
+    expect(grepFilter(lines, "banana", { invert: true })).toEqual([
+      "apple",
+      "cherry",
+    ]);
+  });
+
+  it("grepFilter supports line numbers flag", () => {
+    const result = grepFilter("a\nb\nc\nb", "b", { lineNumbers: true });
+    expect(result).toEqual(["   2:b", "   4:b"]);
+  });
+
+  it("grepFilter supports count flag", () => {
+    const result = grepFilter("a\nb\na\nb\na", "a", { count: true });
+    expect(result).toEqual(["3"]);
+  });
+
+  it("grepFilter falls back gracefully on invalid regex", () => {
+    // "[" is invalid regex, should fall back to literal match
+    expect(grepFilter("a[b\nc[d", "[")).toEqual(["a[b", "c[d"]);
+  });
+
+  it("parseGrepArgs extracts flags and pattern", () => {
+    expect(parseGrepArgs("-v foo")).toEqual({
+      pattern: "foo",
+      ignoreCase: true,
+      invert: true,
+      lineNumbers: false,
+      count: false,
+    });
+    expect(parseGrepArgs("-nc bar")).toEqual({
+      pattern: "bar",
+      ignoreCase: true,
+      invert: false,
+      lineNumbers: true,
+      count: true,
+    });
+    expect(parseGrepArgs("'hello world'")).toEqual({
+      pattern: "hello world",
+      ignoreCase: true,
+      invert: false,
+      lineNumbers: false,
+      count: false,
+    });
+    expect(parseGrepArgs("")).toEqual({
+      pattern: "",
+      ignoreCase: true,
+      invert: false,
+      lineNumbers: false,
+      count: false,
+    });
+    // -E flag accepted without error
+    const withE = parseGrepArgs("-Ev test");
+    expect(withE.pattern).toBe("test");
+    expect(withE.invert).toBe(true);
   });
 
   it("parses pipeline segments", () => {

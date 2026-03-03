@@ -157,11 +157,85 @@ export function formatHistoryOutput(history) {
     .join("\n");
 }
 
-export function grepFilter(text, pattern) {
+export function parseGrepArgs(argsString) {
+  const result = {
+    pattern: "",
+    ignoreCase: true,
+    invert: false,
+    lineNumbers: false,
+    count: false,
+  };
+  if (!argsString) return result;
+
+  const tokens = [];
+  let current = "";
+  let inQuote = null;
+  for (let i = 0; i < argsString.length; i++) {
+    const ch = argsString[i];
+    if ((ch === '"' || ch === "'") && !inQuote) {
+      inQuote = ch;
+    } else if (ch === inQuote) {
+      inQuote = null;
+    } else if (ch === " " && !inQuote && current) {
+      tokens.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current) tokens.push(current);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.startsWith("-") && t.length > 1 && !t.startsWith("--")) {
+      for (let j = 1; j < t.length; j++) {
+        const flag = t[j];
+        if (flag === "i") result.ignoreCase = true;
+        else if (flag === "v") result.invert = true;
+        else if (flag === "n") result.lineNumbers = true;
+        else if (flag === "c") result.count = true;
+        else if (flag === "E") {
+          /* extended regex, default behavior */
+        }
+      }
+    } else if (!result.pattern) {
+      result.pattern = t;
+    }
+  }
+  return result;
+}
+
+export function grepFilter(text, pattern, options = {}) {
   if (!text || !pattern) return [];
   const lines = typeof text === "string" ? text.split("\n") : text;
-  const lower = pattern.toLowerCase();
-  return lines.filter((line) => line.toLowerCase().includes(lower));
+
+  let regex;
+  try {
+    const flags = options.ignoreCase !== false ? "i" : "";
+    regex = new RegExp(pattern, flags);
+  } catch {
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const flags = options.ignoreCase !== false ? "i" : "";
+    regex = new RegExp(escaped, flags);
+  }
+
+  const results = [];
+  lines.forEach((line, i) => {
+    const matches = regex.test(line);
+    const include = options.invert ? !matches : matches;
+    if (include) {
+      if (options.lineNumbers) {
+        results.push(`${String(i + 1).padStart(4)}:${line}`);
+      } else {
+        results.push(line);
+      }
+    }
+  });
+
+  if (options.count) {
+    return [`${results.length}`];
+  }
+  return results;
 }
 
 export function parsePipeline(input) {

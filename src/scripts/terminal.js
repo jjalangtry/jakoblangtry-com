@@ -2,6 +2,7 @@ import {
   formatUptime,
   formatHistoryOutput,
   grepFilter,
+  parseGrepArgs,
   parsePipeline,
   buildNeofetchOutput,
   formatManPage,
@@ -796,9 +797,11 @@ AVAILABLE COMMANDS:
              (alias: repo)
              Usage: github
 
-  grep       Search across projects and commands, or filter piped output
-             Usage: grep [pattern]
-             Pipe:  help | grep weather
+  grep       Search with regex, wildcards, and flags
+             Usage: grep [-ivnc] [pattern]
+             Regex: grep 'foo.*bar'  grep '^C'  grep '(js|ts)'
+             Flags: -v invert  -n line numbers  -c count
+             Pipe:  help | grep -n weather
 
   help       Display this help information
              Usage: help
@@ -1207,12 +1210,15 @@ Currently seeking opportunities in software engineering.`,
         displaySkills(catName);
         break;
       } else if (normalizedCommand.startsWith("grep ")) {
-        const pattern = command.substring(5).trim();
-        if (!pattern) {
-          appendOutput("Usage: grep [pattern]", "info-text");
+        const argsStr = command.substring(5).trim();
+        if (!argsStr) {
+          appendOutput(
+            "Usage: grep [-ivnc] [pattern]\n\nSupports regex: grep 'foo.*bar', grep '^start', grep '(a|b)'\nFlags: -i case-insensitive (default)  -v invert  -n line numbers  -c count",
+            "info-text",
+          );
           break;
         }
-        executeStandaloneGrep(pattern);
+        executeStandaloneGrep(argsStr);
         break;
       } else if (normalizedCommand.startsWith("man ")) {
         const cmd = normalizedCommand.substring(4).trim();
@@ -2682,8 +2688,27 @@ function displayNeofetch() {
   );
 }
 
-function executeStandaloneGrep(pattern) {
-  const lower = pattern.toLowerCase();
+function executeStandaloneGrep(argsString) {
+  const args = parseGrepArgs(argsString);
+  if (!args.pattern) {
+    appendOutput("Usage: grep [-ivnc] [pattern]", "info-text");
+    return;
+  }
+  const opts = {
+    ignoreCase: args.ignoreCase,
+    invert: args.invert,
+  };
+
+  let regex;
+  try {
+    const flags = args.ignoreCase ? "i" : "";
+    regex = new RegExp(args.pattern, flags);
+  } catch {
+    const escaped = args.pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const flags = args.ignoreCase ? "i" : "";
+    regex = new RegExp(escaped, flags);
+  }
+
   const results = [];
 
   // Search projects
@@ -2699,10 +2724,9 @@ function executeStandaloneGrep(pattern) {
       p.description || "",
       p.language || "",
       p.url || "",
-    ]
-      .join(" ")
-      .toLowerCase();
-    return searchable.includes(lower);
+    ].join(" ");
+    const matches = regex.test(searchable);
+    return args.invert ? !matches : matches;
   });
 
   if (matchedProjects.length > 0) {
@@ -2715,9 +2739,10 @@ function executeStandaloneGrep(pattern) {
   }
 
   // Search commands
-  const matchedCmds = commandList.filter((cmd) =>
-    cmd.toLowerCase().includes(lower),
-  );
+  const matchedCmds = commandList.filter((cmd) => {
+    const matches = regex.test(cmd);
+    return args.invert ? !matches : matches;
+  });
   if (matchedCmds.length > 0) {
     results.push("\u2500\u2500 Commands " + "\u2500".repeat(40));
     matchedCmds.forEach((cmd) => {
@@ -2725,8 +2750,32 @@ function executeStandaloneGrep(pattern) {
     });
   }
 
-  if (results.length === 0) {
-    appendOutput(`No matches found for "${pattern}".`, "info-text");
+  // Search blog posts
+  const allPosts = getAllPosts();
+  const matchedPosts = allPosts.filter((p) => {
+    const searchable = [
+      p.title || "",
+      p.summary || "",
+      p.content || "",
+      p.slug || "",
+    ].join(" ");
+    const matches = regex.test(searchable);
+    return args.invert ? !matches : matches;
+  });
+  if (matchedPosts.length > 0) {
+    results.push("\u2500\u2500 Blog Posts " + "\u2500".repeat(38));
+    matchedPosts.forEach((p) => {
+      results.push(`  ${p.title}  (${p.date})`);
+      results.push(`    \u2192 blog ${p.slug}`);
+    });
+  }
+
+  if (args.count) {
+    const total =
+      matchedProjects.length + matchedCmds.length + matchedPosts.length;
+    appendOutput(`${total} match${total !== 1 ? "es" : ""}`, "info-text");
+  } else if (results.length === 0) {
+    appendOutput(`No matches for /${args.pattern}/.`, "info-text");
   } else {
     appendOutput(results.join("\n"), "info-text");
   }
@@ -2831,16 +2880,21 @@ function getHelpDetails() {
         'The command "repo" is an alias for "github" and performs the same action.',
     },
     grep: {
-      desc: "Search across projects and commands, or filter piped output.",
-      usage: "grep [pattern]",
+      desc: "Search with regex patterns, wildcards, and flags.",
+      usage: "grep [-ivnc] [pattern]",
       examples: [
         "grep python",
-        "grep TypeScript",
-        "help | grep weather",
-        "ls | grep pro",
+        "grep 'foo.*bar'",
+        "grep '^C'",
+        "grep '(swift|java)'",
+        "grep -v test",
+        "grep -n TypeScript",
+        "grep -c python",
+        "help | grep -n weather",
+        "ls | grep -v sudo",
       ],
       notes:
-        "As a standalone command, searches projects and command names. In a pipe, filters the output line-by-line.",
+        "Supports full regex: . * + ? ^ $ [ ] ( ) | \\. Flags: -i case-insensitive (default), -v invert match, -n line numbers, -c count only. Standalone searches projects, commands, and blog posts. In a pipe, filters output line-by-line.",
     },
     help: {
       desc: "Display a list of available commands with brief descriptions.",
@@ -3635,12 +3689,17 @@ function executePipeline(input) {
     const pipeCmdLower = pipeCmd.toLowerCase();
 
     if (pipeCmdLower.startsWith("grep ")) {
-      const pattern = pipeCmd.substring(5).trim();
-      if (!pattern) {
+      const grepArgs = parseGrepArgs(pipeCmd.substring(5).trim());
+      if (!grepArgs.pattern) {
         appendOutput("grep: missing pattern", "error-text");
         return;
       }
-      output = grepFilter(output, pattern).join("\n");
+      output = grepFilter(output, grepArgs.pattern, {
+        ignoreCase: grepArgs.ignoreCase,
+        invert: grepArgs.invert,
+        lineNumbers: grepArgs.lineNumbers,
+        count: grepArgs.count,
+      }).join("\n");
     } else if (pipeCmdLower === "grep") {
       appendOutput("grep: missing pattern", "error-text");
       return;
