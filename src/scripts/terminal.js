@@ -3,6 +3,7 @@ import {
   formatHistoryOutput,
   grepFilter,
   parseGrepArgs,
+  expandGlob,
   parsePipeline,
   buildNeofetchOutput,
   formatManPage,
@@ -1221,8 +1222,13 @@ Currently seeking opportunities in software engineering.`,
         executeStandaloneGrep(argsStr);
         break;
       } else if (normalizedCommand.startsWith("man ")) {
-        const cmd = normalizedCommand.substring(4).trim();
-        displayManPage(cmd);
+        const pattern = normalizedCommand.substring(4).trim();
+        const matches = expandGlob(pattern, commandList);
+        if (matches.length === 0) {
+          appendOutput(`No manual entry matching '${pattern}'.`, "error-text");
+        } else {
+          matches.forEach((cmd) => displayManPage(cmd));
+        }
         break;
       } else if (normalizedCommand.startsWith("weather ")) {
         const city = command.substring(8).trim();
@@ -1261,10 +1267,14 @@ Currently seeking opportunities in software engineering.`,
         break;
       } else if (normalizedCommand.startsWith("which ")) {
         const target = normalizedCommand.substring(6).trim();
-        if (commandList.includes(target)) {
-          appendOutput(`${target}: shell built-in`, "info-text");
+        const matches = expandGlob(target, commandList);
+        if (matches.length > 0) {
+          appendOutput(
+            matches.map((m) => `${m}: shell built-in`).join("\n"),
+            "info-text",
+          );
         } else {
-          appendOutput(`${target} not found`, "error-text");
+          appendOutput(`${target}: not found`, "error-text");
         }
         break;
       } else if (normalizedCommand.startsWith("echo ")) {
@@ -3206,17 +3216,23 @@ function displayBlogList() {
   }
 }
 
-function displayBlogPost(slug) {
+function displayBlogPost(pattern) {
   const posts = getAllPosts();
-  const post = posts.find((p) => p.slug === slug.toLowerCase());
-  if (!post) {
+  const slugs = posts.map((p) => p.slug);
+  const matches = expandGlob(pattern.toLowerCase(), slugs);
+
+  if (matches.length === 0) {
     appendOutput(
-      `Post "${slug}" not found. Type 'blog' to see available posts.`,
+      `No posts matching "${pattern}". Type 'blog' to see available posts.`,
       "error-text",
     );
     return;
   }
-  appendOutput(buildBlogPostOutput(post), "info-text");
+
+  matches.forEach((slug) => {
+    const post = posts.find((p) => p.slug === slug);
+    if (post) appendOutput(buildBlogPostOutput(post), "info-text");
+  });
 }
 
 function displayStats() {
@@ -3615,24 +3631,34 @@ function startEditWhoami() {
   );
 }
 
-function deleteLocalPost(slug) {
+function deleteLocalPost(pattern) {
   const posts = loadLocalPosts();
-  const idx = posts.findIndex((p) => p.slug === slug);
-  if (idx === -1) {
-    const isStatic = (terminalData.posts || []).some((p) => p.slug === slug);
+  const slugs = posts.map((p) => p.slug);
+  const matches = expandGlob(pattern, slugs);
+
+  if (matches.length === 0) {
+    const isStatic = (terminalData.posts || []).some((p) => p.slug === pattern);
     if (isStatic) {
       appendOutput(
-        `Cannot delete "${slug}" \u2014 it's a built-in post. Only user-created posts can be deleted.`,
+        `Cannot delete "${pattern}" \u2014 it's a built-in post. Only user-created posts can be deleted.`,
         "error-text",
       );
     } else {
-      appendOutput(`Post "${slug}" not found.`, "error-text");
+      appendOutput(`No posts matching "${pattern}".`, "error-text");
     }
     return;
   }
-  posts.splice(idx, 1);
-  saveLocalPosts(posts);
-  appendOutput(`Deleted post "${slug}".`, "success-text");
+
+  const remaining = posts.filter((p) => !matches.includes(p.slug));
+  saveLocalPosts(remaining);
+  if (matches.length === 1) {
+    appendOutput(`Deleted "${matches[0]}".`, "success-text");
+  } else {
+    appendOutput(
+      `Deleted ${matches.length} posts: ${matches.join(", ")}`,
+      "success-text",
+    );
+  }
 }
 
 function exportLocalPosts() {

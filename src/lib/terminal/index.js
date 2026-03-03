@@ -157,6 +157,28 @@ export function formatHistoryOutput(history) {
     .join("\n");
 }
 
+export function globToRegex(pattern) {
+  let regex = "^";
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === "*") regex += ".*";
+    else if (ch === "?") regex += ".";
+    else if ("[\\^$.|+(){}".includes(ch)) regex += "\\" + ch;
+    else regex += ch;
+  }
+  regex += "$";
+  return new RegExp(regex, "i");
+}
+
+export function expandGlob(pattern, items) {
+  if (!pattern || !Array.isArray(items)) return [];
+  if (!pattern.includes("*") && !pattern.includes("?")) {
+    return items.filter((item) => item.toLowerCase() === pattern.toLowerCase());
+  }
+  const regex = globToRegex(pattern);
+  return items.filter((item) => regex.test(item));
+}
+
 export function parseGrepArgs(argsString) {
   const result = {
     pattern: "",

@@ -13,6 +13,8 @@ import {
   formatHistoryOutput,
   grepFilter,
   parseGrepArgs,
+  globToRegex,
+  expandGlob,
   parsePipeline,
   buildNeofetchOutput,
   formatManPage,
@@ -313,6 +315,38 @@ describe("terminal helpers", () => {
     const withE = parseGrepArgs("-Ev test");
     expect(withE.pattern).toBe("test");
     expect(withE.invert).toBe(true);
+  });
+
+  it("globToRegex converts glob patterns to regex", () => {
+    expect(globToRegex("*").test("anything")).toBe(true);
+    expect(globToRegex("*.js").test("file.js")).toBe(true);
+    expect(globToRegex("*.js").test("file.ts")).toBe(false);
+    expect(globToRegex("test-*").test("test-post")).toBe(true);
+    expect(globToRegex("test-*").test("other")).toBe(false);
+    expect(globToRegex("?at").test("cat")).toBe(true);
+    expect(globToRegex("?at").test("bat")).toBe(true);
+    expect(globToRegex("?at").test("at")).toBe(false);
+    // case insensitive
+    expect(globToRegex("FOO*").test("foobar")).toBe(true);
+    // special chars escaped
+    expect(globToRegex("file.txt").test("filextxt")).toBe(false);
+    expect(globToRegex("file.txt").test("file.txt")).toBe(true);
+  });
+
+  it("expandGlob matches items against glob patterns", () => {
+    const items = ["test-one", "test-two", "other", "testing"];
+    expect(expandGlob("*", items)).toEqual(items);
+    expect(expandGlob("test-*", items)).toEqual(["test-one", "test-two"]);
+    expect(expandGlob("test*", items)).toEqual([
+      "test-one",
+      "test-two",
+      "testing",
+    ]);
+    expect(expandGlob("*er", items)).toEqual(["other"]);
+    expect(expandGlob("other", items)).toEqual(["other"]);
+    expect(expandGlob("nope", items)).toEqual([]);
+    expect(expandGlob("", items)).toEqual([]);
+    expect(expandGlob("*", null)).toEqual([]);
   });
 
   it("parses pipeline segments", () => {
