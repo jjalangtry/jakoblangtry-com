@@ -24,7 +24,12 @@ module.exports = [
     },
   },
   {
-    files: ["src/lib/**/*.js", "src/scripts/**/*.js", "tests/**/*.js"],
+    files: [
+      "src/lib/**/*.js",
+      "src/scripts/**/*.js",
+      "src/pages/**/*.js",
+      "tests/**/*.js",
+    ],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -35,7 +40,12 @@ module.exports = [
   },
   {
     files: ["**/*.{js,cjs}"],
-    ignores: ["src/lib/**/*.js", "src/scripts/**/*.js", "tests/**/*.js"],
+    ignores: [
+      "src/lib/**/*.js",
+      "src/scripts/**/*.js",
+      "src/pages/**/*.js",
+      "tests/**/*.js",
+    ],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "script",

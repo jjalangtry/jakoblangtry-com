@@ -24,6 +24,49 @@ let captureMode = false;
 let capturedLines = [];
 let snakeActive = false;
 let snakeInterval = null;
+let editorState = null; // null | { phase: "title" } | { phase: "body", title, lines }
+
+function loadLocalPosts() {
+  try {
+    const raw = localStorage.getItem("terminal-posts");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+function saveLocalPosts(posts) {
+  try {
+    localStorage.setItem("terminal-posts", JSON.stringify(posts));
+  } catch {
+    // ignore
+  }
+}
+function loadCustomWhoami() {
+  try {
+    return localStorage.getItem("terminal-whoami");
+  } catch {
+    return null;
+  }
+}
+function saveCustomWhoami(text) {
+  try {
+    localStorage.setItem("terminal-whoami", text);
+  } catch {
+    // ignore
+  }
+}
+function getAllPosts() {
+  const staticPosts = terminalData.posts || [];
+  const localPosts = loadLocalPosts();
+  return [...staticPosts, ...localPosts];
+}
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .substring(0, 60);
+}
 
 // Stats persistence
 function loadStats() {
@@ -156,6 +199,10 @@ const commandList = [
   "weather",
   "which",
   "whoami",
+  "write",
+  "edit",
+  "export",
+  "rss",
   "sudo",
   "cd",
   "close",
@@ -771,6 +818,24 @@ AVAILABLE COMMANDS:
   whoami     Display information about Jakob
              Usage: whoami
 
+  write      Create a new blog post
+             Usage: write
+
+  edit       Edit site content (e.g. bio)
+             Usage: edit whoami
+
+  export     Export user-created posts as JSON
+             Usage: export posts
+
+  rss        Show RSS feed URL
+             Usage: rss
+
+CONTENT MANAGEMENT:
+  write              Create a new blog post (saved in browser)
+  edit whoami         Edit your bio text
+  post delete [slug]  Delete a user-created post
+  export posts        Export user posts as JSON for permanent publishing
+
 PIPES:
   Use | to pipe output through grep:  help | grep weather
 
@@ -806,12 +871,16 @@ For more information about a specific command, type: [command] --help
       currentInput.focus();
       break;
     case "whoami":
-      appendOutput(
-        `Jakob Langtry - Software Engineering Student at Rochester Institute of Technology.
+      {
+        const customBio = loadCustomWhoami();
+        appendOutput(
+          customBio ||
+            `Jakob Langtry - Software Engineering Student at Rochester Institute of Technology.
 Passionate about web development, backend systems, and creating useful applications.
 Currently seeking opportunities in software engineering.`,
-        "info-text",
-      );
+          "info-text",
+        );
+      }
       break;
     case "date":
       appendOutput(new Date().toLocaleString());
@@ -851,6 +920,15 @@ Currently seeking opportunities in software engineering.`,
       break;
     case "snake":
       startSnakeGame();
+      break;
+    case "write":
+      startWrite();
+      break;
+    case "rss":
+      appendOutput(
+        "RSS feed: /rss.xml\nSubscribe with any RSS reader to get notified of new posts.",
+        "info-text",
+      );
       break;
     case "grep":
       appendOutput(
@@ -1088,6 +1166,28 @@ Currently seeking opportunities in software engineering.`,
 
         // We're now handling the formatting in fetchWeather function
         fetchWeather(city);
+      } else if (normalizedCommand === "edit whoami") {
+        startEditWhoami();
+        break;
+      } else if (normalizedCommand.startsWith("edit ")) {
+        appendOutput(
+          "Editable fields: whoami\nUsage: edit whoami",
+          "info-text",
+        );
+        break;
+      } else if (normalizedCommand === "edit") {
+        appendOutput(
+          "Editable fields: whoami\nUsage: edit whoami",
+          "info-text",
+        );
+        break;
+      } else if (normalizedCommand.startsWith("post delete ")) {
+        const slug = normalizedCommand.substring(12).trim();
+        deleteLocalPost(slug);
+        break;
+      } else if (normalizedCommand === "export posts") {
+        exportLocalPosts();
+        break;
       } else if (normalizedCommand.startsWith("which ")) {
         const target = normalizedCommand.substring(6).trim();
         if (commandList.includes(target)) {
@@ -2787,7 +2887,34 @@ function getHelpDetails() {
       usage: "whoami",
       examples: ["whoami"],
       notes:
-        "This provides a brief biography and professional information about Jakob.",
+        "Shows custom bio if set via 'edit whoami', otherwise shows the default bio.",
+    },
+    write: {
+      desc: "Create a new blog post in a vi-like editor.",
+      usage: "write",
+      examples: ["write"],
+      notes:
+        "Enter a title, then type the post body line by line. :wq saves, :q cancels. Posts are saved in your browser's localStorage.",
+    },
+    edit: {
+      desc: "Edit site content stored in your browser.",
+      usage: "edit whoami",
+      examples: ["edit whoami"],
+      notes:
+        "Currently supports editing the whoami bio text. Changes are stored in localStorage.",
+    },
+    export: {
+      desc: "Export user-created posts as JSON.",
+      usage: "export posts",
+      examples: ["export posts"],
+      notes:
+        "Outputs JSON for all posts you created with 'write'. Copy this into public/data/posts.json to make them permanent.",
+    },
+    rss: {
+      desc: "Show the RSS feed URL for blog subscriptions.",
+      usage: "rss",
+      examples: ["rss"],
+      notes: "The RSS feed at /rss.xml includes all built-in blog posts.",
     },
   };
 }
@@ -2879,11 +3006,11 @@ function displayExperience() {
 }
 
 function displayBlogList() {
-  appendOutput(buildBlogListOutput(terminalData.posts || []), "info-text");
+  appendOutput(buildBlogListOutput(getAllPosts()), "info-text");
 }
 
 function displayBlogPost(slug) {
-  const posts = terminalData.posts || [];
+  const posts = getAllPosts();
   const post = posts.find((p) => p.slug === slug.toLowerCase());
   if (!post) {
     appendOutput(
@@ -3076,6 +3203,153 @@ function startSnakeGame() {
 
   document.addEventListener("keydown", handleKey, true);
   render();
+}
+
+// ── Editor mode ───────────────────────────────────────────────
+
+function setPromptText(text) {
+  const prompt = inputLine ? inputLine.querySelector(".prompt") : null;
+  if (prompt) prompt.textContent = text;
+}
+
+function handleEditorInput(command, raw) {
+  if (editorState.phase === "title") {
+    if (!command) {
+      appendOutput("Title cannot be empty. Type :q to cancel.", "error-text");
+      return;
+    }
+    if (command === ":q") {
+      appendOutput("Write cancelled.", "info-text");
+      editorState = null;
+      setPromptText("guest@jjalangtry.com:~$ ");
+      return;
+    }
+    const echoLine = document.createElement("div");
+    echoLine.textContent = `Title: ${command}`;
+    if (inputLine && inputLine.parentNode === cliOutput)
+      cliOutput.insertBefore(echoLine, inputLine);
+    editorState = { phase: "body", title: command, lines: [] };
+    setPromptText("> ");
+    appendOutput(
+      "Enter post body. Type :wq on its own line to save, :q to cancel.",
+      "info-text",
+    );
+    return;
+  }
+
+  if (editorState.phase === "body") {
+    if (command === ":wq") {
+      const title = editorState.title;
+      const content = editorState.lines.join("\n");
+      const slug = slugify(title);
+      const post = {
+        slug,
+        title,
+        date: new Date().toISOString().split("T")[0],
+        summary:
+          content.substring(0, 80).replace(/\n/g, " ") +
+          (content.length > 80 ? "..." : ""),
+        content,
+      };
+      const posts = loadLocalPosts();
+      posts.unshift(post);
+      saveLocalPosts(posts);
+      editorState = null;
+      setPromptText("guest@jjalangtry.com:~$ ");
+      appendOutput(`Post saved! Read it with: blog ${slug}`, "success-text");
+      return;
+    }
+    if (command === ":q") {
+      editorState = null;
+      setPromptText("guest@jjalangtry.com:~$ ");
+      appendOutput("Write cancelled. Draft discarded.", "info-text");
+      return;
+    }
+    const echoLine = document.createElement("div");
+    echoLine.textContent = `> ${raw}`;
+    if (inputLine && inputLine.parentNode === cliOutput)
+      cliOutput.insertBefore(echoLine, inputLine);
+    editorState.lines.push(raw);
+    cliOutput.scrollTop = cliOutput.scrollHeight;
+    return;
+  }
+
+  if (editorState.phase === "whoami") {
+    if (command === ":q") {
+      editorState = null;
+      setPromptText("guest@jjalangtry.com:~$ ");
+      appendOutput("Edit cancelled.", "info-text");
+      return;
+    }
+    if (command === ":wq") {
+      const text = editorState.lines.join("\n");
+      saveCustomWhoami(text);
+      editorState = null;
+      setPromptText("guest@jjalangtry.com:~$ ");
+      appendOutput("Bio updated! Type 'whoami' to see it.", "success-text");
+      return;
+    }
+    const echoLine = document.createElement("div");
+    echoLine.textContent = `> ${raw}`;
+    if (inputLine && inputLine.parentNode === cliOutput)
+      cliOutput.insertBefore(echoLine, inputLine);
+    editorState.lines.push(raw);
+    cliOutput.scrollTop = cliOutput.scrollHeight;
+    return;
+  }
+}
+
+function startWrite() {
+  editorState = { phase: "title" };
+  setPromptText("Title: ");
+  appendOutput("New post \u2014 enter a title, or :q to cancel.", "info-text");
+}
+
+function startEditWhoami() {
+  const current =
+    loadCustomWhoami() ||
+    "Jakob Langtry - Software Engineering Student at Rochester Institute of Technology.\nPassionate about web development, backend systems, and creating useful applications.\nCurrently seeking opportunities in software engineering.";
+  editorState = { phase: "whoami", lines: [] };
+  setPromptText("> ");
+  appendOutput(
+    `Current bio:\n${current}\n\nType new bio lines. :wq to save, :q to cancel.`,
+    "info-text",
+  );
+}
+
+function deleteLocalPost(slug) {
+  const posts = loadLocalPosts();
+  const idx = posts.findIndex((p) => p.slug === slug);
+  if (idx === -1) {
+    const isStatic = (terminalData.posts || []).some((p) => p.slug === slug);
+    if (isStatic) {
+      appendOutput(
+        `Cannot delete "${slug}" \u2014 it's a built-in post. Only user-created posts can be deleted.`,
+        "error-text",
+      );
+    } else {
+      appendOutput(`Post "${slug}" not found.`, "error-text");
+    }
+    return;
+  }
+  posts.splice(idx, 1);
+  saveLocalPosts(posts);
+  appendOutput(`Deleted post "${slug}".`, "success-text");
+}
+
+function exportLocalPosts() {
+  const posts = loadLocalPosts();
+  if (posts.length === 0) {
+    appendOutput(
+      "No user-created posts to export. Use 'write' to create one.",
+      "info-text",
+    );
+    return;
+  }
+  appendOutput(
+    `${posts.length} user-created post(s):\n\n${JSON.stringify(posts, null, 2)}\n\nCopy the JSON above and add it to public/data/posts.json to make posts permanent.`,
+    "info-text",
+  );
 }
 
 // ── Pipe support ──────────────────────────────────────────────
@@ -3348,7 +3622,16 @@ function initCLI() {
 
     if (e.key === "Enter") {
       e.preventDefault();
-      const command = e.target.value.trim();
+      const rawInput = e.target.value;
+      const command = rawInput.trim();
+
+      // Editor mode handling
+      if (editorState) {
+        e.target.value = "";
+        handleEditorInput(command, rawInput);
+        return;
+      }
+
       if (command) {
         commandHistory.push(command);
         if (commandHistory.length > 50) commandHistory.shift();
