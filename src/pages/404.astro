@@ -10,9 +10,32 @@ import "../../styles.css";
   <div class="page-container">
     <div
       class="terminal"
-      style="display:flex;align-items:center;justify-content:center;"
+      style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;"
     >
-      <div class="command-output info-text">404: Page not found</div>
+      <pre
+        class="ascii-art"
+        style="text-align:center;">
+ ██╗  ██╗ ██████╗ ██╗  ██╗
+ ██║  ██║██╔═══██╗██║  ██║
+ ███████║██║   ██║███████║
+ ╚════██║██║   ██║╚════██║
+      ██║╚██████╔╝     ██║
+      ╚═╝ ╚═════╝      ╚═╝</pre>
+      <div class="info-text" style="text-align:center;">
+        Page not found. The path you requested doesn't exist.
+      </div>
+      <div style="display:flex;gap:12px;">
+        <a href="/" class="quick-action-link" style="text-decoration:none;">
+          ← Go Home
+        </a>
+        <a
+          href="/#projects"
+          class="quick-action-link"
+          style="text-decoration:none;"
+        >
+          View Projects
+        </a>
+      </div>
     </div>
   </div>
 </BaseLayout>

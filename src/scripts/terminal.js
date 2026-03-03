@@ -124,6 +124,7 @@ const terminalData = loadTerminalDataFromDOM();
 // for a vanilla script we need to ensure the logic exists here if not bundled.
 // To keep things simple, we keep the COMMAND_LIST local but synced.
 const commandList = [
+  "alias",
   "banner",
   "blog",
   "clear",
@@ -139,10 +140,12 @@ const commandList = [
   "grep",
   "help",
   "history",
+  "hostname",
   "ls",
   "man",
   "neofetch",
   "projects",
+  "pwd",
   "repo",
   "resume",
   "skills",
@@ -151,6 +154,7 @@ const commandList = [
   "theme",
   "uptime",
   "weather",
+  "which",
   "whoami",
   "sudo",
   "cd",
@@ -496,9 +500,10 @@ function displayWelcomeMessage() {
 
 const ONBOARDING_COMMANDS = [
   { cmd: "help", desc: "list all commands" },
+  { cmd: "skills", desc: "what I know" },
   { cmd: "projects", desc: "view my work" },
-  { cmd: "resume", desc: "open my resume" },
-  { cmd: "whoami", desc: "about me" },
+  { cmd: "blog", desc: "read my posts" },
+  { cmd: "contact", desc: "get in touch" },
   { cmd: "theme light", desc: "switch theme" },
 ];
 
@@ -823,6 +828,15 @@ Currently seeking opportunities in software engineering.`,
     case "contact":
       displayContact();
       break;
+    case "pwd":
+      appendOutput("/home/guest", "info-text");
+      break;
+    case "hostname":
+      appendOutput("jjalangtry.com", "info-text");
+      break;
+    case "alias":
+      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      break;
     case "skills":
       displaySkills();
       break;
@@ -1074,6 +1088,14 @@ Currently seeking opportunities in software engineering.`,
 
         // We're now handling the formatting in fetchWeather function
         fetchWeather(city);
+      } else if (normalizedCommand.startsWith("which ")) {
+        const target = normalizedCommand.substring(6).trim();
+        if (commandList.includes(target)) {
+          appendOutput(`${target}: shell built-in`, "info-text");
+        } else {
+          appendOutput(`${target} not found`, "error-text");
+        }
+        break;
       } else if (normalizedCommand.startsWith("echo ")) {
         const echoText = command.substring(5).trim();
         if (echoText) {
@@ -2773,7 +2795,61 @@ function getHelpDetails() {
 // ── Content commands ──────────────────────────────────────────
 
 function displayContact() {
-  appendOutput(buildContactOutput(), "info-text");
+  const container = document.createElement("div");
+  container.className = "info-text";
+  container.style.whiteSpace = "pre-wrap";
+
+  const contacts = [
+    {
+      label: "Email",
+      value: "jjalangtry@gmail.com",
+      href: "mailto:jjalangtry@gmail.com",
+    },
+    {
+      label: "GitHub",
+      value: "github.com/JJALANGTRY",
+      href: "https://github.com/JJALANGTRY",
+    },
+    {
+      label: "LinkedIn",
+      value: "linkedin.com/in/jjalangtry",
+      href: "https://linkedin.com/in/jjalangtry",
+    },
+    {
+      label: "Website",
+      value: "jakoblangtry.com",
+      href: "https://jakoblangtry.com",
+    },
+  ];
+
+  const top =
+    "┌────────────────────────────────────────┐\n│          CONTACT INFORMATION           │\n├────────────────────────────────────────┤\n";
+  const bottom = "└────────────────────────────────────────┘";
+
+  container.appendChild(document.createTextNode(top));
+  contacts.forEach((c) => {
+    container.appendChild(document.createTextNode(`│  ${c.label.padEnd(9)} `));
+    const a = document.createElement("a");
+    a.href = c.href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = c.value;
+    a.style.color = "inherit";
+    a.style.textDecoration = "underline";
+    container.appendChild(a);
+    const pad = 28 - c.value.length;
+    container.appendChild(
+      document.createTextNode(`${" ".repeat(Math.max(0, pad))}│\n`),
+    );
+  });
+  container.appendChild(document.createTextNode(bottom));
+
+  if (inputLine && inputLine.parentNode === cliOutput) {
+    cliOutput.insertBefore(container, inputLine);
+  } else {
+    cliOutput.appendChild(container);
+  }
+  cliOutput.scrollTop = cliOutput.scrollHeight;
 }
 
 function displaySkills(categoryFilter) {
@@ -3219,16 +3295,50 @@ function initCLI() {
     // Tab completion
     if (e.key === "Tab") {
       e.preventDefault();
-      const currentText = e.target.value.toLowerCase();
-      if (!currentText) return;
+      const currentText = e.target.value;
+      const currentLower = currentText.toLowerCase();
+      if (!currentLower) return;
 
-      const matches = commandList.filter((cmd) => cmd.startsWith(currentText));
+      // Argument completion for known commands
+      const spaceIdx = currentLower.indexOf(" ");
+      if (spaceIdx > 0) {
+        const baseCmd = currentLower.substring(0, spaceIdx);
+        const arg = currentLower.substring(spaceIdx + 1);
+        let completions = [];
+        if (baseCmd === "blog") {
+          completions = (terminalData.posts || [])
+            .map((p) => p.slug)
+            .filter((s) => s.startsWith(arg));
+        } else if (baseCmd === "theme") {
+          completions = ["dark", "light"].filter((s) => s.startsWith(arg));
+        } else if (baseCmd === "man" || baseCmd === "help") {
+          completions = commandList.filter((c) => c.startsWith(arg));
+        } else if (currentLower.startsWith("skills --category ")) {
+          const catArg = currentLower.substring(18);
+          completions = (terminalData.skills || [])
+            .map((c) => c.name.toLowerCase())
+            .filter((n) => n.startsWith(catArg));
+        }
+        if (completions.length === 1) {
+          e.target.value = `${baseCmd} ${completions[0]}`;
+        } else if (completions.length > 1) {
+          const commandLine = document.createElement("div");
+          commandLine.textContent = `guest@jjalangtry.com:~$ ${currentText}`;
+          cliOutput.insertBefore(commandLine, inputLine);
+          appendOutput(completions.join("  "), "info-text");
+          cliOutput.scrollTop = cliOutput.scrollHeight;
+        }
+        return;
+      }
+
+      // Command name completion
+      const matches = commandList.filter((cmd) => cmd.startsWith(currentLower));
 
       if (matches.length === 1) {
         e.target.value = matches[0] + " ";
       } else if (matches.length > 1) {
         const commandLine = document.createElement("div");
-        commandLine.textContent = `guest@jjalangtry.com:~$ ${e.target.value}`;
+        commandLine.textContent = `guest@jjalangtry.com:~$ ${currentText}`;
         cliOutput.insertBefore(commandLine, inputLine);
         appendOutput(matches.join("  "), "info-text");
         cliOutput.scrollTop = cliOutput.scrollHeight;

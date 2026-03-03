@@ -1,4 +1,5 @@
 export const COMMAND_LIST = [
+  "alias",
   "banner",
   "blog",
   "clear",
@@ -14,10 +15,12 @@ export const COMMAND_LIST = [
   "grep",
   "help",
   "history",
+  "hostname",
   "ls",
   "man",
   "neofetch",
   "projects",
+  "pwd",
   "repo",
   "resume",
   "skills",
@@ -26,6 +29,7 @@ export const COMMAND_LIST = [
   "theme",
   "uptime",
   "weather",
+  "which",
   "whoami",
   "sudo",
   "cd",
@@ -221,11 +225,12 @@ export function buildSkillsOutput(categories) {
       `── ${cat.name} ${"─".repeat(Math.max(0, 50 - cat.name.length))}`,
     );
     (cat.skills || []).forEach((s) => {
-      const filled = Math.round((s.level / 100) * barWidth);
+      const level = Math.max(0, Math.min(100, Number(s.level) || 0));
+      const filled = Math.round((level / 100) * barWidth);
       const empty = barWidth - filled;
       const bar = "█".repeat(filled) + "░".repeat(empty);
-      const name = s.name.padEnd(16);
-      lines.push(`  ${name} ${bar} ${s.level}%`);
+      const name = (s.name || "").padEnd(16);
+      lines.push(`  ${name} ${bar} ${level}%`);
       if (s.note) {
         lines.push(`  ${"".padEnd(16)} └ ${s.note}`);
       }
@@ -256,15 +261,24 @@ export function buildExperienceOutput(entries) {
   return lines.join("\n");
 }
 
+export function estimateReadingTime(content) {
+  if (!content) return 1;
+  const words = content.trim().split(/\s+/).length;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
 export function buildBlogListOutput(posts) {
   if (!Array.isArray(posts) || posts.length === 0) {
     return "No blog posts yet.";
   }
   const lines = ["Available posts:\n"];
   posts.forEach((p) => {
-    lines.push(`  ${p.date}  ${p.title}`);
-    lines.push(`  ${"".padEnd(12)}${p.summary}`);
-    lines.push(`  ${"".padEnd(12)}→ blog ${p.slug}\n`);
+    const mins = estimateReadingTime(p.content);
+    lines.push(
+      `  ${p.date || ""}  ${p.title || "Untitled"}  (${mins} min read)`,
+    );
+    lines.push(`  ${"".padEnd(12)}${p.summary || ""}`);
+    lines.push(`  ${"".padEnd(12)}→ blog ${p.slug || ""}\n`);
   });
   lines.push("Read a post with: blog [slug]");
   return lines.join("\n");
@@ -274,11 +288,16 @@ export function buildBlogPostOutput(post) {
   if (!post) return null;
   const width = 60;
   const border = "─".repeat(width);
+  const title = (post.title || "Untitled")
+    .slice(0, width - 2)
+    .padEnd(width - 1);
+  const mins = estimateReadingTime(post.content);
+  const dateLine = `${post.date || ""}  ·  ${mins} min read`;
   let output = `┌${border}┐\n`;
-  output += `│ ${post.title.padEnd(width - 1)}│\n`;
-  output += `│ ${post.date.padEnd(width - 1)}│\n`;
+  output += `│ ${title}│\n`;
+  output += `│ ${dateLine.padEnd(width - 1)}│\n`;
   output += `└${border}┘\n\n`;
-  output += post.content;
+  output += post.content || "";
   return output;
 }
 

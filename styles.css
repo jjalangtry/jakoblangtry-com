@@ -802,6 +802,16 @@ body.light-theme .tmux-pane-terminal {
   .quick-actions {
     justify-content: center;
   }
+
+  .info-text {
+    overflow-x: auto;
+  }
+
+  .qr-img {
+    width: 200px;
+    height: 200px;
+    max-width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

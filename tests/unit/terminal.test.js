@@ -21,6 +21,7 @@ import {
   buildBlogPostOutput,
   buildContactOutput,
   buildStatsOutput,
+  estimateReadingTime,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -41,6 +42,10 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("skills");
     expect(COMMAND_LIST).toContain("snake");
     expect(COMMAND_LIST).toContain("stats");
+    expect(COMMAND_LIST).toContain("pwd");
+    expect(COMMAND_LIST).toContain("hostname");
+    expect(COMMAND_LIST).toContain("alias");
+    expect(COMMAND_LIST).toContain("which");
   });
 
   it("builds projects output with numbered entries", () => {
@@ -356,7 +361,26 @@ describe("terminal helpers", () => {
     const hMatches = autocompleteCommand("h", COMMAND_LIST);
     expect(hMatches).toContain("help");
     expect(hMatches).toContain("history");
-    expect(hMatches.length).toBe(2);
+    expect(hMatches).toContain("hostname");
+    expect(hMatches.length).toBe(3);
+  });
+
+  it("clamps skill levels to 0-100 range", () => {
+    const cats = [
+      {
+        name: "Test",
+        skills: [
+          { name: "Over", level: 150 },
+          { name: "Under", level: -10 },
+          { name: "NaN", level: "abc" },
+        ],
+      },
+    ];
+    const output = buildSkillsOutput(cats);
+    expect(output).toContain("100%");
+    expect(output).toContain("0%");
+    expect(output).not.toContain("150%");
+    expect(output).not.toContain("-10%");
   });
 
   it("builds skills output with ASCII bar charts and notes", () => {
@@ -412,13 +436,23 @@ describe("terminal helpers", () => {
     expect(buildExperienceOutput([])).toBe("No experience data available.");
   });
 
-  it("builds blog list output", () => {
+  it("estimates reading time from content", () => {
+    expect(estimateReadingTime(null)).toBe(1);
+    expect(estimateReadingTime("")).toBe(1);
+    expect(estimateReadingTime("one two three")).toBe(1);
+    // 400 words = 2 minutes at 200 WPM
+    const words400 = Array(400).fill("word").join(" ");
+    expect(estimateReadingTime(words400)).toBe(2);
+  });
+
+  it("builds blog list output with reading time", () => {
     const posts = [
       {
         slug: "hello",
         title: "Hello World",
         date: "2025-01-01",
         summary: "First post.",
+        content: "Some content here.",
       },
     ];
     const output = buildBlogListOutput(posts);
@@ -426,11 +460,12 @@ describe("terminal helpers", () => {
     expect(output).toContain("2025-01-01");
     expect(output).toContain("First post.");
     expect(output).toContain("blog hello");
+    expect(output).toContain("min read");
 
     expect(buildBlogListOutput([])).toBe("No blog posts yet.");
   });
 
-  it("builds blog post output", () => {
+  it("builds blog post output with reading time", () => {
     const post = {
       title: "My Post",
       date: "2025-01-01",
@@ -439,6 +474,7 @@ describe("terminal helpers", () => {
     const output = buildBlogPostOutput(post);
     expect(output).toContain("My Post");
     expect(output).toContain("2025-01-01");
+    expect(output).toContain("min read");
     expect(output).toContain("Body text here.");
     expect(output).toContain("┌");
     expect(output).toContain("└");
