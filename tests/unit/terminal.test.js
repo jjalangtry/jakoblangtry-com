@@ -46,6 +46,8 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
     expect(COMMAND_LIST).toContain("which");
+    expect(COMMAND_LIST).toContain("login");
+    expect(COMMAND_LIST).toContain("logout");
   });
 
   it("builds projects output with numbered entries", () => {

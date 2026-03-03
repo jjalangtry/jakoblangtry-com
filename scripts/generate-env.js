@@ -1,24 +1,28 @@
 const fs = require("fs");
 const path = require("path");
 
-let apiKey = process.env.OPENWEATHERMAP_API_KEY;
-
-if (!apiKey) {
+function readEnvFile() {
   const envPath = path.join(__dirname, "..", ".env");
   if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, "utf-8");
-    const match = envContent.match(/^OPENWEATHERMAP_API_KEY=(.+)$/m);
-    if (match) {
-      apiKey = match[1].trim();
-    }
+    return fs.readFileSync(envPath, "utf-8");
   }
+  return "";
 }
 
-const safeApiKey = apiKey || "";
+function getEnvVar(name) {
+  if (process.env[name]) return process.env[name];
+  const content = readEnvFile();
+  const match = content.match(new RegExp(`^${name}=(.+)$`, "m"));
+  return match ? match[1].trim() : "";
+}
+
+const safeApiKey = getEnvVar("OPENWEATHERMAP_API_KEY");
+const adminHash = getEnvVar("ADMIN_PASSWORD_HASH");
 
 const envContent = `(function() {
   window.ENV = {
-    OPENWEATHERMAP_API_KEY: '${safeApiKey}'
+    OPENWEATHERMAP_API_KEY: '${safeApiKey}',
+    ADMIN_PASSWORD_HASH: '${adminHash}'
   };
 })();
 `;

@@ -24,7 +24,34 @@ let captureMode = false;
 let capturedLines = [];
 let snakeActive = false;
 let snakeInterval = null;
-let editorState = null; // null | { phase: "title" } | { phase: "body", title, lines }
+let editorState = null; // null | { phase: "title" } | { phase: "body", title, lines } | { phase: "login" }
+let isAdmin = false;
+
+async function hashPassword(password) {
+  const data = new TextEncoder().encode(password);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function requiresAuth() {
+  const hash = (window.ENV?.ADMIN_PASSWORD_HASH || "").trim();
+  return hash.length > 0;
+}
+
+function isAuthenticated() {
+  return isAdmin || !requiresAuth();
+}
+
+function checkAuth(commandName) {
+  if (isAuthenticated()) return true;
+  appendOutput(
+    `Permission denied: '${commandName}' requires admin access. Use 'login' to authenticate.`,
+    "error-text",
+  );
+  return false;
+}
 
 function loadLocalPosts() {
   try {
@@ -203,6 +230,8 @@ const commandList = [
   "edit",
   "export",
   "rss",
+  "login",
+  "logout",
   "sudo",
   "cd",
   "close",
@@ -346,7 +375,8 @@ function createInputLine() {
   inputLine.className = "terminal-input-line";
   const prompt = document.createElement("span");
   prompt.className = "prompt";
-  prompt.textContent = "guest@jjalangtry.com:~$ ";
+  const user = isAdmin ? "admin" : "guest";
+  prompt.textContent = `${user}@jjalangtry.com:~$ `;
 
   const inputWrapper = document.createElement("div");
   inputWrapper.className = "input-wrapper";
@@ -715,7 +745,7 @@ function openResume() {
 function executeCommand(command, options = {}) {
   if (!options.skipEcho) {
     const commandLine = document.createElement("div");
-    commandLine.textContent = `guest@jjalangtry.com:~$ ${command}`;
+    commandLine.textContent = `${getPromptPrefix()}${command}`;
     cliOutput.insertBefore(commandLine, inputLine);
   }
 
@@ -830,7 +860,11 @@ AVAILABLE COMMANDS:
   rss        Show RSS feed URL
              Usage: rss
 
-CONTENT MANAGEMENT:
+AUTHENTICATION:
+  login               Authenticate as admin (required for content management)
+  logout              End admin session
+
+CONTENT MANAGEMENT (requires login):
   write              Create a new blog post (saved in browser)
   edit whoami         Edit your bio text
   post delete [slug]  Delete a user-created post
@@ -922,6 +956,7 @@ Currently seeking opportunities in software engineering.`,
       startSnakeGame();
       break;
     case "write":
+      if (!checkAuth("write")) break;
       startWrite();
       break;
     case "rss":
@@ -929,6 +964,31 @@ Currently seeking opportunities in software engineering.`,
         "RSS feed: /rss.xml\nSubscribe with any RSS reader to get notified of new posts.",
         "info-text",
       );
+      break;
+    case "login":
+      if (isAuthenticated()) {
+        appendOutput(
+          requiresAuth()
+            ? "Already authenticated as admin."
+            : "No password configured. Admin commands are unrestricted.",
+          "info-text",
+        );
+      } else {
+        editorState = { phase: "login" };
+        setPromptText("Password: ");
+        if (currentInput) {
+          currentInput.type = "password";
+        }
+      }
+      break;
+    case "logout":
+      if (isAdmin) {
+        isAdmin = false;
+        updatePromptUser();
+        appendOutput("Logged out.", "info-text");
+      } else {
+        appendOutput("Not logged in.", "info-text");
+      }
       break;
     case "grep":
       appendOutput(
@@ -1167,6 +1227,7 @@ Currently seeking opportunities in software engineering.`,
         // We're now handling the formatting in fetchWeather function
         fetchWeather(city);
       } else if (normalizedCommand === "edit whoami") {
+        if (!checkAuth("edit")) break;
         startEditWhoami();
         break;
       } else if (normalizedCommand.startsWith("edit ")) {
@@ -1182,10 +1243,12 @@ Currently seeking opportunities in software engineering.`,
         );
         break;
       } else if (normalizedCommand.startsWith("post delete ")) {
+        if (!checkAuth("post delete")) break;
         const slug = normalizedCommand.substring(12).trim();
         deleteLocalPost(slug);
         break;
       } else if (normalizedCommand === "export posts") {
+        if (!checkAuth("export")) break;
         exportLocalPosts();
         break;
       } else if (normalizedCommand.startsWith("which ")) {
@@ -2916,6 +2979,19 @@ function getHelpDetails() {
       examples: ["rss"],
       notes: "The RSS feed at /rss.xml includes all built-in blog posts.",
     },
+    login: {
+      desc: "Authenticate as admin to unlock content management commands.",
+      usage: "login",
+      examples: ["login"],
+      notes:
+        "Prompts for a password. The hash is configured via ADMIN_PASSWORD_HASH env var at build time. If no hash is set, admin commands are unrestricted.",
+    },
+    logout: {
+      desc: "End the admin session.",
+      usage: "logout",
+      examples: ["logout"],
+      notes: "Revokes admin access and switches the prompt back to guest.",
+    },
   };
 }
 
@@ -3212,7 +3288,43 @@ function setPromptText(text) {
   if (prompt) prompt.textContent = text;
 }
 
+function getPromptPrefix() {
+  const user = isAdmin ? "admin" : "guest";
+  return `${user}@jjalangtry.com:~$ `;
+}
+
+function updatePromptUser() {
+  setPromptText(getPromptPrefix());
+}
+
 function handleEditorInput(command, raw) {
+  if (editorState.phase === "login") {
+    editorState = null;
+    if (currentInput) currentInput.type = "text";
+    const echoLine = document.createElement("div");
+    echoLine.textContent = "Password: ********";
+    if (inputLine && inputLine.parentNode === cliOutput)
+      cliOutput.insertBefore(echoLine, inputLine);
+    const expected = (window.ENV?.ADMIN_PASSWORD_HASH || "").trim();
+    if (!expected) {
+      isAdmin = true;
+      updatePromptUser();
+      appendOutput("No password configured. Authenticated.", "success-text");
+      return;
+    }
+    hashPassword(command).then((hash) => {
+      if (hash === expected) {
+        isAdmin = true;
+        updatePromptUser();
+        appendOutput("Authenticated. Admin commands unlocked.", "success-text");
+      } else {
+        updatePromptUser();
+        appendOutput("Authentication failed.", "error-text");
+      }
+    });
+    return;
+  }
+
   if (editorState.phase === "title") {
     if (!command) {
       appendOutput("Title cannot be empty. Type :q to cancel.", "error-text");

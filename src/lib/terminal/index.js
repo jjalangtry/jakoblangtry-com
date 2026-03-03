@@ -35,6 +35,8 @@ export const COMMAND_LIST = [
   "edit",
   "export",
   "rss",
+  "login",
+  "logout",
   "sudo",
   "cd",
   "close",
