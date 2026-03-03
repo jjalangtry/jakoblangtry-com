@@ -960,10 +960,7 @@ Currently seeking opportunities in software engineering.`,
       startWrite();
       break;
     case "rss":
-      appendOutput(
-        "RSS feed: /rss.xml\nSubscribe with any RSS reader to get notified of new posts.",
-        "info-text",
-      );
+      displayRssInfo();
       break;
     case "login":
       if (isAuthenticated()) {
@@ -1245,6 +1242,11 @@ Currently seeking opportunities in software engineering.`,
       } else if (normalizedCommand.startsWith("post delete ")) {
         if (!checkAuth("post delete")) break;
         const slug = normalizedCommand.substring(12).trim();
+        deleteLocalPost(slug);
+        break;
+      } else if (normalizedCommand.startsWith("delete ")) {
+        if (!checkAuth("delete")) break;
+        const slug = normalizedCommand.substring(7).trim();
         deleteLocalPost(slug);
         break;
       } else if (normalizedCommand === "export posts") {
@@ -2997,6 +2999,65 @@ function getHelpDetails() {
 
 // ── Content commands ──────────────────────────────────────────
 
+function displayRssInfo() {
+  const feedUrl = `${window.location.origin}/rss.xml`;
+  const container = document.createElement("div");
+  container.className = "info-text";
+  container.style.whiteSpace = "pre-wrap";
+
+  container.appendChild(document.createTextNode("RSS Feed\n────────\n\n"));
+
+  const feedLink = document.createElement("a");
+  feedLink.href = feedUrl;
+  feedLink.target = "_blank";
+  feedLink.rel = "noopener noreferrer";
+  feedLink.textContent = feedUrl;
+  feedLink.style.color = "inherit";
+  feedLink.style.textDecoration = "underline";
+  container.appendChild(feedLink);
+  container.appendChild(document.createTextNode("\n\n"));
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "command-chip";
+  copyBtn.style.display = "inline-block";
+  copyBtn.textContent = "Copy Feed URL";
+  copyBtn.addEventListener("click", () => {
+    navigator.clipboard.writeText(feedUrl).then(() => {
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => {
+        copyBtn.textContent = "Copy Feed URL";
+      }, 2000);
+    });
+  });
+  container.appendChild(copyBtn);
+
+  container.appendChild(document.createTextNode("  "));
+
+  const feedlyBtn = document.createElement("a");
+  feedlyBtn.href = `https://feedly.com/i/subscription/feed/${encodeURIComponent(feedUrl)}`;
+  feedlyBtn.target = "_blank";
+  feedlyBtn.rel = "noopener noreferrer";
+  feedlyBtn.className = "command-chip";
+  feedlyBtn.style.textDecoration = "none";
+  feedlyBtn.style.display = "inline-block";
+  feedlyBtn.textContent = "Open in Feedly";
+  container.appendChild(feedlyBtn);
+
+  container.appendChild(
+    document.createTextNode(
+      "\n\nPaste the URL into any RSS reader to subscribe.",
+    ),
+  );
+
+  if (inputLine && inputLine.parentNode === cliOutput) {
+    cliOutput.insertBefore(container, inputLine);
+  } else {
+    cliOutput.appendChild(container);
+  }
+  cliOutput.scrollTop = cliOutput.scrollHeight;
+}
+
 function displayContact() {
   const container = document.createElement("div");
   container.className = "info-text";
@@ -3082,7 +3143,13 @@ function displayExperience() {
 }
 
 function displayBlogList() {
-  appendOutput(buildBlogListOutput(getAllPosts()), "info-text");
+  const allPosts = getAllPosts();
+  const localSlugs = new Set(loadLocalPosts().map((p) => p.slug));
+  appendOutput(buildBlogListOutput(allPosts), "info-text");
+  if (localSlugs.size > 0) {
+    const slugList = [...localSlugs].map((s) => `delete ${s}`).join(", ");
+    appendOutput(`Your posts: ${slugList}`, "log-text");
+  }
 }
 
 function displayBlogPost(slug) {
@@ -3333,7 +3400,7 @@ function handleEditorInput(command, raw) {
     if (command === ":q") {
       appendOutput("Write cancelled.", "info-text");
       editorState = null;
-      setPromptText("guest@jjalangtry.com:~$ ");
+      updatePromptUser();
       return;
     }
     const echoLine = document.createElement("div");
@@ -3342,10 +3409,7 @@ function handleEditorInput(command, raw) {
       cliOutput.insertBefore(echoLine, inputLine);
     editorState = { phase: "body", title: command, lines: [] };
     setPromptText("> ");
-    appendOutput(
-      "Enter post body. Type :wq on its own line to save, :q to cancel.",
-      "info-text",
-    );
+    showEditorHint();
     return;
   }
 
@@ -3367,14 +3431,74 @@ function handleEditorInput(command, raw) {
       posts.unshift(post);
       saveLocalPosts(posts);
       editorState = null;
-      setPromptText("guest@jjalangtry.com:~$ ");
+      updatePromptUser();
       appendOutput(`Post saved! Read it with: blog ${slug}`, "success-text");
       return;
     }
     if (command === ":q") {
       editorState = null;
-      setPromptText("guest@jjalangtry.com:~$ ");
+      updatePromptUser();
       appendOutput("Write cancelled. Draft discarded.", "info-text");
+      return;
+    }
+    if (command === ":help") {
+      appendOutput(
+        "Editor commands:\n" +
+          "  :wq        Save and exit\n" +
+          "  :q         Cancel and discard\n" +
+          "  :preview   Preview the post so far\n" +
+          "  :lines     Show numbered lines\n" +
+          "  :undo      Remove the last line\n" +
+          "  :clear     Clear all body text\n" +
+          "  :title     Change title (e.g. :title My New Title)\n" +
+          "  :help      Show this help",
+        "info-text",
+      );
+      return;
+    }
+    if (command === ":preview") {
+      const width = 60;
+      const border = "\u2500".repeat(width);
+      let preview = `\u250C${border}\u2510\n`;
+      preview += `\u2502 ${editorState.title.slice(0, width - 2).padEnd(width - 1)}\u2502\n`;
+      preview += `\u2514${border}\u2518\n\n`;
+      preview += editorState.lines.join("\n") || "(empty)";
+      appendOutput(preview, "info-text");
+      return;
+    }
+    if (command === ":lines") {
+      if (editorState.lines.length === 0) {
+        appendOutput("(no lines yet)", "info-text");
+      } else {
+        const numbered = editorState.lines
+          .map((l, i) => `  ${String(i + 1).padStart(3)}  ${l}`)
+          .join("\n");
+        appendOutput(numbered, "info-text");
+      }
+      return;
+    }
+    if (command === ":undo") {
+      if (editorState.lines.length === 0) {
+        appendOutput("Nothing to undo.", "info-text");
+      } else {
+        const removed = editorState.lines.pop();
+        appendOutput(`Removed: ${removed}`, "info-text");
+      }
+      return;
+    }
+    if (command === ":clear") {
+      editorState.lines = [];
+      appendOutput("Body cleared.", "info-text");
+      return;
+    }
+    if (command.startsWith(":title ")) {
+      const newTitle = command.substring(7).trim();
+      if (newTitle) {
+        editorState.title = newTitle;
+        appendOutput(`Title changed to: ${newTitle}`, "success-text");
+      } else {
+        appendOutput("Usage: :title New Title Here", "info-text");
+      }
       return;
     }
     const echoLine = document.createElement("div");
@@ -3389,7 +3513,7 @@ function handleEditorInput(command, raw) {
   if (editorState.phase === "whoami") {
     if (command === ":q") {
       editorState = null;
-      setPromptText("guest@jjalangtry.com:~$ ");
+      updatePromptUser();
       appendOutput("Edit cancelled.", "info-text");
       return;
     }
@@ -3397,7 +3521,7 @@ function handleEditorInput(command, raw) {
       const text = editorState.lines.join("\n");
       saveCustomWhoami(text);
       editorState = null;
-      setPromptText("guest@jjalangtry.com:~$ ");
+      updatePromptUser();
       appendOutput("Bio updated! Type 'whoami' to see it.", "success-text");
       return;
     }
@@ -3415,6 +3539,14 @@ function startWrite() {
   editorState = { phase: "title" };
   setPromptText("Title: ");
   appendOutput("New post \u2014 enter a title, or :q to cancel.", "info-text");
+}
+
+function showEditorHint() {
+  appendOutput(
+    "Type your post line by line. Editor commands:\n" +
+      "  :wq  save    :q  cancel    :preview    :undo    :lines    :help",
+    "info-text",
+  );
 }
 
 function startEditWhoami() {
@@ -3692,7 +3824,11 @@ function initCLI() {
         const arg = currentLower.substring(spaceIdx + 1);
         let completions = [];
         if (baseCmd === "blog") {
-          completions = (terminalData.posts || [])
+          completions = getAllPosts()
+            .map((p) => p.slug)
+            .filter((s) => s.startsWith(arg));
+        } else if (baseCmd === "delete") {
+          completions = loadLocalPosts()
             .map((p) => p.slug)
             .filter((s) => s.startsWith(arg));
         } else if (baseCmd === "theme") {
