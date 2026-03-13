@@ -24,6 +24,8 @@ import {
   buildBlogPostOutput,
   buildContactOutput,
   buildStatsOutput,
+  buildReposOutput,
+  buildContributionChartAscii,
   estimateReadingTime,
 } from "../../src/lib/terminal/index.js";
 
@@ -51,6 +53,67 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
+    expect(COMMAND_LIST).toContain("repos");
+  });
+
+  it("builds repos output with project groups", () => {
+    const projectGroups = {
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jakoblangtry.com",
+          language: "TypeScript",
+          description: "Convert music links",
+        },
+      ],
+      contributions: [
+        {
+          name: "SSE Website",
+          url: "https://sse.rit.edu",
+          description: "Active contributor",
+        },
+      ],
+      github: [
+        {
+          name: "read-faster",
+          url: "https://github.com/jjalangtry/read-faster",
+          language: "Swift",
+        },
+      ],
+    };
+    const output = buildReposOutput(projectGroups);
+    expect(output).toContain("GitHub Repositories & Contributions");
+    expect(output).toContain("▓ DEPLOYED");
+    expect(output).toContain("▓ CONTRIBUTIONS");
+    expect(output).toContain("▓ MORE REPOS");
+    expect(output).toContain("Link Converter");
+    expect(output).toContain("SSE Website");
+    expect(output).toContain("read-faster");
+  });
+
+  it("handles empty repos gracefully", () => {
+    const output = buildReposOutput({
+      featured: [],
+      contributions: [],
+      github: [],
+    });
+    expect(output).toContain("No repositories configured");
+  });
+
+  it("builds contribution chart ASCII from API data", () => {
+    const contributions = [
+      { date: "2026-03-12", count: 4, level: 1 },
+      { date: "2026-03-11", count: 3, level: 1 },
+      { date: "2026-03-10", count: 4, level: 1 },
+      { date: "2026-02-08", count: 23, level: 4 },
+    ];
+    const output = buildContributionChartAscii(contributions);
+    expect(output).toContain("Contribution chart");
+    expect(output).toContain("Less");
+    expect(output).toContain("More");
+    expect(output).toContain("Sun");
+    expect(output).toContain("Sat");
+    expect(output).toContain("github.com/JJALANGTRY");
   });
 
   it("builds projects output with numbered entries", () => {

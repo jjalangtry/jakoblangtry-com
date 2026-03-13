@@ -22,6 +22,7 @@ export const COMMAND_LIST = [
   "projects",
   "pwd",
   "repo",
+  "repos",
   "resume",
   "skills",
   "snake",
@@ -433,6 +434,144 @@ export function buildStatsOutput(stats) {
       lines.push(`  ${c.name.padEnd(16)} ${c.count} times`);
     });
   }
+  return lines.join("\n");
+}
+
+export function buildReposOutput(projectGroups) {
+  const groups = projectGroups || {
+    featured: [],
+    contributions: [],
+    github: [],
+  };
+  const featured = groups.featured || [];
+  const contributions = groups.contributions || [];
+  const github = groups.github || [];
+  const total = featured.length + contributions.length + github.length;
+
+  if (total === 0) {
+    return "No repositories configured. Run 'projects' to see the projects pane.";
+  }
+
+  const W = 58;
+  const pad = (s, n) =>
+    String(s || "")
+      .padEnd(n)
+      .slice(0, n);
+  const row = (content) => `│${pad(content, W)}│`;
+
+  const formatProject = (p, isLast) => {
+    const prefix = isLast ? "└─" : "├─";
+    const name = p.name || "Untitled";
+    const sub = p.url
+      ? p.url.replace(/^https?:\/\//, "").replace(/\/$/, "")
+      : "";
+    const meta = [p.language, p.description].filter(Boolean).join(" · ") || sub;
+    return [row(` ${prefix} ${name}`), row(`    ${meta}`)];
+  };
+
+  const lines = [];
+  lines.push("┌" + "─".repeat(W) + "┐");
+  lines.push(row("   GitHub Repositories & Contributions"));
+  lines.push("├" + "─".repeat(W) + "┤");
+
+  if (featured.length > 0) {
+    lines.push(row(" ▓ DEPLOYED "));
+    featured.forEach((p, i) => {
+      const isLast =
+        i === featured.length - 1 &&
+        contributions.length === 0 &&
+        github.length === 0;
+      formatProject(p, isLast).forEach((l) => lines.push(l));
+    });
+    if (contributions.length > 0 || github.length > 0) {
+      lines.push(row(""));
+    }
+  }
+
+  if (contributions.length > 0) {
+    lines.push(row(" ▓ CONTRIBUTIONS "));
+    contributions.forEach((p, i) => {
+      const lastInSection =
+        i === contributions.length - 1 && github.length === 0;
+      formatProject(p, lastInSection).forEach((l) => lines.push(l));
+    });
+    if (github.length > 0) {
+      lines.push(row(""));
+    }
+  }
+
+  if (github.length > 0) {
+    lines.push(row(" ▓ MORE REPOS "));
+    github.forEach((p, i) => {
+      formatProject(p, i === github.length - 1).forEach((l) => lines.push(l));
+    });
+  }
+
+  lines.push("├" + "─".repeat(W) + "┤");
+  lines.push(row(" Tip: 'projects' for full pane  ·  github.com/JJALANGTRY"));
+  lines.push("└" + "─".repeat(W) + "┘");
+  return lines.join("\n");
+}
+
+/**
+ * Builds a terminal-style ASCII contribution chart from GitHub contributions API data.
+ * @param {Array<{date: string, count: number, level: number}>} contributions - Array of {date, count, level}
+ * @returns {string} ASCII grid (7 rows × 53 weeks, GitHub-style layout)
+ */
+export function buildContributionChartAscii(contributions) {
+  const LEVEL_CHARS = [" ", "░", "▒", "▓", "█"];
+  const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const dateToLevel = new Map();
+  if (Array.isArray(contributions)) {
+    for (const c of contributions) {
+      if (c && c.date != null) {
+        dateToLevel.set(c.date, Math.min(4, Math.max(0, Number(c.level) || 0)));
+      }
+    }
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  // 53 weeks × 7 days, oldest week on left
+  const totalDays = 53 * 7;
+  const startDate = new Date(today.getTime() - (totalDays - 1) * dayMs);
+
+  const grid = [];
+  for (let row = 0; row < 7; row++) {
+    grid[row] = [];
+    for (let col = 0; col < 53; col++) {
+      const dayOffset = col * 7 + row;
+      const d = new Date(startDate.getTime() + dayOffset * dayMs);
+      const dateStr = d.toISOString().slice(0, 10);
+      const level = dateToLevel.get(dateStr) ?? 0;
+      grid[row][col] = LEVEL_CHARS[level];
+    }
+  }
+
+  const lines = [];
+  const W = 60;
+  const pad = (s, n) =>
+    String(s || "")
+      .padEnd(n)
+      .slice(0, n);
+  const row = (content) => `│${pad(content, W)}│`;
+
+  lines.push("┌" + "─".repeat(W) + "┐");
+  lines.push(row("   Contribution chart  Less  ░ ▒ ▓ █  More"));
+  lines.push("├" + "─".repeat(W) + "┤");
+
+  for (let r = 0; r < 7; r++) {
+    const label = DAY_LABELS[r] + " ";
+    const cells = grid[r].join("");
+    lines.push(row(` ${label} ${cells}`));
+  }
+
+  lines.push("├" + "─".repeat(W) + "┤");
+  lines.push(row("   github.com/JJALANGTRY  ·  past 53 weeks"));
+  lines.push("└" + "─".repeat(W) + "┘");
   return lines.join("\n");
 }
 

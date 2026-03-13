@@ -13,6 +13,8 @@ import {
   buildBlogPostOutput,
   buildContactOutput,
   buildStatsOutput,
+  buildReposOutput,
+  buildContributionChartAscii,
 } from "../lib/terminal/index.js";
 
 // Global variables for managing input and command history
@@ -218,6 +220,7 @@ const commandList = [
   "neofetch",
   "projects",
   "pwd",
+  "repos",
   "repo",
   "resume",
   "skills",
@@ -822,6 +825,9 @@ AVAILABLE COMMANDS:
   projects   Open projects in a tmux-style split pane
              Usage: projects
 
+  repos      Display GitHub repos and contributions (ASCII view)
+             Usage: repos
+
   close      Close the projects split pane
              Usage: close (alias: exit, Ctrl+B q)
 
@@ -1045,6 +1051,10 @@ Currently seeking opportunities in software engineering.`,
         appendOutput("Opening projects pane...", "info-text");
         setTimeout(openProjectsPane, 150);
       }
+      break;
+    case "repos":
+      appendOutput(buildReposOutput(terminalData.projectGroups), "info-text");
+      fetchContributionChart();
       break;
     case "close":
     case "exit":
@@ -1337,6 +1347,33 @@ NOTES:
     appendOutput(
       `No detailed help available for '${command}'. Type 'help' to see all available commands.`,
       "error-text",
+    );
+  }
+}
+
+/**
+ * Fetches GitHub contribution chart data and appends a terminal-style ASCII grid.
+ */
+async function fetchContributionChart() {
+  const API_URL = "https://github-contributions-api.jogruber.de/v4/jjalangtry";
+  try {
+    appendOutput("Fetching contribution chart...", "info-text");
+    const res = await fetch(API_URL);
+    if (!res.ok) {
+      appendOutput(
+        `Contribution chart unavailable (${res.status}). Try 'github' to open profile.`,
+        "info-text",
+      );
+      return;
+    }
+    const data = await res.json();
+    const contributions = data?.contributions ?? [];
+    const chart = buildContributionChartAscii(contributions);
+    appendOutput(chart, "info-text");
+  } catch (err) {
+    appendOutput(
+      `Could not fetch contribution chart: ${err.message}. Try 'github' to open profile.`,
+      "info-text",
     );
   }
 }
@@ -2948,6 +2985,13 @@ function getHelpDetails() {
       notes:
         "Click any project to open it. Type 'close' or press Ctrl+B then q to dismiss the pane.",
     },
+    repos: {
+      desc: "Display GitHub repositories and contributions in a terminal-style ASCII view.",
+      usage: "repos",
+      examples: ["repos"],
+      notes:
+        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+    },
     close: {
       desc: "Close the tmux-style projects split pane.",
       usage: "close",
@@ -3692,9 +3736,13 @@ function executePipeline(input) {
   cliOutput.insertBefore(echoLine, inputLine);
 
   const firstCmd = filtered[0].trim().toLowerCase();
-  if (firstCmd.startsWith("weather ") || firstCmd.startsWith("curl ")) {
+  if (
+    firstCmd === "repos" ||
+    firstCmd.startsWith("weather ") ||
+    firstCmd.startsWith("curl ")
+  ) {
     appendOutput(
-      "Pipe is not supported for async commands (weather, curl).",
+      "Pipe is not supported for async commands (repos, weather, curl).",
       "error-text",
     );
     return;
