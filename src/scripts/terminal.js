@@ -15,6 +15,10 @@ import {
   buildStatsOutput,
   buildReposOutput,
   buildContributionChartAscii,
+  getRandomFortune,
+  flipText,
+  safeCalc,
+  renderBigTime,
 } from "../lib/terminal/index.js";
 
 // Global variables for managing input and command history
@@ -28,6 +32,10 @@ let captureMode = false;
 let capturedLines = [];
 let snakeActive = false;
 let snakeInterval = null;
+let matrixActive = false;
+let matrixInterval = null;
+let countdownActive = false;
+let countdownInterval = null;
 let editorState = null; // null | { phase: "title" } | { phase: "body", title, lines } | { phase: "login" }
 let isAdmin = false;
 
@@ -201,15 +209,19 @@ const commandList = [
   "alias",
   "banner",
   "blog",
+  "calc",
   "clear",
   "contact",
   "converter",
+  "countdown",
   "curl",
   "qr",
   "date",
   "echo",
   "email",
   "experience",
+  "flip",
+  "fortune",
   "github",
   "grep",
   "help",
@@ -217,6 +229,7 @@ const commandList = [
   "hostname",
   "ls",
   "man",
+  "matrix",
   "neofetch",
   "projects",
   "pwd",
@@ -586,6 +599,8 @@ const ONBOARDING_COMMANDS = [
   { cmd: "projects", desc: "view my work" },
   { cmd: "blog", desc: "read my posts" },
   { cmd: "contact", desc: "get in touch" },
+  { cmd: "fortune", desc: "random wisdom" },
+  { cmd: "matrix", desc: "digital rain" },
   { cmd: "theme light", desc: "switch theme" },
 ];
 
@@ -770,11 +785,17 @@ AVAILABLE COMMANDS:
   blog       Read blog posts
              Usage: blog [slug]
 
+  calc       Evaluate a math expression
+             Usage: calc [expression]
+
   clear      Clear the terminal screen
              Usage: clear
 
   contact    Display contact information
              Usage: contact
+
+  countdown  Start a visual countdown timer
+             Usage: countdown [seconds]
 
   converter  Open Link Converter tool
              Usage: converter
@@ -797,6 +818,12 @@ AVAILABLE COMMANDS:
   experience Display work and education timeline
              Usage: experience
 
+  flip       Flip text upside down
+             Usage: flip [text]
+
+  fortune    Display a random programming quote
+             Usage: fortune
+
   github     Open Jakob's GitHub profile
              (alias: repo)
              Usage: github
@@ -818,6 +845,9 @@ AVAILABLE COMMANDS:
 
   man        Display manual page for a command
              Usage: man [command]
+
+  matrix     Display Matrix-style digital rain
+             Usage: matrix
 
   neofetch   Display system information
              Usage: neofetch
@@ -964,6 +994,30 @@ Currently seeking opportunities in software engineering.`,
       break;
     case "snake":
       startSnakeGame();
+      break;
+    case "matrix":
+      startMatrixRain();
+      break;
+    case "fortune":
+      appendOutput(getRandomFortune(), "info-text");
+      break;
+    case "calc":
+      appendOutput(
+        "Usage: calc [expression]\nExamples: calc 2+2, calc sqrt(144), calc sin(3.14/2)",
+        "info-text",
+      );
+      break;
+    case "flip":
+      appendOutput(
+        "Usage: flip [text]\nFlips text upside down. Example: flip hello world",
+        "info-text",
+      );
+      break;
+    case "countdown":
+      appendOutput(
+        "Usage: countdown [seconds]\nStarts a visual countdown timer. Example: countdown 60",
+        "info-text",
+      );
       break;
     case "write":
       if (!checkAuth("write")) break;
@@ -1294,6 +1348,42 @@ Currently seeking opportunities in software engineering.`,
         } else {
           appendOutput("Usage: echo [text to display]", "info-text");
         }
+      } else if (normalizedCommand.startsWith("calc ")) {
+        const expr = command.substring(5).trim();
+        if (!expr) {
+          appendOutput(
+            "Usage: calc [expression]\nExamples: calc 2+2, calc sqrt(144), calc sin(3.14/2)",
+            "info-text",
+          );
+        } else {
+          const result = safeCalc(expr);
+          if (result.error) {
+            appendOutput(result.error, "error-text");
+          } else {
+            appendOutput(`${expr} = ${result.value}`, "success-text");
+          }
+        }
+        break;
+      } else if (normalizedCommand.startsWith("flip ")) {
+        const text = command.substring(5).trim();
+        if (!text) {
+          appendOutput("Usage: flip [text]", "info-text");
+        } else {
+          appendOutput(flipText(text), "info-text");
+        }
+        break;
+      } else if (normalizedCommand.startsWith("countdown ")) {
+        const arg = command.substring(10).trim();
+        const secs = parseInt(arg, 10);
+        if (isNaN(secs) || secs <= 0 || secs > 5999) {
+          appendOutput(
+            "Usage: countdown [1-5999]\nExample: countdown 60",
+            "info-text",
+          );
+        } else {
+          startCountdown(secs);
+        }
+        break;
       } else if (normalizedCommand.endsWith(" --help")) {
         // Handle command-specific help
         const cmd = normalizedCommand
@@ -2857,6 +2947,27 @@ function getHelpDetails() {
       notes:
         "Without arguments, lists all available posts. With a slug, displays the full post.",
     },
+    calc: {
+      desc: "Evaluate a math expression with support for common functions.",
+      usage: "calc [expression]",
+      examples: [
+        "calc 2 + 2",
+        "calc sqrt(144)",
+        "calc sin(3.14 / 2)",
+        "calc (10 + 5) * 3",
+        "calc 2 ^ 10",
+        "calc log(100)",
+      ],
+      notes:
+        "Supports +, -, *, /, ^ (power), % (modulo), sqrt, abs, sin, cos, tan, log (base 10), ln (natural). Constants: pi, e.",
+    },
+    countdown: {
+      desc: "Start a visual countdown timer with large ASCII digits.",
+      usage: "countdown [seconds]",
+      examples: ["countdown 10", "countdown 60", "countdown 300"],
+      notes:
+        "Displays a progress bar and large digit display. Press q or Esc to cancel. Max 5999 seconds (99:59).",
+    },
     clear: {
       desc: "Clear the terminal screen, preserving command history.",
       usage: "clear",
@@ -2919,6 +3030,20 @@ function getHelpDetails() {
       examples: ["experience"],
       notes: "Shows a timeline of education, roles, and notable contributions.",
     },
+    flip: {
+      desc: "Flip text upside down using Unicode characters.",
+      usage: "flip [text]",
+      examples: ["flip hello world", "flip Jakob Langtry"],
+      notes:
+        "Reverses and maps each character to its upside-down Unicode equivalent. Great for fun messages.",
+    },
+    fortune: {
+      desc: "Display a random programming quote or piece of wisdom.",
+      usage: "fortune",
+      examples: ["fortune"],
+      notes:
+        "Curated collection of quotes from famous programmers and computer scientists. Run multiple times for different quotes.",
+    },
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
@@ -2970,6 +3095,13 @@ function getHelpDetails() {
       examples: ["man curl", "man weather", "man grep"],
       notes:
         "Man pages provide detailed usage, examples, and notes for each command.",
+    },
+    matrix: {
+      desc: "Display Matrix-style digital rain animation in the terminal.",
+      usage: "matrix",
+      examples: ["matrix"],
+      notes:
+        "Watch cascading Katakana characters fall like rain. Press q or Esc to exit.",
     },
     neofetch: {
       desc: "Display system information in a neofetch-style layout.",
@@ -3460,6 +3592,191 @@ function startSnakeGame() {
 
   document.addEventListener("keydown", handleKey, true);
   render();
+}
+
+// ── Matrix rain ───────────────────────────────────────────────
+
+function startMatrixRain() {
+  if (matrixActive) {
+    appendOutput(
+      "Matrix is already running! Press q or Esc to quit.",
+      "info-text",
+    );
+    return;
+  }
+  matrixActive = true;
+  if (inputLine) inputLine.style.display = "none";
+
+  const W = 60;
+  const H = 20;
+  const CHARS = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789";
+  const columns = [];
+
+  for (let i = 0; i < W; i++) {
+    columns.push({
+      y: Math.floor(Math.random() * H),
+      speed: 1 + Math.floor(Math.random() * 2),
+      length: 4 + Math.floor(Math.random() * 12),
+      tick: 0,
+    });
+  }
+
+  const grid = [];
+  for (let y = 0; y < H; y++) {
+    grid[y] = [];
+    for (let x = 0; x < W; x++) {
+      grid[y][x] = " ";
+    }
+  }
+
+  const gameEl = document.createElement("div");
+  gameEl.className = "info-text";
+  gameEl.style.whiteSpace = "pre";
+  gameEl.style.lineHeight = "1.15";
+  if (inputLine && inputLine.parentNode === cliOutput) {
+    cliOutput.insertBefore(gameEl, inputLine);
+  } else {
+    cliOutput.appendChild(gameEl);
+  }
+
+  function render() {
+    let frame = "";
+    for (let y = 0; y < H; y++) {
+      frame += grid[y].join("") + "\n";
+    }
+    frame += "\n  Press q or Esc to exit";
+    gameEl.textContent = frame;
+    cliOutput.scrollTop = cliOutput.scrollHeight;
+  }
+
+  function tick() {
+    if (!matrixActive) return;
+    for (let x = 0; x < W; x++) {
+      const col = columns[x];
+      col.tick++;
+      if (col.tick < col.speed) continue;
+      col.tick = 0;
+
+      grid[col.y][x] = CHARS[Math.floor(Math.random() * CHARS.length)];
+
+      const tailY = col.y - col.length;
+      if (tailY >= 0 && tailY < H) {
+        grid[tailY][x] = " ";
+      }
+      if (tailY >= H) {
+        for (let clearY = 0; clearY < H; clearY++) {
+          grid[clearY][x] = " ";
+        }
+        col.y = -Math.floor(Math.random() * H);
+        col.speed = 1 + Math.floor(Math.random() * 2);
+        col.length = 4 + Math.floor(Math.random() * 12);
+      }
+      col.y++;
+    }
+    render();
+  }
+
+  function handleKey(e) {
+    const key = e.key.toLowerCase();
+    if (key === "escape" || key === "q") {
+      e.preventDefault();
+      cleanUp();
+    }
+  }
+
+  function cleanUp() {
+    matrixActive = false;
+    clearInterval(matrixInterval);
+    document.removeEventListener("keydown", handleKey, true);
+    if (inputLine) inputLine.style.display = "";
+    appendOutput("", "");
+    if (currentInput) currentInput.focus();
+  }
+
+  document.addEventListener("keydown", handleKey, true);
+  matrixInterval = setInterval(tick, 60);
+  render();
+}
+
+// ── Countdown timer ───────────────────────────────────────────
+
+function startCountdown(totalSeconds) {
+  if (countdownActive) {
+    appendOutput(
+      "A countdown is already running! Wait for it to finish or press q/Esc.",
+      "info-text",
+    );
+    return;
+  }
+  countdownActive = true;
+  if (inputLine) inputLine.style.display = "none";
+
+  let remaining = totalSeconds;
+
+  const el = document.createElement("div");
+  el.className = "info-text";
+  el.style.whiteSpace = "pre";
+  el.style.lineHeight = "1.3";
+  if (inputLine && inputLine.parentNode === cliOutput) {
+    cliOutput.insertBefore(el, inputLine);
+  } else {
+    cliOutput.appendChild(el);
+  }
+
+  function render() {
+    let frame = `\n${renderBigTime(remaining)}\n`;
+    const pct = remaining / totalSeconds;
+    const barW = 30;
+    const filled = Math.round(pct * barW);
+    frame += `\n  [${"█".repeat(filled)}${"░".repeat(barW - filled)}] ${remaining}s remaining\n`;
+    if (remaining > 0) {
+      frame += "\n  Press q or Esc to cancel";
+    } else {
+      frame +=
+        "\n  ╔═══════════════════════╗\n  ║     ⏰ TIME'S UP!     ║\n  ╚═══════════════════════╝\n\n  Press any key to continue";
+    }
+    el.textContent = frame;
+    cliOutput.scrollTop = cliOutput.scrollHeight;
+  }
+
+  function tick() {
+    remaining--;
+    if (remaining <= 0) {
+      remaining = 0;
+      clearInterval(countdownInterval);
+      render();
+      return;
+    }
+    render();
+  }
+
+  function handleKey(e) {
+    e.preventDefault();
+    if (remaining > 0) {
+      const key = e.key.toLowerCase();
+      if (key === "escape" || key === "q") {
+        cleanUp(true);
+      }
+    } else {
+      cleanUp(false);
+    }
+  }
+
+  function cleanUp(cancelled) {
+    countdownActive = false;
+    clearInterval(countdownInterval);
+    document.removeEventListener("keydown", handleKey, true);
+    if (inputLine) inputLine.style.display = "";
+    if (cancelled) {
+      el.textContent += "\n\n  Countdown cancelled.";
+    }
+    appendOutput("", "");
+    if (currentInput) currentInput.focus();
+  }
+
+  document.addEventListener("keydown", handleKey, true);
+  render();
+  countdownInterval = setInterval(tick, 1000);
 }
 
 // ── Editor mode ───────────────────────────────────────────────

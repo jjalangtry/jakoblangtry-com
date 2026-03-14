@@ -27,6 +27,11 @@ import {
   buildReposOutput,
   buildContributionChartAscii,
   estimateReadingTime,
+  getRandomFortune,
+  FORTUNE_QUOTES,
+  flipText,
+  safeCalc,
+  renderBigTime,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -54,6 +59,11 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
     expect(COMMAND_LIST).toContain("repos");
+    expect(COMMAND_LIST).toContain("calc");
+    expect(COMMAND_LIST).toContain("countdown");
+    expect(COMMAND_LIST).toContain("flip");
+    expect(COMMAND_LIST).toContain("fortune");
+    expect(COMMAND_LIST).toContain("matrix");
   });
 
   it("builds repos output with project groups", () => {
@@ -517,7 +527,7 @@ describe("terminal helpers", () => {
     expect(autocompleteCommand("hi", COMMAND_LIST)).toEqual(["history"]);
     expect(autocompleteCommand("ne", COMMAND_LIST)).toEqual(["neofetch"]);
     expect(autocompleteCommand("up", COMMAND_LIST)).toEqual(["uptime"]);
-    expect(autocompleteCommand("ma", COMMAND_LIST)).toEqual(["man"]);
+    expect(autocompleteCommand("ma", COMMAND_LIST)).toEqual(["man", "matrix"]);
     expect(autocompleteCommand("bl", COMMAND_LIST)).toEqual(["blog"]);
     expect(autocompleteCommand("sk", COMMAND_LIST)).toEqual(["skills"]);
     expect(autocompleteCommand("sn", COMMAND_LIST)).toEqual(["snake"]);
@@ -677,5 +687,87 @@ describe("terminal helpers", () => {
     expect(output).toContain("2025-01-01");
     expect(output).toContain("help");
     expect(output).toContain("10 times");
+  });
+
+  // ── Fortune ──────────────────────────────────────────────────
+
+  it("getRandomFortune returns a string from the quotes list", () => {
+    const quote = getRandomFortune();
+    expect(typeof quote).toBe("string");
+    expect(quote.length).toBeGreaterThan(0);
+    expect(FORTUNE_QUOTES).toContain(quote);
+  });
+
+  it("FORTUNE_QUOTES contains at least 10 entries", () => {
+    expect(FORTUNE_QUOTES.length).toBeGreaterThanOrEqual(10);
+  });
+
+  // ── Flip text ────────────────────────────────────────────────
+
+  it("flips text upside down", () => {
+    expect(flipText("hello")).toBe("oll\u01DDɥ");
+    expect(flipText("")).toBe("");
+  });
+
+  it("flipText reverses and maps characters", () => {
+    const result = flipText("ab");
+    expect(result).toBe("q\u0250");
+  });
+
+  it("flipText preserves unmapped characters", () => {
+    expect(flipText("$")).toBe("$");
+  });
+
+  // ── Calc ─────────────────────────────────────────────────────
+
+  it("safeCalc evaluates basic arithmetic", () => {
+    expect(safeCalc("2+2")).toEqual({ value: 4 });
+    expect(safeCalc("10 * 3")).toEqual({ value: 30 });
+    expect(safeCalc("100 / 4")).toEqual({ value: 25 });
+    expect(safeCalc("7 - 3")).toEqual({ value: 4 });
+  });
+
+  it("safeCalc supports exponentiation", () => {
+    expect(safeCalc("2^10")).toEqual({ value: 1024 });
+    expect(safeCalc("3**2")).toEqual({ value: 9 });
+  });
+
+  it("safeCalc supports math functions", () => {
+    expect(safeCalc("sqrt(144)")).toEqual({ value: 12 });
+    expect(safeCalc("abs(-5)")).toEqual({ value: 5 });
+  });
+
+  it("safeCalc returns error for empty input", () => {
+    expect(safeCalc("")).toEqual({ error: "No expression provided." });
+    expect(safeCalc(null)).toEqual({ error: "No expression provided." });
+  });
+
+  it("safeCalc returns error for invalid characters", () => {
+    const result = safeCalc("require('fs')");
+    expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc handles division by zero as Infinity", () => {
+    const result = safeCalc("1/0");
+    expect(result).toHaveProperty("error");
+  });
+
+  // ── Countdown digits ─────────────────────────────────────────
+
+  it("renderBigTime formats 0 seconds as 00:00", () => {
+    const output = renderBigTime(0);
+    expect(output).toContain("┌───┐");
+    expect(output.split("\n")).toHaveLength(5);
+  });
+
+  it("renderBigTime formats 90 seconds as 01:30", () => {
+    const output = renderBigTime(90);
+    expect(output).toContain("●");
+    expect(output.split("\n")).toHaveLength(5);
+  });
+
+  it("renderBigTime formats 5999 seconds correctly", () => {
+    const output = renderBigTime(5999);
+    expect(output.split("\n")).toHaveLength(5);
   });
 });

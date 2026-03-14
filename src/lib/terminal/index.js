@@ -2,15 +2,19 @@ export const COMMAND_LIST = [
   "alias",
   "banner",
   "blog",
+  "calc",
   "clear",
   "contact",
   "converter",
+  "countdown",
   "curl",
   "qr",
   "date",
   "echo",
   "email",
   "experience",
+  "flip",
+  "fortune",
   "github",
   "grep",
   "help",
@@ -18,6 +22,7 @@ export const COMMAND_LIST = [
   "hostname",
   "ls",
   "man",
+  "matrix",
   "neofetch",
   "projects",
   "pwd",
@@ -601,4 +606,208 @@ export function formatManPage(command, helpEntry) {
 
   page += "SEE ALSO\n       help(1), man(1)";
   return page;
+}
+
+// ── Fortune quotes ────────────────────────────────────────────
+
+export const FORTUNE_QUOTES = [
+  '"Any fool can write code that a computer can understand. Good programmers write code that humans can understand." — Martin Fowler',
+  '"First, solve the problem. Then, write the code." — John Johnson',
+  '"Experience is the name everyone gives to their mistakes." — Oscar Wilde',
+  '"In order to be irreplaceable, one must always be different." — Coco Chanel',
+  '"Java is to JavaScript what car is to carpet." — Chris Heilmann',
+  '"Knowledge is power." — Francis Bacon',
+  '"Fix the cause, not the symptom." — Steve Maguire',
+  '"Simplicity is the soul of efficiency." — Austin Freeman',
+  '"Make it work, make it right, make it fast." — Kent Beck',
+  '"Code is like humor. When you have to explain it, it\'s bad." — Cory House',
+  '"Before software can be reusable it first has to be usable." — Ralph Johnson',
+  '"The best error message is the one that never shows up." — Thomas Fuchs',
+  '"Talk is cheap. Show me the code." — Linus Torvalds',
+  '"Programs must be written for people to read, and only incidentally for machines to execute." — Harold Abelson',
+  '"Truth can only be found in one place: the code." — Robert C. Martin',
+  '"The most disastrous thing that you can ever learn is your first programming language." — Alan Kay',
+  '"Software is a great combination between artistry and engineering." — Bill Gates',
+  '"Measuring programming progress by lines of code is like measuring aircraft building progress by weight." — Bill Gates',
+  '"Every great developer you know got there by solving problems they were unqualified to solve until they actually did it." — Patrick McKenzie',
+  '"The computer was born to solve problems that did not exist before." — Bill Gates',
+  '"It works on my machine." — Every developer, at some point',
+  '"There are only two hard things in Computer Science: cache invalidation and naming things." — Phil Karlton',
+  '"The best thing about a boolean is even if you are wrong, you are only off by a bit." — Anonymous',
+  '"A language that doesn\'t affect the way you think about programming is not worth knowing." — Alan Perlis',
+  '"Debugging is twice as hard as writing the code in the first place." — Brian Kernighan',
+  '"Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away." — Antoine de Saint-Exupéry',
+  '"The function of good software is to make the complex appear to be simple." — Grady Booch',
+  '"If debugging is the process of removing bugs, then programming must be the process of putting them in." — Edsger Dijkstra',
+  '"One of my most productive days was throwing away 1000 lines of code." — Ken Thompson',
+  '"Always code as if the guy who ends up maintaining your code will be a violent psychopath who knows where you live." — John Woods',
+];
+
+export function getRandomFortune() {
+  return FORTUNE_QUOTES[Math.floor(Math.random() * FORTUNE_QUOTES.length)];
+}
+
+// ── Flip text ─────────────────────────────────────────────────
+
+const FLIP_MAP = {
+  a: "\u0250",
+  b: "q",
+  c: "\u0254",
+  d: "p",
+  e: "\u01DD",
+  f: "\u025F",
+  g: "\u0183",
+  h: "\u0265",
+  i: "\u0131",
+  j: "\u027E",
+  k: "\u029E",
+  l: "l",
+  m: "\u026F",
+  n: "u",
+  o: "o",
+  p: "d",
+  q: "b",
+  r: "\u0279",
+  s: "s",
+  t: "\u0287",
+  u: "n",
+  v: "\u028C",
+  w: "\u028D",
+  x: "x",
+  y: "\u028E",
+  z: "z",
+  A: "\u2200",
+  B: "q",
+  C: "\u0186",
+  D: "p",
+  E: "\u018E",
+  F: "\u2132",
+  G: "\u2141",
+  H: "H",
+  I: "I",
+  J: "\u017F",
+  K: "\u029E",
+  L: "\u02E5",
+  M: "W",
+  N: "N",
+  O: "O",
+  P: "\u0500",
+  Q: "\u038C",
+  R: "\u1D1A",
+  S: "S",
+  T: "\u22A5",
+  U: "\u2229",
+  V: "\u039B",
+  W: "M",
+  X: "X",
+  Y: "\u2144",
+  Z: "Z",
+  0: "0",
+  1: "\u21C2",
+  2: "\u1105",
+  3: "\u0190",
+  4: "\u3123",
+  5: "\u03DB",
+  6: "9",
+  7: "\u3125",
+  8: "8",
+  9: "6",
+  ".": "\u02D9",
+  ",": "'",
+  "'": ",",
+  '"': "\u201E",
+  "`": ",",
+  "!": "\u00A1",
+  "?": "\u00BF",
+  "(": ")",
+  ")": "(",
+  "[": "]",
+  "]": "[",
+  "{": "}",
+  "}": "{",
+  "<": ">",
+  ">": "<",
+  _: "\u203E",
+  "&": "\u214B",
+  " ": " ",
+};
+
+export function flipText(text) {
+  if (!text) return "";
+  return text
+    .split("")
+    .map((ch) => FLIP_MAP[ch] || ch)
+    .reverse()
+    .join("");
+}
+
+// ── Calc ──────────────────────────────────────────────────────
+
+export function safeCalc(expression) {
+  if (!expression || typeof expression !== "string") {
+    return { error: "No expression provided." };
+  }
+
+  let expr = expression
+    .replace(/\s+/g, "")
+    .replace(/\*\*/g, "^")
+    .replace(/pi/gi, String(Math.PI))
+    .replace(/e(?![0-9a-z])/gi, String(Math.E));
+
+  const allowed = /^[0-9+\-*/().^%,sincotaqrlgb ]+$/i;
+  if (!allowed.test(expr)) {
+    return { error: "Invalid characters in expression." };
+  }
+
+  expr = expr
+    .replace(/sqrt\(/gi, "Math.sqrt(")
+    .replace(/abs\(/gi, "Math.abs(")
+    .replace(/sin\(/gi, "Math.sin(")
+    .replace(/cos\(/gi, "Math.cos(")
+    .replace(/tan\(/gi, "Math.tan(")
+    .replace(/log\(/gi, "Math.log10(")
+    .replace(/ln\(/gi, "Math.log(")
+    .replace(/\^/g, "**");
+
+  try {
+    const fn = new Function(`"use strict"; return (${expr});`);
+    const result = fn();
+    if (typeof result !== "number" || !isFinite(result)) {
+      return { error: "Result is not a finite number." };
+    }
+    const display =
+      Number.isInteger(result) || String(result).length <= 15
+        ? result
+        : Number(result.toPrecision(12));
+    return { value: display };
+  } catch {
+    return { error: "Could not evaluate expression." };
+  }
+}
+
+// ── Countdown ASCII digits ────────────────────────────────────
+
+const BIG_DIGITS = {
+  0: ["┌───┐", "│   │", "│   │", "│   │", "└───┘"],
+  1: ["    ╷", "    │", "    │", "    │", "    ╵"],
+  2: ["┌───┐", "    │", "├───┘", "│    ", "└───┘"],
+  3: ["┌───┐", "    │", " ───┤", "    │", "└───┘"],
+  4: ["╷   ╷", "│   │", "└───┤", "    │", "    ╵"],
+  5: ["┌───┐", "│    ", "└───┐", "    │", "└───┘"],
+  6: ["┌───┐", "│    ", "├───┐", "│   │", "└───┘"],
+  7: ["┌───┐", "    │", "    │", "    │", "    ╵"],
+  8: ["┌───┐", "│   │", "├───┤", "│   │", "└───┘"],
+  9: ["┌───┐", "│   │", "└───┤", "    │", "└───┘"],
+  ":": ["     ", "  ●  ", "     ", "  ●  ", "     "],
+};
+
+export function renderBigTime(seconds) {
+  const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+  const s = String(seconds % 60).padStart(2, "0");
+  const chars = `${m}:${s}`.split("");
+  const lines = [];
+  for (let row = 0; row < 5; row++) {
+    lines.push(chars.map((ch) => BIG_DIGITS[ch][row]).join(" "));
+  }
+  return lines.join("\n");
 }
