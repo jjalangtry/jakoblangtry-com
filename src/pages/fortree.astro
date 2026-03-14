@@ -1,0 +1,305 @@
+---
+
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#000000" />
+    <title>For Tree ♥</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <script is:inline>
+      (function () {
+        var canvas = document.getElementById("c");
+        var ctx = canvas.getContext("2d");
+
+        var MONO = '"Courier New", "Lucida Console", Monaco, monospace';
+        var FONT_PX = 14;
+        var LINE_H = 1.3;
+        var CHARS = " .\\u00b7:;=+*?#%@\u2588";
+        var W, H, cellW, cellH, cols, rows;
+        var mask;
+        var hearts = [];
+
+        /* ---- Noise ---- */
+
+        function hash(x, y) {
+          var n = (x | 0) * 374761393 + (y | 0) * 668265263;
+          n = (n >> 13) ^ n;
+          n = (n * 1274126177) | 0;
+          return ((n ^ (n >> 16)) >>> 0) / 4294967295;
+        }
+
+        function smooth(t) {
+          return t * t * (3 - 2 * t);
+        }
+
+        function vnoise(x, y) {
+          var ix = Math.floor(x),
+            iy = Math.floor(y);
+          var fx = smooth(x - ix),
+            fy = smooth(y - iy);
+          var a = hash(ix, iy),
+            b = hash(ix + 1, iy);
+          var c = hash(ix, iy + 1),
+            d = hash(ix + 1, iy + 1);
+          return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+        }
+
+        function fbm(x, y) {
+          var v = 0,
+            a = 0.5;
+          for (var i = 0; i < 5; i++) {
+            v += a * vnoise(x, y);
+            x *= 2;
+            y *= 2;
+            a *= 0.5;
+          }
+          return v;
+        }
+
+        /* ---- Text mask ---- */
+
+        function buildMask() {
+          var S = 4;
+          var oc = document.createElement("canvas");
+          oc.width = cols * S;
+          oc.height = rows * S;
+          var ox = oc.getContext("2d");
+
+          ox.fillStyle = "#000";
+          ox.fillRect(0, 0, oc.width, oc.height);
+          ox.fillStyle = "#fff";
+          ox.textAlign = "center";
+          ox.textBaseline = "middle";
+
+          var line1 = "I love you";
+          var line2 = "Tree";
+
+          var s1 = 2;
+          do {
+            s1++;
+            ox.font = "900 " + s1 + "px sans-serif";
+          } while (
+            ox.measureText(line1).width < oc.width * 0.72 &&
+            s1 < oc.height
+          );
+
+          var s2 = 2;
+          do {
+            s2++;
+            ox.font = "900 " + s2 + "px sans-serif";
+          } while (
+            ox.measureText(line2).width < oc.width * 0.5 &&
+            s2 < oc.height
+          );
+
+          var gap = oc.height * 0.04;
+          var h1 = s1 * 0.75;
+          var h2 = s2 * 0.75;
+          var total = h1 + h2 + gap;
+          var top = (oc.height - total) / 2;
+
+          ox.font = "900 " + s1 + "px sans-serif";
+          ox.fillText(line1, oc.width / 2, top + h1 * 0.5);
+
+          ox.font = "900 " + s2 + "px sans-serif";
+          ox.fillText(line2, oc.width / 2, top + h1 + gap + h2 * 0.5);
+
+          var px = ox.getImageData(0, 0, oc.width, oc.height).data;
+          mask = new Uint8Array(cols * rows);
+          for (var r = 0; r < rows; r++) {
+            for (var c = 0; c < cols; c++) {
+              var sum = 0;
+              for (var dy = 0; dy < S; dy++) {
+                for (var dx = 0; dx < S; dx++) {
+                  var idx = ((r * S + dy) * oc.width + c * S + dx) * 4;
+                  sum += px[idx];
+                }
+              }
+              mask[r * cols + c] = sum / (S * S) > 60 ? 1 : 0;
+            }
+          }
+        }
+
+        /* ---- Hearts ---- */
+
+        function spawnHeart(forceX, forceY) {
+          if (hearts.length >= 45) return;
+          var x,
+            y,
+            tries = 0;
+          if (forceX !== undefined) {
+            x = forceX / W;
+            y = forceY / H;
+          } else {
+            do {
+              x = Math.random();
+              y = Math.random();
+              tries++;
+            } while (
+              mask[Math.floor(y * rows) * cols + Math.floor(x * cols)] &&
+              tries < 30
+            );
+          }
+
+          hearts.push({
+            x: x * W,
+            y: y * H,
+            vy: -(18 + Math.random() * 30),
+            vx: (Math.random() - 0.5) * 12,
+            size: 7 + Math.random() * 10,
+            life: 0,
+            maxLife: 3.5 + Math.random() * 4,
+            hue: 335 + Math.random() * 35,
+            phase: Math.random() * Math.PI * 2,
+          });
+        }
+
+        /* ---- Interaction ---- */
+
+        function onTap(e) {
+          var cx = e.clientX || (e.touches && e.touches[0].clientX);
+          var cy = e.clientY || (e.touches && e.touches[0].clientY);
+          if (cx == null) return;
+          for (var i = 0; i < 6; i++) {
+            var ox = cx + (Math.random() - 0.5) * 60;
+            var oy = cy + (Math.random() - 0.5) * 60;
+            spawnHeart(ox, oy);
+          }
+        }
+        canvas.addEventListener("click", onTap);
+        canvas.addEventListener("touchstart", onTap);
+
+        /* ---- Resize ---- */
+
+        function resize() {
+          var dpr = window.devicePixelRatio || 1;
+          W = window.innerWidth;
+          H = window.innerHeight;
+          canvas.width = W * dpr;
+          canvas.height = H * dpr;
+          canvas.style.width = W + "px";
+          canvas.style.height = H + "px";
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+          ctx.font = FONT_PX + "px " + MONO;
+          cellW = ctx.measureText("M").width;
+          cellH = FONT_PX * LINE_H;
+          cols = Math.ceil(W / cellW);
+          rows = Math.ceil(H / cellH);
+
+          buildMask();
+          hearts = [];
+        }
+
+        /* ---- Main loop ---- */
+
+        var prevT = 0;
+        var hTimer = 0;
+        var fadeIn = 0;
+
+        function frame(ts) {
+          var dt = Math.min((ts - prevT) / 1000, 0.1);
+          prevT = ts;
+          var t = ts / 1000;
+
+          fadeIn = Math.min(1, fadeIn + dt * 0.4);
+
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, W, H);
+          ctx.globalAlpha = fadeIn;
+
+          ctx.font = FONT_PX + "px " + MONO;
+          ctx.textBaseline = "top";
+
+          for (var r = 0; r < rows; r++) {
+            var yOff = r * cellH;
+            for (var c = 0; c < cols; c++) {
+              if (!mask[r * cols + c]) continue;
+
+              var nx = c * 0.045 + t * 0.35;
+              var ny = r * 0.07 + t * 0.12;
+
+              var v = fbm(nx, ny);
+              v += 0.3 * Math.sin(c * 0.03 + t * 1.3 + Math.sin(r * 0.015) * 3);
+              v += 0.2 * Math.sin(c * 0.07 + r * 0.02 - t * 1.0);
+              v += 0.15 * Math.sin(r * 0.05 + t * 0.6);
+              v += 0.1 * Math.sin((c + r) * 0.025 + t * 0.8);
+
+              v = (v + 0.3) / 1.6;
+              if (v < 0) v = 0;
+              if (v > 1) v = 1;
+
+              var ch = CHARS[(v * (CHARS.length - 1)) | 0];
+              if (ch === " ") continue;
+
+              var g = (55 + v * 200) | 0;
+              var b = (v * 35) | 0;
+              ctx.fillStyle = "rgb(0," + g + "," + b + ")";
+              ctx.fillText(ch, c * cellW, yOff);
+            }
+          }
+
+          // Hearts
+          hTimer += dt;
+          while (hTimer > 0.4) {
+            hTimer -= 0.4;
+            spawnHeart();
+          }
+
+          for (var i = hearts.length - 1; i >= 0; i--) {
+            var h = hearts[i];
+            h.life += dt;
+            if (h.life > h.maxLife) {
+              hearts.splice(i, 1);
+              continue;
+            }
+
+            h.y += h.vy * dt;
+            h.x += Math.sin(h.life * 1.8 + h.phase) * h.vx * dt;
+
+            var p = h.life / h.maxLife;
+            var a = p < 0.15 ? p / 0.15 : p > 0.65 ? (1 - p) / 0.35 : 1;
+
+            ctx.font = h.size + "px " + MONO;
+            ctx.fillStyle =
+              "hsla(" + h.hue + ",100%,62%," + (a * 0.65).toFixed(2) + ")";
+            ctx.fillText("\u2665", h.x, h.y);
+          }
+
+          ctx.font = FONT_PX + "px " + MONO;
+          ctx.globalAlpha = 1;
+          requestAnimationFrame(frame);
+        }
+
+        /* ---- Init ---- */
+        window.addEventListener("resize", resize);
+        resize();
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>
