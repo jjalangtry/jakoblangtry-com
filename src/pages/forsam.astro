@@ -1,0 +1,589 @@
+---
+
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#030014" />
+    <title>For Sam ✦</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;1,300&display=swap");
+
+      * {
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #030014;
+        cursor: none;
+      }
+      canvas {
+        display: block;
+      }
+
+      #subtitle {
+        position: fixed;
+        bottom: 6vh;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-family: "Cormorant Garamond", Georgia, serif;
+        font-weight: 300;
+        font-style: italic;
+        font-size: clamp(14px, 2.2vw, 22px);
+        color: rgba(180, 160, 220, 0);
+        letter-spacing: 0.25em;
+        pointer-events: none;
+        transition: color 4s ease;
+      }
+      #subtitle.visible {
+        color: rgba(180, 160, 220, 0.45);
+      }
+
+      #cursor-glow {
+        position: fixed;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(
+          circle,
+          rgba(120, 80, 220, 0.08) 0%,
+          transparent 70%
+        );
+        z-index: 10;
+        mix-blend-mode: screen;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="cursor-glow"></div>
+    <div id="subtitle">click anywhere to send a star</div>
+
+    <script is:inline>
+      (function () {
+        var canvas = document.getElementById("c");
+        var ctx = canvas.getContext("2d");
+        var glow = document.getElementById("cursor-glow");
+        var subtitle = document.getElementById("subtitle");
+
+        var W, H, dpr;
+        var mx = -9999,
+          my = -9999;
+        var stars = [];
+        var constellationStars = [];
+        var constellationEdges = [];
+        var shootingStars = [];
+        var bursts = [];
+        var fadeIn = 0;
+        var textRevealed = 0;
+        var prevT = 0;
+
+        /* ---- Letter paths for "SAM" as constellation points ---- */
+        /* Each letter defined as normalized coords (0-1) and edges */
+
+        function getLetterData() {
+          // S
+          var S_pts = [
+            [0.85, 0.05],
+            [0.5, 0.0],
+            [0.15, 0.1],
+            [0.05, 0.3],
+            [0.2, 0.48],
+            [0.55, 0.52],
+            [0.85, 0.58],
+            [0.95, 0.75],
+            [0.8, 0.92],
+            [0.45, 1.0],
+            [0.1, 0.9],
+          ];
+          var S_edges = [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [6, 7],
+            [7, 8],
+            [8, 9],
+            [9, 10],
+          ];
+
+          // A
+          var A_pts = [
+            [0.0, 1.0],
+            [0.25, 0.5],
+            [0.5, 0.0],
+            [0.75, 0.5],
+            [1.0, 1.0],
+            [0.2, 0.62],
+            [0.8, 0.62],
+          ];
+          var A_edges = [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [5, 6],
+          ];
+
+          // M
+          var M_pts = [
+            [0.0, 1.0],
+            [0.0, 0.0],
+            [0.5, 0.55],
+            [1.0, 0.0],
+            [1.0, 1.0],
+          ];
+          var M_edges = [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 4],
+          ];
+
+          return {
+            letters: [
+              { pts: S_pts, edges: S_edges, width: 0.28 },
+              { pts: A_pts, edges: A_edges, width: 0.32 },
+              { pts: M_pts, edges: M_edges, width: 0.3 },
+            ],
+          };
+        }
+
+        function buildConstellation() {
+          constellationStars = [];
+          constellationEdges = [];
+
+          var data = getLetterData();
+          var totalWidth = 0;
+          for (var i = 0; i < data.letters.length; i++)
+            totalWidth += data.letters[i].width;
+          var spacing = 0.06;
+          totalWidth += spacing * (data.letters.length - 1);
+
+          var scale = Math.min(W * 0.7, H * 0.45);
+          var startX = (W - totalWidth * scale) / 2;
+          var startY = H * 0.28;
+          var letterH = scale * 0.4;
+
+          var offsetX = startX;
+          var globalIdx = 0;
+
+          for (var li = 0; li < data.letters.length; li++) {
+            var letter = data.letters[li];
+            var lw = letter.width * scale;
+            var baseIdx = globalIdx;
+
+            for (var pi = 0; pi < letter.pts.length; pi++) {
+              var px = offsetX + letter.pts[pi][0] * lw;
+              var py = startY + letter.pts[pi][1] * letterH;
+              constellationStars.push({
+                x: px,
+                y: py,
+                ox: px,
+                oy: py,
+                size: 1.8 + Math.random() * 1.5,
+                twinkleSpeed: 0.5 + Math.random() * 2,
+                twinklePhase: Math.random() * Math.PI * 2,
+                revealed: 0,
+              });
+              globalIdx++;
+            }
+
+            for (var ei = 0; ei < letter.edges.length; ei++) {
+              constellationEdges.push([
+                baseIdx + letter.edges[ei][0],
+                baseIdx + letter.edges[ei][1],
+              ]);
+            }
+
+            offsetX += lw + spacing * scale;
+          }
+        }
+
+        /* ---- Background stars ---- */
+
+        function initStars() {
+          stars = [];
+          var count = Math.floor((W * H) / 2800);
+          for (var i = 0; i < count; i++) {
+            stars.push({
+              x: Math.random() * W,
+              y: Math.random() * H,
+              size: Math.random() * 1.4 + 0.3,
+              alpha: Math.random() * 0.6 + 0.15,
+              twinkleSpeed: 0.3 + Math.random() * 1.5,
+              phase: Math.random() * Math.PI * 2,
+            });
+          }
+        }
+
+        /* ---- Shooting stars ---- */
+
+        function spawnShootingStar() {
+          var startX = Math.random() * W * 1.2 - W * 0.1;
+          var angle = Math.PI * 0.15 + Math.random() * 0.2;
+          var speed = 350 + Math.random() * 450;
+          shootingStars.push({
+            x: startX,
+            y: -20,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0,
+            maxLife: 0.8 + Math.random() * 0.6,
+            length: 60 + Math.random() * 80,
+            hue:
+              Math.random() < 0.4
+                ? 220 + Math.random() * 40
+                : 40 + Math.random() * 20,
+          });
+        }
+
+        /* ---- Click bursts ---- */
+
+        function spawnBurst(bx, by) {
+          var count = 25 + Math.floor(Math.random() * 20);
+          for (var i = 0; i < count; i++) {
+            var angle = Math.random() * Math.PI * 2;
+            var speed = 40 + Math.random() * 180;
+            var hue = 200 + Math.random() * 100;
+            bursts.push({
+              x: bx,
+              y: by,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 30,
+              life: 0,
+              maxLife: 1.0 + Math.random() * 1.5,
+              size: 1 + Math.random() * 2.5,
+              hue: hue,
+            });
+          }
+        }
+
+        /* ---- Interaction ---- */
+
+        function onMove(e) {
+          mx = e.clientX || (e.touches && e.touches[0].clientX) || mx;
+          my = e.clientY || (e.touches && e.touches[0].clientY) || my;
+          glow.style.left = mx + "px";
+          glow.style.top = my + "px";
+        }
+
+        function onClick(e) {
+          var cx = e.clientX || (e.touches && e.touches[0].clientX);
+          var cy = e.clientY || (e.touches && e.touches[0].clientY);
+          if (cx != null) spawnBurst(cx, cy);
+        }
+
+        canvas.addEventListener("mousemove", onMove);
+        canvas.addEventListener(
+          "touchmove",
+          function (e) {
+            e.preventDefault();
+            onMove(e);
+          },
+          { passive: false },
+        );
+        canvas.addEventListener("click", onClick);
+        canvas.addEventListener("touchstart", function (e) {
+          onMove(e);
+          onClick(e);
+        });
+
+        /* ---- Resize ---- */
+
+        function resize() {
+          dpr = window.devicePixelRatio || 1;
+          W = window.innerWidth;
+          H = window.innerHeight;
+          canvas.width = W * dpr;
+          canvas.height = H * dpr;
+          canvas.style.width = W + "px";
+          canvas.style.height = H + "px";
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          initStars();
+          buildConstellation();
+        }
+
+        /* ---- Draw ---- */
+
+        var shootTimer = 0;
+
+        function frame(ts) {
+          var dt = Math.min((ts - prevT) / 1000, 0.1);
+          prevT = ts;
+          var t = ts / 1000;
+
+          fadeIn = Math.min(1, fadeIn + dt * 0.3);
+          textRevealed = Math.min(1, textRevealed + dt * 0.12);
+
+          // Nebula background
+          ctx.fillStyle = "#030014";
+          ctx.fillRect(0, 0, W, H);
+
+          // Subtle nebula glow
+          var ng1 = ctx.createRadialGradient(
+            W * 0.3,
+            H * 0.4,
+            0,
+            W * 0.3,
+            H * 0.4,
+            W * 0.5,
+          );
+          ng1.addColorStop(0, "rgba(40, 10, 80, 0.06)");
+          ng1.addColorStop(1, "transparent");
+          ctx.fillStyle = ng1;
+          ctx.fillRect(0, 0, W, H);
+
+          var ng2 = ctx.createRadialGradient(
+            W * 0.75,
+            H * 0.6,
+            0,
+            W * 0.75,
+            H * 0.6,
+            W * 0.45,
+          );
+          ng2.addColorStop(0, "rgba(10, 20, 60, 0.05)");
+          ng2.addColorStop(1, "transparent");
+          ctx.fillStyle = ng2;
+          ctx.fillRect(0, 0, W, H);
+
+          ctx.globalAlpha = fadeIn;
+
+          // Background stars
+          for (var i = 0; i < stars.length; i++) {
+            var s = stars[i];
+            var twinkle = Math.sin(t * s.twinkleSpeed + s.phase);
+            var a = s.alpha * (0.6 + 0.4 * twinkle);
+
+            // Mouse proximity glow
+            var ddx = s.x - mx,
+              ddy = s.y - my;
+            var dist = Math.sqrt(ddx * ddx + ddy * ddy);
+            if (dist < 150) {
+              a = Math.min(1, a + (1 - dist / 150) * 0.5);
+            }
+
+            ctx.globalAlpha = fadeIn * a;
+            ctx.fillStyle = "#c8c0e0";
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Constellation stars & edges
+          ctx.globalAlpha = fadeIn;
+
+          // Draw edges first
+          for (var ei = 0; ei < constellationEdges.length; ei++) {
+            var edge = constellationEdges[ei];
+            var sa = constellationStars[edge[0]];
+            var sb = constellationStars[edge[1]];
+            var revealA = Math.min(1, textRevealed * 3 - edge[0] * 0.05);
+            var revealB = Math.min(1, textRevealed * 3 - edge[1] * 0.05);
+            var lineAlpha = Math.min(revealA, revealB);
+            if (lineAlpha <= 0) continue;
+
+            // Gravity displacement
+            var sax = sa.x,
+              say = sa.y,
+              sbx = sb.x,
+              sby = sb.y;
+
+            ctx.globalAlpha = fadeIn * lineAlpha * 0.25;
+            ctx.strokeStyle = "rgba(160, 140, 230, 1)";
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(sax, say);
+            ctx.lineTo(sbx, sby);
+            ctx.stroke();
+          }
+
+          // Draw constellation star points
+          for (var ci = 0; ci < constellationStars.length; ci++) {
+            var cs = constellationStars[ci];
+            var reveal = Math.min(1, textRevealed * 3 - ci * 0.04);
+            if (reveal <= 0) continue;
+            cs.revealed = reveal;
+
+            // Gravity: push away from mouse gently
+            var gdx = cs.ox - mx,
+              gdy = cs.oy - my;
+            var gd = Math.sqrt(gdx * gdx + gdy * gdy);
+            var push = 0;
+            if (gd < 200 && gd > 0) {
+              push = (1 - gd / 200) * 12;
+            }
+            cs.x = cs.ox + (gd > 0 ? (gdx / gd) * push : 0);
+            cs.y = cs.oy + (gd > 0 ? (gdy / gd) * push : 0);
+
+            var ctwinkle =
+              0.7 + 0.3 * Math.sin(t * cs.twinkleSpeed + cs.twinklePhase);
+            var starAlpha = reveal * ctwinkle;
+
+            // Glow
+            ctx.globalAlpha = fadeIn * starAlpha * 0.3;
+            var sg = ctx.createRadialGradient(
+              cs.x,
+              cs.y,
+              0,
+              cs.x,
+              cs.y,
+              cs.size * 6,
+            );
+            sg.addColorStop(0, "rgba(180, 160, 255, 0.6)");
+            sg.addColorStop(1, "transparent");
+            ctx.fillStyle = sg;
+            ctx.fillRect(
+              cs.x - cs.size * 6,
+              cs.y - cs.size * 6,
+              cs.size * 12,
+              cs.size * 12,
+            );
+
+            // Core
+            ctx.globalAlpha = fadeIn * starAlpha;
+            ctx.fillStyle = "#e8e0ff";
+            ctx.beginPath();
+            ctx.arc(cs.x, cs.y, cs.size * 1.1, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Cross sparkle
+            ctx.globalAlpha = fadeIn * starAlpha * 0.5;
+            ctx.strokeStyle = "#d0c8ff";
+            ctx.lineWidth = 0.6;
+            var sparkLen = cs.size * 3.5;
+            ctx.beginPath();
+            ctx.moveTo(cs.x - sparkLen, cs.y);
+            ctx.lineTo(cs.x + sparkLen, cs.y);
+            ctx.moveTo(cs.x, cs.y - sparkLen);
+            ctx.lineTo(cs.x, cs.y + sparkLen);
+            ctx.stroke();
+          }
+
+          // Shooting stars
+          shootTimer += dt;
+          if (shootTimer > 2.5 + Math.random() * 3) {
+            shootTimer = 0;
+            spawnShootingStar();
+          }
+
+          for (var si = shootingStars.length - 1; si >= 0; si--) {
+            var ss = shootingStars[si];
+            ss.life += dt;
+            if (ss.life > ss.maxLife) {
+              shootingStars.splice(si, 1);
+              continue;
+            }
+
+            ss.x += ss.vx * dt;
+            ss.y += ss.vy * dt;
+
+            var sp = ss.life / ss.maxLife;
+            var sa2 = sp < 0.1 ? sp / 0.1 : sp > 0.5 ? (1 - sp) / 0.5 : 1;
+
+            var tailX =
+              ss.x -
+              (ss.vx / Math.sqrt(ss.vx * ss.vx + ss.vy * ss.vy)) * ss.length;
+            var tailY =
+              ss.y -
+              (ss.vy / Math.sqrt(ss.vx * ss.vx + ss.vy * ss.vy)) * ss.length;
+
+            var grad = ctx.createLinearGradient(tailX, tailY, ss.x, ss.y);
+            grad.addColorStop(0, "rgba(255,255,255,0)");
+            grad.addColorStop(
+              0.7,
+              "hsla(" + ss.hue + ",60%,75%," + (sa2 * 0.4).toFixed(2) + ")",
+            );
+            grad.addColorStop(
+              1,
+              "hsla(" + ss.hue + ",80%,90%," + (sa2 * 0.9).toFixed(2) + ")",
+            );
+
+            ctx.globalAlpha = fadeIn;
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 1.5;
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(tailX, tailY);
+            ctx.lineTo(ss.x, ss.y);
+            ctx.stroke();
+          }
+
+          // Click bursts
+          for (var bi = bursts.length - 1; bi >= 0; bi--) {
+            var b = bursts[bi];
+            b.life += dt;
+            if (b.life > b.maxLife) {
+              bursts.splice(bi, 1);
+              continue;
+            }
+
+            b.x += b.vx * dt;
+            b.y += b.vy * dt;
+            b.vx *= 0.97;
+            b.vy *= 0.97;
+            b.vy += 15 * dt; // tiny gravity
+
+            var bp = b.life / b.maxLife;
+            var ba = bp < 0.1 ? bp / 0.1 : Math.max(0, 1 - (bp - 0.3) / 0.7);
+
+            ctx.globalAlpha = fadeIn * ba * 0.8;
+            ctx.fillStyle = "hsla(" + b.hue + ",70%,75%,1)";
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.size * (1 - bp * 0.3), 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // "for" label above constellation
+          if (textRevealed > 0.5) {
+            var labelAlpha = Math.min(1, (textRevealed - 0.5) * 4);
+            ctx.globalAlpha = fadeIn * labelAlpha * 0.35;
+            ctx.fillStyle = "#b8a8e0";
+            ctx.font =
+              "300 " +
+              Math.max(14, Math.floor(W * 0.018)) +
+              'px "Cormorant Garamond", Georgia, serif';
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.letterSpacing = "0.3em";
+            ctx.fillText(
+              "f o r",
+              W / 2,
+              constellationStars.length > 0
+                ? constellationStars[0].oy - 30
+                : H * 0.25,
+            );
+            ctx.letterSpacing = "0";
+          }
+
+          ctx.globalAlpha = 1;
+          requestAnimationFrame(frame);
+        }
+
+        /* ---- Subtitle reveal ---- */
+        setTimeout(function () {
+          subtitle.classList.add("visible");
+        }, 3500);
+
+        /* ---- Init ---- */
+        window.addEventListener("resize", resize);
+        resize();
+        requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
+</html>
