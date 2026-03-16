@@ -719,7 +719,21 @@ function appendOutput(text, className = "") {
 }
 
 function buildCommandsListOutput() {
-  return `Available commands:\n${commandList.join("\n")}`;
+  const sorted = [...commandList].sort();
+  const cols = 4;
+  const colWidth = 14;
+  let output = `  ${sorted.length} commands  ·  help for descriptions  ·  man [cmd] for manual\n\n`;
+  for (let i = 0; i < sorted.length; i += cols) {
+    const row = sorted.slice(i, i + cols);
+    output +=
+      "  " +
+      row
+        .map((cmd) => cmd.padEnd(colWidth))
+        .join("")
+        .trimEnd() +
+      "\n";
+  }
+  return output;
 }
 
 function buildProjectsListOutput() {
@@ -772,149 +786,48 @@ function executeCommand(command, options = {}) {
   const normalizedCommand = command.toLowerCase();
   switch (normalizedCommand) {
     case "help":
-      const helpText = `
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                      JAKOB LANGTRY TERMINAL - HELP                           ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+      const helpText = `┌──────────────────────────────────────────────────────────────────────────┐
+│               JAKOB LANGTRY TERMINAL  ·  COMMAND REFERENCE               │
+└──────────────────────────────────────────────────────────────────────────┘
 
-AVAILABLE COMMANDS:
+  INFO & PORTFOLIO                  TOOLS & UTILITIES
+  ────────────────────────────────  ────────────────────────────────
+  banner      show banner           calc        math expressions
+  whoami      about jakob           converter   link converter
+  experience  work & education      countdown   visual countdown
+  skills      skill proficiency     curl        HTTP simulation
+  contact     contact info          date        current date/time
+  email       email jakob           echo        print text
+  github      github profile        flip        upside-down text
+  repos       github repos          fortune     random quote
+  resume      view resume           grep        regex search/pipe
+  blog        read blog posts       matrix      digital rain
+  projects    projects pane         qr          QR code generator
+  close       close pane            weather     weather forecast
+                                    snake       play snake
 
-  banner     Display the terminal banner
-             Usage: banner
+  SYSTEM                            AUTH & CONTENT (login required)
+  ────────────────────────────────  ────────────────────────────────
+  help        this screen           login       authenticate
+  man         command manual        logout      end session
+  ls          list commands         write       create blog post
+  history     command history       edit        edit site content
+  clear       clear terminal        export      export posts
+  theme       toggle dark/light
+  uptime      session uptime
+  neofetch    system info
+  stats       visitor stats
+  pwd         print directory
+  hostname    show hostname
+  which       find a command
+  alias       manage aliases
+  cd          change directory
+  rss         RSS feed URL
+  sudo        sudo mode
 
-  blog       Read blog posts
-             Usage: blog [slug]
-
-  calc       Evaluate a math expression
-             Usage: calc [expression]
-
-  clear      Clear the terminal screen
-             Usage: clear
-
-  contact    Display contact information
-             Usage: contact
-
-  countdown  Start a visual countdown timer
-             Usage: countdown [seconds]
-
-  converter  Open Link Converter tool
-             Usage: converter
-
-  curl       Simulate HTTP requests (educational purposes only)
-             Usage: curl [URL]
-
-  qr         Generate a QR code for a URL
-             Usage: qr [URL]
-
-  date       Display the current date and time
-             Usage: date
-
-  echo       Display a line of text
-             Usage: echo [text]
-
-  email      Open email client to contact Jakob
-             Usage: email
-
-  experience Display work and education timeline
-             Usage: experience
-
-  flip       Flip text upside down
-             Usage: flip [text]
-
-  fortune    Display a random programming quote
-             Usage: fortune
-
-  github     Open Jakob's GitHub profile
-             (alias: repo)
-             Usage: github
-
-  grep       Search with regex, wildcards, and flags
-             Usage: grep [-ivnc] [pattern]
-             Regex: grep 'foo.*bar'  grep '^C'  grep '(js|ts)'
-             Flags: -v invert  -n line numbers  -c count
-             Pipe:  help | grep -n weather
-
-  help       Display this help information
-             Usage: help
-
-  history    Show command history
-             Usage: history [clear|N]
-
-  ls         List available commands
-             Usage: ls
-
-  man        Display manual page for a command
-             Usage: man [command]
-
-  matrix     Display Matrix-style digital rain
-             Usage: matrix
-
-  neofetch   Display system information
-             Usage: neofetch
-
-  projects   Open projects in a tmux-style split pane
-             Usage: projects
-
-  repos      Display GitHub repos and contributions (ASCII view)
-             Usage: repos
-
-  close      Close the projects split pane
-             Usage: close (alias: exit, Ctrl+B q)
-
-  resume     View Jakob's resume
-             Usage: resume
-
-  skills     Display skills with proficiency bars
-             Usage: skills [--category name]
-
-  snake      Play Snake in the terminal
-             Usage: snake
-
-  stats      Show visitor and session statistics
-             Usage: stats
-
-  theme      Toggle between dark and light mode
-             Usage: theme [dark|light]
-
-  uptime     Show session uptime
-             Usage: uptime
-
-  weather    Display weather forecast for a location
-             Usage: weather [city or location]
-             Examples: weather New York
-                      weather Syracuse NY
-                      weather London, UK
-
-  whoami     Display information about Jakob
-             Usage: whoami
-
-  write      Create a new blog post
-             Usage: write
-
-  edit       Edit site content (e.g. bio)
-             Usage: edit whoami
-
-  export     Export user-created posts as JSON
-             Usage: export posts
-
-  rss        Show RSS feed URL
-             Usage: rss
-
-AUTHENTICATION:
-  login               Authenticate as admin (required for content management)
-  logout              End admin session
-
-CONTENT MANAGEMENT (requires login):
-  write              Create a new blog post (saved in browser)
-  edit whoami         Edit your bio text
-  post delete [slug]  Delete a user-created post
-  export posts        Export user posts as JSON for permanent publishing
-
-PIPES:
-  Use | to pipe output through grep:  help | grep weather
-
-For more information about a specific command, type: [command] --help
-                                                  or: man [command]`;
+  ──────────────────────────────────────────────────────────────────────────
+  PIPES  help | grep [term]    ·    MAN  man [command]    ·    [cmd] --help
+  ──────────────────────────────────────────────────────────────────────────`;
 
       // Create a div with pre-formatted text for help output
       appendOutput(helpText, "info-text");
