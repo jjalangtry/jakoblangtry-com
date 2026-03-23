@@ -1,0 +1,261 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import "../../styles.css";
+---
+
+<BaseLayout
+  title="Inventory Tool | Jakob Langtry"
+  description="Shared barcode entry tool for building an inventory CSV."
+>
+  <main class="inventory-page">
+    <section class="inventory-shell">
+      <div class="inventory-hero">
+        <p class="inventory-eyebrow">Shared Scanner Intake</p>
+        <h1>Inventory Tool</h1>
+        <p class="inventory-copy">
+          Scan a barcode, add a description, and every submission is appended to
+          the shared CSV on the server.
+        </p>
+        <div class="inventory-actions">
+          <a class="quick-action-link" href="/api/inventory/export.csv"
+            >Download CSV</a
+          >
+          <a class="quick-action-link" href="/">Back Home</a>
+        </div>
+      </div>
+
+      <section class="inventory-panel" aria-labelledby="inventory-form-heading">
+        <div class="inventory-panel-header">
+          <h2 id="inventory-form-heading">Scan Items</h2>
+          <p>
+            Barcode scanners that type into a focused input should work
+            directly.
+          </p>
+        </div>
+
+        <form class="inventory-form" id="inventory-form">
+          <label class="inventory-field">
+            <span>Station / operator</span>
+            <input
+              id="operator"
+              name="operator"
+              type="text"
+              maxlength="60"
+              placeholder="Front desk"
+              autocomplete="off"
+            />
+          </label>
+
+          <label class="inventory-field">
+            <span>Barcode</span>
+            <input
+              id="barcode"
+              name="barcode"
+              type="text"
+              inputmode="numeric"
+              placeholder="Scan barcode here"
+              autocomplete="off"
+              autofocus
+              required
+            />
+          </label>
+
+          <label class="inventory-field">
+            <span>Description</span>
+            <textarea
+              id="description"
+              name="description"
+              rows="3"
+              maxlength="280"
+              placeholder="Blue storage bin, size medium"
+              required></textarea>
+          </label>
+
+          <div class="inventory-form-actions">
+            <button class="inventory-submit" id="submit-button" type="submit">
+              Add item
+            </button>
+            <button class="inventory-secondary" id="clear-button" type="button">
+              Clear
+            </button>
+          </div>
+
+          <p
+            class="inventory-status"
+            id="form-status"
+            role="status"
+            aria-live="polite"
+          >
+          </p>
+        </form>
+      </section>
+
+      <section class="inventory-panel" aria-labelledby="inventory-feed-heading">
+        <div class="inventory-panel-header">
+          <h2 id="inventory-feed-heading">Recent Scans</h2>
+          <p>
+            Auto-refreshes so multiple desktops can work from the same queue.
+          </p>
+        </div>
+
+        <div class="inventory-meta">
+          <span id="inventory-count">Loading...</span>
+          <span class="inventory-path" id="inventory-path"></span>
+        </div>
+
+        <div class="inventory-feed" id="inventory-feed"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("inventory-form");
+    const operatorInput = document.getElementById("operator");
+    const barcodeInput = document.getElementById("barcode");
+    const descriptionInput = document.getElementById("description");
+    const statusEl = document.getElementById("form-status");
+    const countEl = document.getElementById("inventory-count");
+    const pathEl = document.getElementById("inventory-path");
+    const feedEl = document.getElementById("inventory-feed");
+    const clearButton = document.getElementById("clear-button");
+    const submitButton = document.getElementById("submit-button");
+    const operatorStorageKey = "inventorytool-operator";
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function formatTimestamp(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
+    }
+
+    function renderItems(items) {
+      if (!feedEl) return;
+
+      if (!items.length) {
+        feedEl.innerHTML =
+          '<p class="inventory-empty">No items scanned yet. Your next scan will create the CSV.</p>';
+        return;
+      }
+
+      feedEl.innerHTML = items
+        .map(
+          (item) => `
+            <article class="inventory-item">
+              <div class="inventory-item-main">
+                <h3>${escapeHtml(item.description)}</h3>
+                <p>${escapeHtml(item.barcode)}</p>
+              </div>
+              <div class="inventory-item-meta">
+                <span>${escapeHtml(item.operator || "Unknown station")}</span>
+                <time datetime="${escapeHtml(item.createdAt)}">${escapeHtml(formatTimestamp(item.createdAt))}</time>
+              </div>
+            </article>
+          `,
+        )
+        .join("");
+    }
+
+    async function loadItems() {
+      try {
+        const response = await fetch("/api/inventory?limit=20", {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          throw new Error("Unable to load items.");
+        }
+
+        const payload = await response.json();
+        countEl.textContent = `${payload.count} recent item${payload.count === 1 ? "" : "s"}`;
+        pathEl.textContent = payload.csvPath ? `CSV: ${payload.csvPath}` : "";
+        renderItems(payload.items || []);
+      } catch {
+        countEl.textContent = "Recent scans unavailable";
+        renderItems([]);
+        if (pathEl) pathEl.textContent = "";
+      }
+    }
+
+    function setStatus(message, kind = "neutral") {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.dataset.kind = kind;
+    }
+
+    function clearForm() {
+      if (barcodeInput) barcodeInput.value = "";
+      if (descriptionInput) descriptionInput.value = "";
+      barcodeInput?.focus();
+    }
+
+    operatorInput?.addEventListener("input", () => {
+      localStorage.setItem(operatorStorageKey, operatorInput.value.trim());
+    });
+
+    clearButton?.addEventListener("click", () => {
+      clearForm();
+      setStatus("Ready for the next scan.");
+    });
+
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setStatus("Saving item...");
+      if (submitButton) submitButton.disabled = true;
+
+      try {
+        const response = await fetch("/api/inventory", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            operator: operatorInput?.value || "",
+            barcode: barcodeInput?.value || "",
+            description: descriptionInput?.value || "",
+          }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Unable to save item.");
+        }
+
+        clearForm();
+        setStatus(`Saved ${payload.item.barcode}.`, "success");
+        await loadItems();
+      } catch (error) {
+        setStatus(
+          error instanceof Error ? error.message : "Unable to save item.",
+          "error",
+        );
+      } finally {
+        if (submitButton) submitButton.disabled = false;
+      }
+    });
+
+    const savedOperator = localStorage.getItem(operatorStorageKey);
+    if (savedOperator && operatorInput) {
+      operatorInput.value = savedOperator;
+    }
+
+    loadItems();
+    window.setInterval(loadItems, 5000);
+    window.setTimeout(() => barcodeInput?.focus(), 50);
+  </script>
+</BaseLayout>

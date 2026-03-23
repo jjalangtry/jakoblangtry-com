@@ -8,7 +8,7 @@
     "build": "astro build",
     "prebuild": "node scripts/generate-env.js",
     "preview": "astro preview",
-    "start": "serve dist -l ${PORT:-4321}",
+    "start": "HOST=0.0.0.0 PORT=${PORT:-4321} node ./dist/server/entry.mjs",
     "prepare": "husky",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -19,6 +19,7 @@
     "check": "npm run lint && npm run format:check && npm run test:coverage && npm run build"
   },
   "dependencies": {
+    "@astrojs/node": "^9.5.5",
     "astro": "latest",
     "serve": "^14.2.5"
   },
