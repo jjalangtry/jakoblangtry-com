@@ -11,14 +11,9 @@ describe("inventory store helpers", () => {
   it("parses quoted csv lines", () => {
     expect(
       inventoryTestUtils.parseCsvLine(
-        '2026-03-23T10:00:00.000Z,12345,"Large, Blue Widget","Front Desk"',
+        '2026-03-23T10:00:00.000Z,12345,"Large, Blue Widget"',
       ),
-    ).toEqual([
-      "2026-03-23T10:00:00.000Z",
-      "12345",
-      "Large, Blue Widget",
-      "Front Desk",
-    ]);
+    ).toEqual(["2026-03-23T10:00:00.000Z", "12345", "Large, Blue Widget"]);
   });
 
   it("requires barcode and description", () => {
@@ -30,13 +25,14 @@ describe("inventory store helpers", () => {
     ).toThrow("Description is required.");
   });
 
-  it("defaults operator when omitted", () => {
+  it("normalizes a valid entry", () => {
     const item = inventoryTestUtils.normalizeEntry({
       barcode: "12345",
       description: "Widget",
     });
 
-    expect(item.operator).toBe("Unknown station");
+    expect(item.barcode).toBe("12345");
+    expect(item.description).toBe("Widget");
     expect(item.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });

@@ -6,7 +6,8 @@ const DATA_DIR = process.env.INVENTORY_DATA_DIR
   : path.join(process.cwd(), ".data", "inventory");
 
 const CSV_FILE = path.join(DATA_DIR, "inventory.csv");
-const HEADERS = ["createdAt", "barcode", "description", "operator"];
+const HEADERS = ["createdAt", "barcode", "description"];
+const LEGACY_HEADERS = ["createdAt", "barcode", "description", "operator"];
 let writeQueue = Promise.resolve();
 
 function escapeCsvField(value) {
@@ -53,7 +54,6 @@ function parseCsvLine(line) {
 function normalizeEntry(entry) {
   const barcode = String(entry?.barcode ?? "").trim();
   const description = String(entry?.description ?? "").trim();
-  const operator = String(entry?.operator ?? "").trim();
 
   if (!barcode) {
     throw new Error("Barcode is required.");
@@ -67,7 +67,6 @@ function normalizeEntry(entry) {
     createdAt: new Date().toISOString(),
     barcode,
     description,
-    operator: operator || "Unknown station",
   };
 }
 
@@ -78,6 +77,27 @@ async function ensureStore() {
     await stat(CSV_FILE);
   } catch {
     await writeFile(CSV_FILE, `${HEADERS.join(",")}\n`, "utf8");
+    return;
+  }
+
+  const content = await readFile(CSV_FILE, "utf8");
+  const [headerLine = ""] = content.split(/\r?\n/, 1);
+
+  if (headerLine === LEGACY_HEADERS.join(",")) {
+    const migratedRows = content
+      .split(/\r?\n/)
+      .slice(1)
+      .filter(Boolean)
+      .map((line) => {
+        const [createdAt = "", barcode = "", description = ""] =
+          parseCsvLine(line);
+        return [createdAt, barcode, description]
+          .map((value) => escapeCsvField(value))
+          .join(",");
+      });
+
+    const nextContent = [`${HEADERS.join(",")}`, ...migratedRows].join("\n");
+    await writeFile(CSV_FILE, `${nextContent}\n`, "utf8");
   }
 }
 
@@ -94,14 +114,12 @@ async function readCsvRows() {
   }
 
   return lines.slice(1).map((line) => {
-    const [createdAt = "", barcode = "", description = "", operator = ""] =
-      parseCsvLine(line);
+    const [createdAt = "", barcode = "", description = ""] = parseCsvLine(line);
 
     return {
       createdAt,
       barcode,
       description,
-      operator,
     };
   });
 }

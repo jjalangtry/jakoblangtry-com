@@ -1,116 +1,121 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-import "../../styles.css";
 ---
 
 <BaseLayout
   title="Inventory Tool | Jakob Langtry"
   description="Shared barcode entry tool for building an inventory CSV."
 >
-  <main class="inventory-page">
-    <section class="inventory-shell">
-      <div class="inventory-hero">
-        <p class="inventory-eyebrow">Shared Scanner Intake</p>
-        <h1>Inventory Tool</h1>
-        <p class="inventory-copy">
-          Scan a barcode, add a description, and every submission is appended to
-          the shared CSV on the server.
-        </p>
-        <div class="inventory-actions">
-          <a class="quick-action-link" href="/api/inventory/export.csv"
-            >Download CSV</a
-          >
-          <a class="quick-action-link" href="/">Back Home</a>
-        </div>
-      </div>
-
-      <section class="inventory-panel" aria-labelledby="inventory-form-heading">
-        <div class="inventory-panel-header">
-          <h2 id="inventory-form-heading">Scan Items</h2>
-          <p>
-            Barcode scanners that type into a focused input should work
-            directly.
-          </p>
-        </div>
-
-        <form class="inventory-form" id="inventory-form">
-          <label class="inventory-field">
-            <span>Station / operator</span>
-            <input
-              id="operator"
-              name="operator"
-              type="text"
-              maxlength="60"
-              placeholder="Front desk"
-              autocomplete="off"
-            />
-          </label>
-
-          <label class="inventory-field">
-            <span>Barcode</span>
-            <input
-              id="barcode"
-              name="barcode"
-              type="text"
-              inputmode="numeric"
-              placeholder="Scan barcode here"
-              autocomplete="off"
-              autofocus
-              required
-            />
-          </label>
-
-          <label class="inventory-field">
-            <span>Description</span>
-            <textarea
-              id="description"
-              name="description"
-              rows="3"
-              maxlength="280"
-              placeholder="Blue storage bin, size medium"
-              required></textarea>
-          </label>
-
-          <div class="inventory-form-actions">
-            <button class="inventory-submit" id="submit-button" type="submit">
-              Add item
-            </button>
-            <button class="inventory-secondary" id="clear-button" type="button">
-              Clear
-            </button>
-          </div>
-
-          <p
-            class="inventory-status"
-            id="form-status"
-            role="status"
-            aria-live="polite"
-          >
-          </p>
-        </form>
-      </section>
-
-      <section class="inventory-panel" aria-labelledby="inventory-feed-heading">
-        <div class="inventory-panel-header">
-          <h2 id="inventory-feed-heading">Recent Scans</h2>
-          <p>
-            Auto-refreshes so multiple desktops can work from the same queue.
-          </p>
-        </div>
-
-        <div class="inventory-meta">
-          <span id="inventory-count">Loading...</span>
-          <span class="inventory-path" id="inventory-path"></span>
-        </div>
-
-        <div class="inventory-feed" id="inventory-feed"></div>
-      </section>
+  <main>
+    <section>
+      <h1>Inventory Tool</h1>
+      <p>
+        Scan a barcode, type the item, and download the CSV when you are done.
+      </p>
+      <p>
+        <a href="/api/inventory/export.csv">Download CSV</a>
+        |
+        <a href="/">Back Home</a>
+      </p>
     </section>
+
+    <section aria-labelledby="inventory-form-heading">
+      <h2 id="inventory-form-heading">Add Item</h2>
+
+      <form id="inventory-form">
+        <p>
+          <label for="barcode">Barcode</label><br />
+          <input
+            id="barcode"
+            name="barcode"
+            type="text"
+            inputmode="numeric"
+            placeholder="Scan barcode here"
+            autocomplete="off"
+            autofocus
+            required
+          />
+        </p>
+
+        <p>
+          <label for="description">Item</label><br />
+          <input
+            id="description"
+            name="description"
+            type="text"
+            maxlength="280"
+            placeholder="Item name or description"
+            autocomplete="off"
+            required
+          />
+        </p>
+
+        <p>
+          <button id="submit-button" type="submit">Add item</button>
+          <button id="clear-button" type="button">Clear</button>
+        </p>
+
+        <p id="form-status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section aria-labelledby="inventory-feed-heading">
+      <h2 id="inventory-feed-heading">Recent Scans</h2>
+      <p id="inventory-count">Loading...</p>
+      <p id="inventory-path"></p>
+      <div id="inventory-feed"></div>
+    </section>
+
+    <style>
+      main {
+        max-width: 760px;
+        margin: 32px auto;
+        padding: 0 16px 32px;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      section {
+        margin-bottom: 24px;
+      }
+
+      input {
+        width: 100%;
+        max-width: 420px;
+        padding: 8px;
+        font: inherit;
+      }
+
+      button {
+        padding: 8px 12px;
+        font: inherit;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border: 1px solid #cccccc;
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      #form-status {
+        min-height: 1.5em;
+      }
+    </style>
   </main>
 
   <script>
     const form = document.getElementById("inventory-form");
-    const operatorInput = document.getElementById("operator");
     const barcodeInput = document.getElementById("barcode");
     const descriptionInput = document.getElementById("description");
     const statusEl = document.getElementById("form-status");
@@ -119,7 +124,6 @@ import "../../styles.css";
     const feedEl = document.getElementById("inventory-feed");
     const clearButton = document.getElementById("clear-button");
     const submitButton = document.getElementById("submit-button");
-    const operatorStorageKey = "inventorytool-operator";
 
     function escapeHtml(value) {
       return String(value ?? "")
@@ -151,22 +155,30 @@ import "../../styles.css";
         return;
       }
 
-      feedEl.innerHTML = items
-        .map(
-          (item) => `
-            <article class="inventory-item">
-              <div class="inventory-item-main">
-                <h3>${escapeHtml(item.description)}</h3>
-                <p>${escapeHtml(item.barcode)}</p>
-              </div>
-              <div class="inventory-item-meta">
-                <span>${escapeHtml(item.operator || "Unknown station")}</span>
-                <time datetime="${escapeHtml(item.createdAt)}">${escapeHtml(formatTimestamp(item.createdAt))}</time>
-              </div>
-            </article>
-          `,
-        )
-        .join("");
+      feedEl.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Barcode</th>
+              <th>Item</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items
+              .map(
+                (item) => `
+                  <tr>
+                    <td>${escapeHtml(formatTimestamp(item.createdAt))}</td>
+                    <td>${escapeHtml(item.barcode)}</td>
+                    <td>${escapeHtml(item.description)}</td>
+                  </tr>
+                `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      `;
     }
 
     async function loadItems() {
@@ -202,10 +214,6 @@ import "../../styles.css";
       barcodeInput?.focus();
     }
 
-    operatorInput?.addEventListener("input", () => {
-      localStorage.setItem(operatorStorageKey, operatorInput.value.trim());
-    });
-
     clearButton?.addEventListener("click", () => {
       clearForm();
       setStatus("Ready for the next scan.");
@@ -224,7 +232,6 @@ import "../../styles.css";
             Accept: "application/json",
           },
           body: JSON.stringify({
-            operator: operatorInput?.value || "",
             barcode: barcodeInput?.value || "",
             description: descriptionInput?.value || "",
           }),
@@ -248,11 +255,6 @@ import "../../styles.css";
         if (submitButton) submitButton.disabled = false;
       }
     });
-
-    const savedOperator = localStorage.getItem(operatorStorageKey);
-    if (savedOperator && operatorInput) {
-      operatorInput.value = savedOperator;
-    }
 
     loadItems();
     window.setInterval(loadItems, 5000);
