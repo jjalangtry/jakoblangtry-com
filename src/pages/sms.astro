@@ -1,0 +1,275 @@
+---
+const title = "lab86 SMS Notifications";
+const description =
+  "Sign up for optional lab86 SMS notifications from Jakob Langtry.";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <style>
+      body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        background: #ffffff;
+        color: #1d1d1f;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        line-height: 1.6;
+      }
+
+      h1 {
+        margin-bottom: 4px;
+        font-size: 32px;
+        line-height: 1.15;
+      }
+
+      h2 {
+        margin-top: 32px;
+        margin-bottom: 8px;
+        font-size: 18px;
+      }
+
+      p,
+      li {
+        margin: 8px 0;
+      }
+
+      a {
+        color: #0066cc;
+      }
+
+      form {
+        margin-top: 24px;
+        padding: 20px;
+        border: 1px solid #d2d2d7;
+        border-radius: 8px;
+        background: #fbfbfd;
+      }
+
+      label,
+      legend {
+        display: block;
+        font-weight: 600;
+      }
+
+      input[type="tel"],
+      input[type="text"] {
+        display: block;
+        width: 100%;
+        margin-top: 6px;
+        margin-bottom: 16px;
+        padding: 11px 12px;
+        border: 1px solid #86868b;
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      fieldset {
+        margin: 4px 0 18px;
+        padding: 0;
+        border: 0;
+      }
+
+      .choice {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        margin: 10px 0;
+        font-weight: 400;
+      }
+
+      .choice input {
+        margin-top: 6px;
+        flex: 0 0 auto;
+      }
+
+      .consent {
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid #d2d2d7;
+      }
+
+      .fine-print {
+        color: #6e6e73;
+        font-size: 14px;
+      }
+
+      .status {
+        display: none;
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 6px;
+        font-weight: 600;
+      }
+
+      .status[data-state="success"] {
+        display: block;
+        background: #e8f5e9;
+        color: #1b5e20;
+      }
+
+      .status[data-state="error"] {
+        display: block;
+        background: #ffebee;
+        color: #b71c1c;
+      }
+
+      .website-field {
+        position: absolute;
+        left: -10000px;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+
+      button {
+        min-height: 44px;
+        padding: 0 18px;
+        border: 0;
+        border-radius: 6px;
+        background: #1d1d1f;
+        color: #ffffff;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>lab86 SMS Notifications</h1>
+      <p class="fine-print">Optional SMS notifications from Jakob Langtry.</p>
+
+      <p>
+        Sign up to receive lab86 SMS notifications for personal server alerts,
+        daily briefs, project notifications, and direct support responses.
+        Message frequency varies based on system activity and your preferences.
+      </p>
+
+      <form id="sms-form" method="post" action="/api/sms/subscribe">
+        <label>
+          Mobile phone number
+          <input
+            name="phone"
+            type="tel"
+            autocomplete="tel"
+            inputmode="tel"
+            placeholder="+1 607 555 1234"
+            required
+          />
+        </label>
+
+        <label>
+          Name <span class="fine-print">(optional)</span>
+          <input name="name" type="text" autocomplete="name" maxlength="120" />
+        </label>
+
+        <label class="website-field">
+          Website
+          <input name="website" type="text" tabindex="-1" autocomplete="off" />
+        </label>
+
+        <fieldset>
+          <legend
+            >Notification types <span class="fine-print">(optional)</span
+            ></legend
+          >
+          <label class="choice">
+            <input type="checkbox" name="interests" value="server_alerts" />
+            <span>Personal server alerts</span>
+          </label>
+          <label class="choice">
+            <input type="checkbox" name="interests" value="daily_briefs" />
+            <span>Daily briefs</span>
+          </label>
+          <label class="choice">
+            <input
+              type="checkbox"
+              name="interests"
+              value="project_notifications"
+            />
+            <span>Project notifications</span>
+          </label>
+          <label class="choice">
+            <input type="checkbox" name="interests" value="support_responses" />
+            <span>Direct support responses</span>
+          </label>
+        </fieldset>
+
+        <label class="choice consent">
+          <input type="checkbox" name="consent" value="yes" required />
+          <span>
+            I agree to receive SMS notifications from lab86 / Jakob Langtry at
+            the phone number provided. Message frequency varies. Message and
+            data rates may apply. Consent is not a condition of purchase. Reply
+            STOP to opt out or HELP for help. See the
+            <a href="/terms">Terms</a> and
+            <a href="/privacy">Privacy Policy</a>.
+          </span>
+        </label>
+
+        <button type="submit">Sign up for SMS</button>
+        <p class="fine-print">
+          After submitting, reply YES to the confirmation text before recurring
+          lab86 SMS notifications are enabled. For support, email
+          <a href="mailto:jjalangtry@gmail.com">jjalangtry@gmail.com</a>.
+        </p>
+        <p id="sms-status" class="status" role="status" aria-live="polite"></p>
+      </form>
+
+      <h2>Opt out and help</h2>
+      <p>
+        Reply STOP at any time to unsubscribe from lab86 SMS notifications.
+        Reply HELP for support information. Message and data rates may apply.
+      </p>
+    </main>
+
+    <script>
+      const form = document.getElementById("sms-form");
+      const status = document.getElementById("sms-status");
+
+      form?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const button = form.querySelector("button");
+        button.disabled = true;
+        status.removeAttribute("data-state");
+        status.textContent = "";
+
+        try {
+          const response = await fetch(form.action, {
+            method: "POST",
+            body: new FormData(form),
+            headers: {
+              accept: "application/json",
+            },
+          });
+          const result = await response.json();
+          status.dataset.state = response.ok ? "success" : "error";
+          status.textContent =
+            result.message ||
+            result.error ||
+            "SMS signup could not be completed. Please try again.";
+          if (response.ok) form.reset();
+        } catch {
+          status.dataset.state = "error";
+          status.textContent =
+            "SMS signup is temporarily unavailable. Please try again.";
+        } finally {
+          button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
