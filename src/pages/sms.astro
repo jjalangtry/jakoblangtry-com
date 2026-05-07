@@ -250,10 +250,19 @@ const description =
         try {
           const response = await fetch(form.action, {
             method: "POST",
-            body: new FormData(form),
             headers: {
               accept: "application/json",
+              "content-type": "application/json",
             },
+            body: JSON.stringify({
+              phone: form.elements.phone.value,
+              name: form.elements.name.value,
+              consent: form.elements.consent.checked ? "yes" : "",
+              website: form.elements.website.value,
+              interests: Array.from(
+                form.querySelectorAll('input[name="interests"]:checked'),
+              ).map((input) => input.value),
+            }),
           });
           const result = await response.json();
           status.dataset.state = response.ok ? "success" : "error";
