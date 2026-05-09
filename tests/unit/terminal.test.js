@@ -113,6 +113,24 @@ describe("terminal helpers", () => {
     expect(output).toContain("No repositories configured");
   });
 
+  it("builds repos output for partial project groups", () => {
+    const featuredOnly = buildReposOutput({
+      featured: [{}],
+      contributions: [],
+      github: [],
+    });
+    expect(featuredOnly).toContain("Untitled");
+    expect(featuredOnly).toContain("└─");
+
+    const contributionsOnly = buildReposOutput({
+      featured: [],
+      contributions: [{ name: "Docs Fix" }],
+      github: [],
+    });
+    expect(contributionsOnly).toContain("▓ CONTRIBUTIONS");
+    expect(contributionsOnly).toContain("Docs Fix");
+  });
+
   it("flattens project groups into repository entries", () => {
     const entries = getRepoEntries({
       featured: [
@@ -259,6 +277,17 @@ describe("terminal helpers", () => {
     expect(output).toContain("Sun");
     expect(output).toContain("Sat");
     expect(output).toContain("github.com/JJALANGTRY");
+  });
+
+  it("builds contribution chart with missing and clamped data", () => {
+    const output = buildContributionChartAscii([
+      null,
+      { date: null, level: 2 },
+      { date: "2026-01-01", level: 99 },
+      { date: "2026-01-02", level: -5 },
+    ]);
+    expect(output).toContain("Contribution chart");
+    expect(buildContributionChartAscii(null)).toContain("past 53 weeks");
   });
 
   it("builds projects output with numbered entries", () => {
@@ -865,6 +894,7 @@ describe("terminal helpers", () => {
   it("safeCalc supports exponentiation", () => {
     expect(safeCalc("2^10")).toEqual({ value: 1024 });
     expect(safeCalc("3**2")).toEqual({ value: 9 });
+    expect(safeCalc("10/3")).toEqual({ value: 3.33333333333 });
   });
 
   it("safeCalc supports math functions", () => {
