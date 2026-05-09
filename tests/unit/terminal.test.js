@@ -25,6 +25,9 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoDetailOutput,
+  findRepoMatches,
+  getRepoEntries,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -110,6 +113,156 @@ describe("terminal helpers", () => {
     expect(output).toContain("No repositories configured");
   });
 
+  it("builds repos output for partial project groups", () => {
+    const featuredOnly = buildReposOutput({
+      featured: [{}],
+      contributions: [],
+      github: [],
+    });
+    expect(featuredOnly).toContain("Untitled");
+    expect(featuredOnly).toContain("└─");
+
+    const contributionsOnly = buildReposOutput({
+      featured: [],
+      contributions: [{ name: "Docs Fix" }],
+      github: [],
+    });
+    expect(contributionsOnly).toContain("▓ CONTRIBUTIONS");
+    expect(contributionsOnly).toContain("Docs Fix");
+  });
+
+  it("flattens project groups into repository entries", () => {
+    const entries = getRepoEntries({
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jjalangtry.com",
+          repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          language: "TypeScript",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "jakobs-ls-remake",
+          url: "https://github.com/jjalangtry/jakobs-ls-remake",
+          language: "C",
+        },
+        {
+          name: "Protocol-less Repo",
+          url: "github.com/jjalangtry/protocol-less.git",
+          language: "JavaScript",
+        },
+        {
+          name: "External Tool",
+          url: "https://example.com/tool",
+          language: "Shell",
+        },
+      ],
+    });
+
+    expect(entries).toHaveLength(4);
+    expect(entries[0]).toMatchObject({
+      section: "Deployed",
+      slug: "convert-jakoblangtry-com",
+      repoPath: "jjalangtry/convert-jakoblangtry-com",
+      websiteUrl: "https://convert.jjalangtry.com",
+    });
+    expect(entries[1]).toMatchObject({
+      section: "GitHub Repos",
+      slug: "jakobs-ls-remake",
+      repoPath: "jjalangtry/jakobs-ls-remake",
+    });
+    expect(entries[2]).toMatchObject({
+      slug: "protocol-less",
+      repoPath: "jjalangtry/protocol-less",
+    });
+    expect(entries[3]).toMatchObject({
+      slug: "external-tool",
+      repoPath: "",
+    });
+  });
+
+  it("finds repositories by name, language, and GitHub path", () => {
+    const projectGroups = {
+      featured: [],
+      contributions: [],
+      github: [
+        {
+          name: "NES-Pong",
+          url: "https://github.com/jjalangtry/NES-Pong",
+          description: "Pong written in 6502 assembly for the NES",
+          language: "Assembly",
+        },
+        {
+          name: "jakobs-ls-remake",
+          url: "https://github.com/jjalangtry/jakobs-ls-remake",
+          description: "Reimplementation of ls using low-level C",
+          language: "C",
+        },
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          language: "C",
+        },
+      ],
+    };
+
+    expect(findRepoMatches(projectGroups, "nes pong").matches[0].slug).toBe(
+      "NES-Pong",
+    );
+    expect(
+      findRepoMatches(projectGroups, "jjalangtry/NES-Pong").matches[0].name,
+    ).toBe("NES-Pong");
+    expect(
+      findRepoMatches(projectGroups, "c").matches.map((repo) => repo.name),
+    ).toEqual(["jakobs-ls-remake", "wordlehelper"]);
+    expect(findRepoMatches(projectGroups, "").matches).toEqual([]);
+  });
+
+  it("builds repository detail and multi-match output", () => {
+    const projectGroups = {
+      featured: [],
+      contributions: [],
+      github: [
+        {
+          name: "jakobs-ls-remake",
+          url: "https://github.com/jjalangtry/jakobs-ls-remake",
+          description: "Reimplementation of ls using low-level C",
+          language: "C",
+        },
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          description:
+            "Wordle solver with extraordinarilylongrepositorymetadatatokenwithoutbreaks",
+          language: "C",
+        },
+      ],
+    };
+
+    const detail = buildRepoDetailOutput(projectGroups, "jakobs-ls-remake");
+    expect(detail).toContain("Repository: jakobs-ls-remake");
+    expect(detail).toContain("Language");
+    expect(detail).toContain("https://github.com/jjalangtry/jakobs-ls-remake");
+    expect(detail).toContain("repo open jakobs-ls-remake");
+
+    const multiple = buildRepoDetailOutput(projectGroups, "c");
+    expect(multiple).toContain('2 repositories match "c"');
+    expect(multiple).toContain("repo jakobs-ls-remake");
+    expect(multiple).toContain("repo wordlehelper");
+
+    expect(buildRepoDetailOutput(projectGroups, "wordlehelper")).toContain(
+      "extraordinarilylongrepositorymetadatatoken",
+    );
+    expect(buildRepoDetailOutput(projectGroups, "missing")).toContain(
+      'No repository matching "missing"',
+    );
+    expect(buildRepoDetailOutput(projectGroups, "")).toContain(
+      "Usage: repo [name|language|keyword]",
+    );
+  });
+
   it("builds contribution chart ASCII from API data", () => {
     const contributions = [
       { date: "2026-03-12", count: 4, level: 1 },
@@ -124,6 +277,17 @@ describe("terminal helpers", () => {
     expect(output).toContain("Sun");
     expect(output).toContain("Sat");
     expect(output).toContain("github.com/JJALANGTRY");
+  });
+
+  it("builds contribution chart with missing and clamped data", () => {
+    const output = buildContributionChartAscii([
+      null,
+      { date: null, level: 2 },
+      { date: "2026-01-01", level: 99 },
+      { date: "2026-01-02", level: -5 },
+    ]);
+    expect(output).toContain("Contribution chart");
+    expect(buildContributionChartAscii(null)).toContain("past 53 weeks");
   });
 
   it("builds projects output with numbered entries", () => {
@@ -730,6 +894,7 @@ describe("terminal helpers", () => {
   it("safeCalc supports exponentiation", () => {
     expect(safeCalc("2^10")).toEqual({ value: 1024 });
     expect(safeCalc("3**2")).toEqual({ value: 9 });
+    expect(safeCalc("10/3")).toEqual({ value: 3.33333333333 });
   });
 
   it("safeCalc supports math functions", () => {
@@ -745,6 +910,12 @@ describe("terminal helpers", () => {
   it("safeCalc returns error for invalid characters", () => {
     const result = safeCalc("require('fs')");
     expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc returns error for malformed expressions", () => {
+    expect(safeCalc("sqrt(")).toEqual({
+      error: "Could not evaluate expression.",
+    });
   });
 
   it("safeCalc handles division by zero as Infinity", () => {

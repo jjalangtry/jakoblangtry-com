@@ -442,6 +442,221 @@ export function buildStatsOutput(stats) {
   return lines.join("\n");
 }
 
+const REPO_GROUPS = [
+  ["featured", "Deployed"],
+  ["contributions", "Contributions"],
+  ["github", "GitHub Repos"],
+];
+
+function getGitHubPath(url) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    if (!/github\.com$/i.test(parsed.hostname)) return "";
+    return parsed.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "");
+  } catch {
+    return String(url)
+      .replace(/^(?:https?:\/\/)?(?:www\.)?github\.com\//i, "")
+      .replace(/^\/+|\/+$/g, "")
+      .replace(/\.git$/i, "");
+  }
+}
+
+function slugifyRepoName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeRepoSearch(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/^github\.com\//, "")
+    .replace(/\.git$/, "")
+    .replace(/\/$/, "");
+}
+
+function compactRepoSearch(value) {
+  return normalizeRepoSearch(value).replace(/[^a-z0-9]+/g, "");
+}
+
+export function getRepoEntries(projectGroups) {
+  const groups = projectGroups || {};
+  return REPO_GROUPS.flatMap(([key, section]) => {
+    const projects = Array.isArray(groups[key]) ? groups[key] : [];
+    return projects.filter(Boolean).map((project) => {
+      const repoUrl = project.repo || project.url || "";
+      const websiteUrl =
+        project.url && project.url !== repoUrl ? project.url : "";
+      const repoPath = getGitHubPath(repoUrl || project.url);
+      const slug = repoPath
+        ? repoPath.split("/").filter(Boolean).pop()
+        : slugifyRepoName(project.name);
+
+      return {
+        ...project,
+        section,
+        repoUrl,
+        websiteUrl,
+        repoPath,
+        slug,
+      };
+    });
+  });
+}
+
+export function findRepoMatches(projectGroups, query) {
+  const rawQuery = String(query || "").trim();
+  const entries = getRepoEntries(projectGroups);
+
+  if (!rawQuery) {
+    return {
+      query: rawQuery,
+      matches: [],
+      exactMatches: [],
+    };
+  }
+
+  const normalizedQuery = normalizeRepoSearch(rawQuery);
+  const compactQuery = compactRepoSearch(rawQuery);
+  const isExactMatch = (entry) => {
+    const fields = [entry.name, entry.slug, entry.repoPath, entry.language];
+    return fields.some((field) => {
+      const normalizedField = normalizeRepoSearch(field);
+      return (
+        normalizedField === normalizedQuery ||
+        (compactQuery && compactRepoSearch(field) === compactQuery)
+      );
+    });
+  };
+
+  const exactMatches = entries.filter(isExactMatch);
+  if (exactMatches.length > 0) {
+    return {
+      query: rawQuery,
+      matches: exactMatches,
+      exactMatches,
+    };
+  }
+
+  const matches = entries.filter((entry) => {
+    const searchable = [
+      entry.name,
+      entry.slug,
+      entry.repoPath,
+      entry.language,
+      entry.description,
+      entry.url,
+      entry.repoUrl,
+    ].join(" ");
+    return (
+      normalizeRepoSearch(searchable).includes(normalizedQuery) ||
+      (compactQuery && compactRepoSearch(searchable).includes(compactQuery))
+    );
+  });
+
+  return {
+    query: rawQuery,
+    matches,
+    exactMatches,
+  };
+}
+
+function wrapRepoText(text, width) {
+  const words = String(text || "")
+    .split(/\s+/)
+    .filter(Boolean);
+  const lines = [];
+  let current = "";
+
+  words.forEach((word) => {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= width) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word.length > width ? word.slice(0, width) : word;
+    }
+  });
+
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [""];
+}
+
+export function buildRepoDetailOutput(projectGroups, query) {
+  const rawQuery = String(query || "").trim();
+
+  if (!rawQuery) {
+    return [
+      "Usage: repo [name|language|keyword]",
+      "       repo open [name]",
+      "",
+      "Examples:",
+      "  repo jakobs-ls-remake",
+      "  repo c",
+      "  repo open NES-Pong",
+      "",
+      "Use 'repos' to list every configured repository.",
+    ].join("\n");
+  }
+
+  const { matches } = findRepoMatches(projectGroups, rawQuery);
+
+  if (matches.length === 0) {
+    return `No repository matching "${rawQuery}". Try 'repos' or 'grep ${rawQuery}'.`;
+  }
+
+  if (matches.length > 1) {
+    const lines = [`${matches.length} repositories match "${rawQuery}":`, ""];
+    matches.forEach((entry) => {
+      const lang = entry.language ? ` [${entry.language}]` : "";
+      const desc = entry.description ? ` - ${entry.description}` : "";
+      lines.push(`  ${entry.slug.padEnd(24)}${lang}${desc}`);
+      lines.push(`    -> repo ${entry.slug}`);
+    });
+    return lines.join("\n");
+  }
+
+  const entry = matches[0];
+  const W = 64;
+  const pad = (s) =>
+    String(s || "")
+      .padEnd(W)
+      .slice(0, W);
+  const row = (content) => `│${pad(content)}│`;
+  const field = (label, value) => {
+    if (!value) return [];
+    const labelWidth = 11;
+    return wrapRepoText(value, W - labelWidth - 2).map((chunk, index) =>
+      row(
+        ` ${index === 0 ? label.padEnd(labelWidth) : "".padEnd(labelWidth)}${chunk}`,
+      ),
+    );
+  };
+
+  const lines = [];
+  lines.push("┌" + "─".repeat(W) + "┐");
+  lines.push(row(` Repository: ${entry.name || entry.slug}`));
+  lines.push("├" + "─".repeat(W) + "┤");
+  field("Section", entry.section).forEach((line) => lines.push(line));
+  field("Language", entry.language || "Unspecified").forEach((line) =>
+    lines.push(line),
+  );
+  field("Summary", entry.description).forEach((line) => lines.push(line));
+  field("GitHub", entry.repoUrl).forEach((line) => lines.push(line));
+  field("Website", entry.websiteUrl).forEach((line) => lines.push(line));
+  field("Open", `repo open ${entry.slug}`).forEach((line) => lines.push(line));
+  lines.push("├" + "─".repeat(W) + "┤");
+  lines.push(row(" Related: repos · projects · github"));
+  lines.push("└" + "─".repeat(W) + "┘");
+  return lines.join("\n");
+}
+
 export function buildReposOutput(projectGroups) {
   const groups = projectGroups || {
     featured: [],
