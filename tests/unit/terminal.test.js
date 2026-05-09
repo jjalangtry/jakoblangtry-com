@@ -25,6 +25,9 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoDetailOutput,
+  findRepoMatches,
+  getRepoEntries,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -108,6 +111,115 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  it("flattens project groups into repository entries", () => {
+    const entries = getRepoEntries({
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jjalangtry.com",
+          repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          language: "TypeScript",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "jakobs-ls-remake",
+          url: "https://github.com/jjalangtry/jakobs-ls-remake",
+          language: "C",
+        },
+      ],
+    });
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      section: "Deployed",
+      slug: "convert-jakoblangtry-com",
+      repoPath: "jjalangtry/convert-jakoblangtry-com",
+      websiteUrl: "https://convert.jjalangtry.com",
+    });
+    expect(entries[1]).toMatchObject({
+      section: "GitHub Repos",
+      slug: "jakobs-ls-remake",
+      repoPath: "jjalangtry/jakobs-ls-remake",
+    });
+  });
+
+  it("finds repositories by name, language, and GitHub path", () => {
+    const projectGroups = {
+      featured: [],
+      contributions: [],
+      github: [
+        {
+          name: "NES-Pong",
+          url: "https://github.com/jjalangtry/NES-Pong",
+          description: "Pong written in 6502 assembly for the NES",
+          language: "Assembly",
+        },
+        {
+          name: "jakobs-ls-remake",
+          url: "https://github.com/jjalangtry/jakobs-ls-remake",
+          description: "Reimplementation of ls using low-level C",
+          language: "C",
+        },
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          language: "C",
+        },
+      ],
+    };
+
+    expect(findRepoMatches(projectGroups, "nes pong").matches[0].slug).toBe(
+      "NES-Pong",
+    );
+    expect(
+      findRepoMatches(projectGroups, "jjalangtry/NES-Pong").matches[0].name,
+    ).toBe("NES-Pong");
+    expect(
+      findRepoMatches(projectGroups, "c").matches.map((repo) => repo.name),
+    ).toEqual(["jakobs-ls-remake", "wordlehelper"]);
+  });
+
+  it("builds repository detail and multi-match output", () => {
+    const projectGroups = {
+      featured: [],
+      contributions: [],
+      github: [
+        {
+          name: "jakobs-ls-remake",
+          url: "https://github.com/jjalangtry/jakobs-ls-remake",
+          description: "Reimplementation of ls using low-level C",
+          language: "C",
+        },
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          description: "Wordle solver",
+          language: "C",
+        },
+      ],
+    };
+
+    const detail = buildRepoDetailOutput(projectGroups, "jakobs-ls-remake");
+    expect(detail).toContain("Repository: jakobs-ls-remake");
+    expect(detail).toContain("Language");
+    expect(detail).toContain("https://github.com/jjalangtry/jakobs-ls-remake");
+    expect(detail).toContain("repo open jakobs-ls-remake");
+
+    const multiple = buildRepoDetailOutput(projectGroups, "c");
+    expect(multiple).toContain('2 repositories match "c"');
+    expect(multiple).toContain("repo jakobs-ls-remake");
+    expect(multiple).toContain("repo wordlehelper");
+
+    expect(buildRepoDetailOutput(projectGroups, "missing")).toContain(
+      'No repository matching "missing"',
+    );
+    expect(buildRepoDetailOutput(projectGroups, "")).toContain(
+      "Usage: repo [name|language|keyword]",
+    );
   });
 
   it("builds contribution chart ASCII from API data", () => {

@@ -28,6 +28,17 @@ Terminal-style personal website with command-driven navigation.
 - Project/domain list: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
 
+## Terminal Repository Browser
+
+The terminal can browse configured GitHub repositories:
+
+```bash
+repos                  # overview of configured repositories
+repo jakobs-ls-remake  # detailed repository card
+repo c                 # filter repositories by language/keyword
+repo open NES-Pong     # open a unique match on GitHub
+```
+
 ## Build
 
 ```bash

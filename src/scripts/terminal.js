@@ -14,6 +14,8 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoDetailOutput,
+  findRepoMatches,
   buildContributionChartAscii,
   getRandomFortune,
   flipText,
@@ -799,12 +801,12 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
-  resume      view resume           grep        regex search/pipe
-  blog        read blog posts       matrix      digital rain
-  projects    projects pane         qr          QR code generator
-  close       close pane            weather     weather forecast
-                                    snake       play snake
+  repo        repo details          fortune     random quote
+  repos       all repos             grep        regex search/pipe
+  resume      view resume           matrix      digital rain
+  blog        read blog posts       qr          QR code generator
+  projects    projects pane         weather     weather forecast
+  close       close pane            snake       play snake
 
   SYSTEM                            AUTH & CONTENT (login required)
   ────────────────────────────────  ────────────────────────────────
@@ -891,7 +893,7 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput("alias gh='github'\nalias exit='close'", "info-text");
       break;
     case "skills":
       displaySkills();
@@ -1023,6 +1025,9 @@ Currently seeking opportunities in software engineering.`,
       appendOutput(buildReposOutput(terminalData.projectGroups), "info-text");
       fetchContributionChart();
       break;
+    case "repo":
+      displayRepoLookup("");
+      break;
     case "close":
     case "exit":
       if (tmuxActive) {
@@ -1031,11 +1036,6 @@ Currently seeking opportunities in software engineering.`,
       } else {
         appendOutput("No pane to close.", "info-text");
       }
-      break;
-    case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1144,6 +1144,12 @@ Currently seeking opportunities in software engineering.`,
             selection.addRange(selectionRange);
           }, 0);
         }
+        break;
+      } else if (normalizedCommand.startsWith("repo open ")) {
+        displayRepoLookup(command.substring(10).trim(), true);
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        displayRepoLookup(command.substring(5).trim());
         break;
       } else if (normalizedCommand.startsWith("history ")) {
         const arg = command.substring(8).trim();
@@ -1316,6 +1322,23 @@ Currently seeking opportunities in software engineering.`,
         }
       }
   }
+}
+
+function displayRepoLookup(query, shouldOpen = false) {
+  const result = findRepoMatches(terminalData.projectGroups, query);
+
+  if (shouldOpen && query && result.matches.length === 1) {
+    const repo = result.matches[0];
+    const target = repo.repoUrl || repo.url;
+    appendOutput(`Opening ${repo.name || repo.slug} repository...`);
+    window.open(target, "_blank");
+    return;
+  }
+
+  appendOutput(
+    buildRepoDetailOutput(terminalData.projectGroups, query),
+    query && result.matches.length === 0 ? "error-text" : "info-text",
+  );
 }
 
 /**
@@ -2960,9 +2983,9 @@ function getHelpDetails() {
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
-      examples: ["github", "repo"],
+      examples: ["github"],
       notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
+        "Use 'repo [name]' to inspect a specific configured repository without leaving the terminal.",
     },
     grep: {
       desc: "Search with regex patterns, wildcards, and flags.",
@@ -3035,7 +3058,7 @@ function getHelpDetails() {
       usage: "repos",
       examples: ["repos"],
       notes:
-        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+        "Shows deployed projects, contributions to other repos, and more. Use 'repo [name]' for a detailed repository card.",
     },
     close: {
       desc: "Close the tmux-style projects split pane.",
@@ -3045,10 +3068,11 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Inspect a configured GitHub repository by name, language, or keyword.",
+      usage: "repo [name|language|keyword]",
+      examples: ["repo jakobs-ls-remake", "repo c", "repo open NES-Pong"],
+      notes:
+        "Use 'repo open [name]' when a lookup resolves to exactly one repository and you want to open it in GitHub.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",
