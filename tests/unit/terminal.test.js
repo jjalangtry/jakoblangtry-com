@@ -130,10 +130,20 @@ describe("terminal helpers", () => {
           url: "https://github.com/jjalangtry/jakobs-ls-remake",
           language: "C",
         },
+        {
+          name: "Protocol-less Repo",
+          url: "github.com/jjalangtry/protocol-less.git",
+          language: "JavaScript",
+        },
+        {
+          name: "External Tool",
+          url: "https://example.com/tool",
+          language: "Shell",
+        },
       ],
     });
 
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(4);
     expect(entries[0]).toMatchObject({
       section: "Deployed",
       slug: "convert-jakoblangtry-com",
@@ -144,6 +154,14 @@ describe("terminal helpers", () => {
       section: "GitHub Repos",
       slug: "jakobs-ls-remake",
       repoPath: "jjalangtry/jakobs-ls-remake",
+    });
+    expect(entries[2]).toMatchObject({
+      slug: "protocol-less",
+      repoPath: "jjalangtry/protocol-less",
+    });
+    expect(entries[3]).toMatchObject({
+      slug: "external-tool",
+      repoPath: "",
     });
   });
 
@@ -181,6 +199,7 @@ describe("terminal helpers", () => {
     expect(
       findRepoMatches(projectGroups, "c").matches.map((repo) => repo.name),
     ).toEqual(["jakobs-ls-remake", "wordlehelper"]);
+    expect(findRepoMatches(projectGroups, "").matches).toEqual([]);
   });
 
   it("builds repository detail and multi-match output", () => {
@@ -197,7 +216,8 @@ describe("terminal helpers", () => {
         {
           name: "wordlehelper",
           url: "https://github.com/jjalangtry/wordlehelper",
-          description: "Wordle solver",
+          description:
+            "Wordle solver with extraordinarilylongrepositorymetadatatokenwithoutbreaks",
           language: "C",
         },
       ],
@@ -214,6 +234,9 @@ describe("terminal helpers", () => {
     expect(multiple).toContain("repo jakobs-ls-remake");
     expect(multiple).toContain("repo wordlehelper");
 
+    expect(buildRepoDetailOutput(projectGroups, "wordlehelper")).toContain(
+      "extraordinarilylongrepositorymetadatatoken",
+    );
     expect(buildRepoDetailOutput(projectGroups, "missing")).toContain(
       'No repository matching "missing"',
     );
@@ -857,6 +880,12 @@ describe("terminal helpers", () => {
   it("safeCalc returns error for invalid characters", () => {
     const result = safeCalc("require('fs')");
     expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc returns error for malformed expressions", () => {
+    expect(safeCalc("sqrt(")).toEqual({
+      error: "Could not evaluate expression.",
+    });
   });
 
   it("safeCalc handles division by zero as Infinity", () => {
