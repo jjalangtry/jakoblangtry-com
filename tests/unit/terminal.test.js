@@ -235,6 +235,43 @@ describe("terminal helpers", () => {
     expect(detail).toContain("repo open unix-permissions-game");
   });
 
+  it("handles repo browser empty states and optional fields", () => {
+    expect(
+      buildRepoIndexOutput({
+        featured: [],
+        contributions: [],
+        github: [],
+      }),
+    ).toBe("No repositories are configured yet.");
+
+    expect(buildRepoLanguageOutput({ github: [] }, "Rust")).toBe(
+      'No repositories found for language "Rust".',
+    );
+    expect(buildRepoDetailOutput(null)).toBeNull();
+  });
+
+  it("renders repo detail website rows and wraps long summaries", () => {
+    const [entry] = flattenRepoEntries({
+      featured: [
+        {
+          name: "Long Summary Project",
+          url: "https://example.com/app",
+          repo: "https://github.com/jjalangtry/long-summary-project",
+          description:
+            "A deliberately long repository description that should wrap onto multiple terminal card rows so visitors can read it without horizontal scrolling.",
+        },
+      ],
+    });
+
+    const detail = buildRepoDetailOutput(entry);
+    expect(detail).toContain("Source");
+    expect(detail).toContain("github.com/jjalangtry/long-summary-project");
+    expect(detail).toContain("Website");
+    expect(detail).toContain("example.com/app");
+    expect(detail).toContain("visitors can read it");
+    expect(detail).toContain("repo --lang language");
+  });
+
   it("builds contribution chart ASCII from API data", () => {
     const contributions = [
       { date: "2026-03-12", count: 4, level: 1 },
@@ -870,6 +907,12 @@ describe("terminal helpers", () => {
   it("safeCalc returns error for invalid characters", () => {
     const result = safeCalc("require('fs')");
     expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc returns error for malformed expressions", () => {
+    expect(safeCalc("2+")).toEqual({
+      error: "Could not evaluate expression.",
+    });
   });
 
   it("safeCalc handles division by zero as Infinity", () => {
