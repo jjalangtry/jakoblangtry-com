@@ -14,6 +14,10 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoIndexOutput,
+  buildRepoLanguageOutput,
+  buildRepoDetailOutput,
+  findRepoEntry,
   buildContributionChartAscii,
   getRandomFortune,
   flipText,
@@ -770,6 +774,62 @@ function openResume() {
   window.open(resumeUrl, "_blank");
 }
 
+function handleRepoCommand(argsString) {
+  const args = String(argsString || "").trim();
+  if (!args || args === "--all" || args === "list") {
+    appendOutput(buildRepoIndexOutput(terminalData.projectGroups), "info-text");
+    return;
+  }
+
+  if (args.startsWith("--lang ") || args.startsWith("-l ")) {
+    const language = args.replace(/^(--lang|-l)\s+/, "").trim();
+    appendOutput(
+      buildRepoLanguageOutput(terminalData.projectGroups, language),
+      "info-text",
+    );
+    return;
+  }
+
+  if (args.startsWith("open ")) {
+    const query = args.substring(5).trim();
+    const repo = findRepoEntry(query, terminalData.projectGroups);
+    if (!repo) {
+      appendOutput(`repo: no repository matching "${query}"`, "error-text");
+      return;
+    }
+
+    const targetUrl = repo.sourceUrl || repo.appUrl;
+    if (!targetUrl) {
+      appendOutput(
+        `repo: ${repo.name} does not have a URL configured.`,
+        "error-text",
+      );
+      return;
+    }
+
+    appendOutput(`Opening ${repo.name} source...`, "info-text");
+    window.open(targetUrl, "_blank");
+    return;
+  }
+
+  const byName = findRepoEntry(args, terminalData.projectGroups);
+  if (byName) {
+    appendOutput(buildRepoDetailOutput(byName), "info-text");
+    return;
+  }
+
+  const byLanguage = buildRepoLanguageOutput(terminalData.projectGroups, args);
+  if (!byLanguage.startsWith("No repositories found")) {
+    appendOutput(byLanguage, "info-text");
+    return;
+  }
+
+  appendOutput(
+    `repo: no repository matching "${args}". Try 'repo', 'repo --lang C', or 'repo open jakobs-ls-remake'.`,
+    "error-text",
+  );
+}
+
 /**
  * Executes a command entered in the terminal interface.
  * @param {string} command - The command to execute.
@@ -799,12 +859,12 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
-  resume      view resume           grep        regex search/pipe
-  blog        read blog posts       matrix      digital rain
-  projects    projects pane         qr          QR code generator
-  close       close pane            weather     weather forecast
-                                    snake       play snake
+  repo        repo browser          fortune     random quote
+  repos       repo overview         grep        regex search/pipe
+  resume      view resume           matrix      digital rain
+  blog        read blog posts       qr          QR code generator
+  projects    projects pane         weather     weather forecast
+  close       close pane            snake       play snake
 
   SYSTEM                            AUTH & CONTENT (login required)
   ────────────────────────────────  ────────────────────────────────
@@ -891,7 +951,10 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput(
+        "alias exit='close'\n# repo is a built-in browser",
+        "info-text",
+      );
       break;
     case "skills":
       displaySkills();
@@ -1033,9 +1096,10 @@ Currently seeking opportunities in software engineering.`,
       }
       break;
     case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
+      appendOutput(
+        buildRepoIndexOutput(terminalData.projectGroups),
+        "info-text",
+      );
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1144,6 +1208,9 @@ Currently seeking opportunities in software engineering.`,
             selection.addRange(selectionRange);
           }, 0);
         }
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        handleRepoCommand(command.substring(5).trim());
         break;
       } else if (normalizedCommand.startsWith("history ")) {
         const arg = command.substring(8).trim();
@@ -2960,9 +3027,9 @@ function getHelpDetails() {
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
-      examples: ["github", "repo"],
+      examples: ["github"],
       notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
+        "Use the repo command to browse individual repositories from the terminal.",
     },
     grep: {
       desc: "Search with regex patterns, wildcards, and flags.",
@@ -3033,9 +3100,9 @@ function getHelpDetails() {
     repos: {
       desc: "Display GitHub repositories and contributions in a terminal-style ASCII view.",
       usage: "repos",
-      examples: ["repos"],
+      examples: ["repos", "repo", "repo --lang C"],
       notes:
-        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+        "Shows deployed projects, contributions to other repos, and more. Use 'repo <name>' for details or 'projects' for the interactive pane.",
     },
     close: {
       desc: "Close the tmux-style projects split pane.",
@@ -3045,10 +3112,16 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Browse individual GitHub repositories from the terminal.",
+      usage: "repo [name|number|--lang language|open name]",
+      examples: [
+        "repo",
+        "repo --lang C",
+        "repo jakobs-ls-remake",
+        "repo open Unix-Permissions-Game",
+      ],
+      notes:
+        "Lists all configured repos, filters by language, shows detail cards, and opens source URLs with 'repo open'.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",

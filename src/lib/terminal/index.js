@@ -518,6 +518,209 @@ export function buildReposOutput(projectGroups) {
   return lines.join("\n");
 }
 
+const REPO_GROUP_LABELS = {
+  featured: "Deployed",
+  contributions: "Contributions",
+  github: "GitHub Repos",
+};
+
+const REPO_GROUP_ORDER = ["featured", "contributions", "github"];
+
+export function normalizeRepoQuery(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?github\.com\//, "")
+    .replace(/^jjalangtry\//, "")
+    .replace(/\.git$/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function getRepoSourceUrl(project) {
+  if (!project) return "";
+  if (project.repo) return project.repo;
+  if (project.url && /github\.com/i.test(project.url)) return project.url;
+  return "";
+}
+
+export function flattenRepoEntries(projectGroups) {
+  const groups = projectGroups || {};
+  const entries = [];
+
+  REPO_GROUP_ORDER.forEach((groupKey) => {
+    const projects = Array.isArray(groups[groupKey]) ? groups[groupKey] : [];
+    projects.forEach((project) => {
+      if (!project || !project.name) return;
+      const sourceUrl = getRepoSourceUrl(project);
+      entries.push({
+        ...project,
+        index: entries.length + 1,
+        category: groupKey,
+        categoryLabel: REPO_GROUP_LABELS[groupKey] || groupKey,
+        sourceUrl,
+        appUrl: project.url || "",
+        slug: normalizeRepoQuery(project.name),
+        repoSlug: normalizeRepoQuery(
+          sourceUrl.split("/").pop() || project.name,
+        ),
+      });
+    });
+  });
+
+  return entries;
+}
+
+export function findRepoEntry(query, projectGroups) {
+  const rawQuery = String(query || "").trim();
+  if (!rawQuery) return null;
+
+  const entries = flattenRepoEntries(projectGroups);
+  const numeric = Number(rawQuery);
+  if (Number.isInteger(numeric) && numeric >= 1 && numeric <= entries.length) {
+    return entries[numeric - 1];
+  }
+
+  const normalized = normalizeRepoQuery(rawQuery);
+  if (!normalized) return null;
+
+  return (
+    entries.find((entry) =>
+      [entry.slug, entry.repoSlug, normalizeRepoQuery(entry.name)].includes(
+        normalized,
+      ),
+    ) ||
+    entries.find((entry) =>
+      [entry.slug, entry.repoSlug, normalizeRepoQuery(entry.name)].some((key) =>
+        key.includes(normalized),
+      ),
+    ) ||
+    null
+  );
+}
+
+export function filterRepoEntriesByLanguage(projectGroups, language) {
+  const target = String(language || "")
+    .trim()
+    .toLowerCase();
+  if (!target) return [];
+
+  return flattenRepoEntries(projectGroups).filter((entry) => {
+    const projectLanguage = String(entry.language || "").toLowerCase();
+    return projectLanguage === target;
+  });
+}
+
+function shortenRepoUrl(url) {
+  return String(url || "")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
+}
+
+function formatRepoCatalogLine(entry) {
+  const language = entry.language || "Other";
+  const source = shortenRepoUrl(entry.sourceUrl || entry.appUrl);
+  return `  ${String(entry.index).padStart(2)}  ${entry.slug.padEnd(24).slice(0, 24)} ${language.padEnd(11).slice(0, 11)} ${source}`;
+}
+
+export function buildRepoIndexOutput(projectGroups) {
+  const entries = flattenRepoEntries(projectGroups);
+  if (entries.length === 0) {
+    return "No repositories are configured yet.";
+  }
+
+  const lines = [
+    "Repository browser",
+    "Usage: repo <name|number>  ·  repo --lang C  ·  repo open <name>",
+    "",
+  ];
+
+  REPO_GROUP_ORDER.forEach((groupKey) => {
+    const groupEntries = entries.filter((entry) => entry.category === groupKey);
+    if (groupEntries.length === 0) return;
+    lines.push(`── ${REPO_GROUP_LABELS[groupKey]} ${"─".repeat(36)}`);
+    groupEntries.forEach((entry) => lines.push(formatRepoCatalogLine(entry)));
+    lines.push("");
+  });
+
+  lines.push(
+    "Tip: systems projects are one command away: repo --lang C, then repo open <name>.",
+  );
+  return lines.join("\n").trimEnd();
+}
+
+export function buildRepoLanguageOutput(projectGroups, language) {
+  const entries = filterRepoEntriesByLanguage(projectGroups, language);
+  const label = String(language || "").trim();
+  if (entries.length === 0) {
+    return `No repositories found for language "${label}".`;
+  }
+
+  return [
+    `Repositories using ${label}:`,
+    ...entries.map((entry) => formatRepoCatalogLine(entry)),
+    "",
+    "Open one with: repo open <name-or-number>",
+  ].join("\n");
+}
+
+export function buildRepoDetailOutput(entry) {
+  if (!entry) return null;
+
+  const width = 68;
+  const border = "─".repeat(width);
+  const row = (content = "") =>
+    `│ ${String(content)
+      .padEnd(width - 1)
+      .slice(0, width - 1)}│`;
+  const wrap = (label, value) => {
+    const text = String(value || "").trim();
+    if (!text) return [];
+    const prefix = `${label.padEnd(12)} `;
+    const available = width - prefix.length - 1;
+    const words = text.split(/\s+/);
+    const lines = [];
+    let current = "";
+    words.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > available && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    });
+    if (current) lines.push(current);
+    return lines.map((line, index) =>
+      row(`${index === 0 ? prefix : " ".repeat(prefix.length)}${line}`),
+    );
+  };
+
+  const lines = [
+    "┌" + border + "┐",
+    row(`repo/${entry.slug}`),
+    "├" + border + "┤",
+    ...wrap("Name", entry.name),
+    ...wrap("Category", entry.categoryLabel),
+    ...wrap("Language", entry.language || "Not specified"),
+    ...wrap("Summary", entry.description),
+    ...wrap("Source", shortenRepoUrl(entry.sourceUrl)),
+  ];
+
+  if (entry.appUrl && entry.appUrl !== entry.sourceUrl) {
+    lines.push(...wrap("Website", shortenRepoUrl(entry.appUrl)));
+  }
+
+  lines.push(
+    "├" + border + "┤",
+    row(`Commands: repo open ${entry.slug}`),
+    row(`          repo --lang ${entry.language || "language"}`),
+    "└" + border + "┘",
+  );
+
+  return lines.join("\n");
+}
+
 /**
  * Builds a terminal-style ASCII contribution chart from GitHub contributions API data.
  * @param {Array<{date: string, count: number, level: number}>} contributions - Array of {date, count, level}
