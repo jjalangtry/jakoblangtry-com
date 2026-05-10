@@ -161,6 +161,22 @@ describe("terminal helpers", () => {
     expect(output).toContain("github.com/jjalangtry/jakobs-ls-remake");
   });
 
+  it("keeps deployed projects without repo URLs in the browser", () => {
+    const [entry] = flattenRepoEntries({
+      featured: [
+        {
+          name: "Private Demo",
+          url: "https://demo.jjalangtry.com",
+          language: "JavaScript",
+        },
+      ],
+    });
+
+    expect(entry.sourceUrl).toBe("");
+    expect(entry.appUrl).toBe("https://demo.jjalangtry.com");
+    expect(buildRepoDetailOutput(entry)).toContain("Website");
+  });
+
   it("finds repos by number, display name, repo slug, and partial query", () => {
     const projectGroups = {
       featured: [
