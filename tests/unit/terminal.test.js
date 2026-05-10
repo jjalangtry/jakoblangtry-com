@@ -25,6 +25,12 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoIndexOutput,
+  buildRepoLanguageOutput,
+  buildRepoDetailOutput,
+  flattenRepoEntries,
+  findRepoEntry,
+  filterRepoEntriesByLanguage,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -108,6 +114,179 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  it("builds a browsable repo index with stable slugs and source URLs", () => {
+    const projectGroups = {
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jakoblangtry.com",
+          repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          language: "TypeScript",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "jakobs-ls-remake",
+          url: "https://github.com/jjalangtry/jakobs-ls-remake",
+          description: "Reimplementation of ls using low-level C",
+          language: "C",
+        },
+      ],
+    };
+
+    const entries = flattenRepoEntries(projectGroups);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      index: 1,
+      slug: "link-converter",
+      repoSlug: "convert-jakoblangtry-com",
+      sourceUrl: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+      categoryLabel: "Deployed",
+    });
+    expect(entries[1]).toMatchObject({
+      index: 2,
+      slug: "jakobs-ls-remake",
+      sourceUrl: "https://github.com/jjalangtry/jakobs-ls-remake",
+      categoryLabel: "GitHub Repos",
+    });
+
+    const output = buildRepoIndexOutput(projectGroups);
+    expect(output).toContain("Repository browser");
+    expect(output).toContain("repo --lang C");
+    expect(output).toContain("link-converter");
+    expect(output).toContain("jakobs-ls-remake");
+    expect(output).toContain("github.com/jjalangtry/jakobs-ls-remake");
+  });
+
+  it("keeps deployed projects without repo URLs in the browser", () => {
+    const [entry] = flattenRepoEntries({
+      featured: [
+        {
+          name: "Private Demo",
+          url: "https://demo.jjalangtry.com",
+          language: "JavaScript",
+        },
+      ],
+    });
+
+    expect(entry.sourceUrl).toBe("");
+    expect(entry.appUrl).toBe("https://demo.jjalangtry.com");
+    expect(buildRepoDetailOutput(entry)).toContain("Website");
+  });
+
+  it("finds repos by number, display name, repo slug, and partial query", () => {
+    const projectGroups = {
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jakoblangtry.com",
+          repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          language: "TypeScript",
+        },
+      ],
+      github: [
+        {
+          name: "Unix-Permissions-Game",
+          url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+          language: "C",
+        },
+      ],
+    };
+
+    expect(findRepoEntry("1", projectGroups).name).toBe("Link Converter");
+    expect(findRepoEntry("link converter", projectGroups).repoSlug).toBe(
+      "convert-jakoblangtry-com",
+    );
+    expect(findRepoEntry("convert-jakoblangtry-com", projectGroups).name).toBe(
+      "Link Converter",
+    );
+    expect(findRepoEntry("permissions", projectGroups).name).toBe(
+      "Unix-Permissions-Game",
+    );
+    expect(findRepoEntry("missing", projectGroups)).toBeNull();
+  });
+
+  it("filters repos by language and renders detail cards", () => {
+    const projectGroups = {
+      featured: [],
+      contributions: [],
+      github: [
+        {
+          name: "playlist",
+          url: "https://github.com/jjalangtry/playlist",
+          language: "TypeScript",
+        },
+        {
+          name: "Unix-Permissions-Game",
+          url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+          description: "ncurses quiz game for unix permission strings",
+          language: "C",
+        },
+        {
+          name: "read-faster",
+          url: "https://github.com/jjalangtry/read-faster",
+          language: "Swift",
+        },
+      ],
+    };
+
+    const cRepos = filterRepoEntriesByLanguage(projectGroups, "c");
+    expect(cRepos.map((entry) => entry.name)).toEqual([
+      "Unix-Permissions-Game",
+    ]);
+
+    const languageOutput = buildRepoLanguageOutput(projectGroups, "C");
+    expect(languageOutput).toContain("Repositories using C");
+    expect(languageOutput).toContain("Unix-Permissions-Game");
+    expect(languageOutput).not.toContain("playlist");
+    expect(languageOutput).not.toContain("read-faster");
+
+    const detail = buildRepoDetailOutput(cRepos[0]);
+    expect(detail).toContain("repo/unix-permissions-game");
+    expect(detail).toContain("Language");
+    expect(detail).toContain("C");
+    expect(detail).toContain("repo open unix-permissions-game");
+  });
+
+  it("handles repo browser empty states and optional fields", () => {
+    expect(
+      buildRepoIndexOutput({
+        featured: [],
+        contributions: [],
+        github: [],
+      }),
+    ).toBe("No repositories are configured yet.");
+
+    expect(buildRepoLanguageOutput({ github: [] }, "Rust")).toBe(
+      'No repositories found for language "Rust".',
+    );
+    expect(buildRepoDetailOutput(null)).toBeNull();
+  });
+
+  it("renders repo detail website rows and wraps long summaries", () => {
+    const [entry] = flattenRepoEntries({
+      featured: [
+        {
+          name: "Long Summary Project",
+          url: "https://example.com/app",
+          repo: "https://github.com/jjalangtry/long-summary-project",
+          description:
+            "A deliberately long repository description that should wrap onto multiple terminal card rows so visitors can read it without horizontal scrolling.",
+        },
+      ],
+    });
+
+    const detail = buildRepoDetailOutput(entry);
+    expect(detail).toContain("Source");
+    expect(detail).toContain("github.com/jjalangtry/long-summary-project");
+    expect(detail).toContain("Website");
+    expect(detail).toContain("example.com/app");
+    expect(detail).toContain("wrap onto multiple terminal card rows");
+    expect(detail).toContain("read it without horizontal scrolling");
+    expect(detail).toContain("repo --lang language");
   });
 
   it("builds contribution chart ASCII from API data", () => {
@@ -745,6 +924,12 @@ describe("terminal helpers", () => {
   it("safeCalc returns error for invalid characters", () => {
     const result = safeCalc("require('fs')");
     expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc returns error for malformed expressions", () => {
+    expect(safeCalc("2+")).toEqual({
+      error: "Could not evaluate expression.",
+    });
   });
 
   it("safeCalc handles division by zero as Infinity", () => {
