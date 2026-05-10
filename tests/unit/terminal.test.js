@@ -268,7 +268,8 @@ describe("terminal helpers", () => {
     expect(detail).toContain("github.com/jjalangtry/long-summary-project");
     expect(detail).toContain("Website");
     expect(detail).toContain("example.com/app");
-    expect(detail).toContain("visitors can read it");
+    expect(detail).toContain("wrap onto multiple terminal card rows");
+    expect(detail).toContain("read it without horizontal scrolling");
     expect(detail).toContain("repo --lang language");
   });
 
