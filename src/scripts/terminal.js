@@ -14,6 +14,10 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoBrowserOutput,
+  buildRepoDetailOutput,
+  findRepoEntry,
+  flattenRepoGroups,
   buildContributionChartAscii,
   getRandomFortune,
   flipText,
@@ -770,6 +774,102 @@ function openResume() {
   window.open(resumeUrl, "_blank");
 }
 
+function getRepoUsage() {
+  return [
+    "Usage: repo [--lang language|--systems|--search term|id|name]",
+    "       repo open <id|name>",
+    "",
+    "Examples:",
+    "  repo",
+    "  repo --lang C",
+    "  repo --systems",
+    "  repo Unix-Permissions-Game",
+    "  repo open 5",
+  ].join("\n");
+}
+
+function handleRepoCommand(argsString = "") {
+  const args = argsString.trim();
+  const groups = terminalData.projectGroups;
+
+  if (!args || args === "list") {
+    appendOutput(buildRepoBrowserOutput(groups), "info-text");
+    return;
+  }
+
+  if (args === "--help" || args === "help") {
+    appendOutput(getRepoUsage(), "info-text");
+    return;
+  }
+
+  if (args === "--systems" || args === "systems") {
+    appendOutput(
+      buildRepoBrowserOutput(groups, { systemsOnly: true }),
+      "info-text",
+    );
+    return;
+  }
+
+  if (args.startsWith("--lang=")) {
+    const language = args.substring(7).trim();
+    appendOutput(
+      language
+        ? buildRepoBrowserOutput(groups, { language })
+        : "Usage: repo --lang <language>",
+      "info-text",
+    );
+    return;
+  }
+
+  if (args.startsWith("--lang ")) {
+    const language = args.substring(7).trim();
+    appendOutput(
+      language
+        ? buildRepoBrowserOutput(groups, { language })
+        : "Usage: repo --lang <language>",
+      "info-text",
+    );
+    return;
+  }
+
+  if (args.startsWith("--search ")) {
+    const query = args.substring(9).trim();
+    appendOutput(
+      query
+        ? buildRepoBrowserOutput(groups, { query })
+        : "Usage: repo --search <term>",
+      "info-text",
+    );
+    return;
+  }
+
+  if (args.startsWith("open ")) {
+    const target = args.substring(5).trim();
+    const repo = findRepoEntry(groups, target);
+    if (!repo) {
+      appendOutput(
+        `repo: no repository matches '${target}'. Run 'repo' to list available repositories.`,
+        "error-text",
+      );
+      return;
+    }
+    appendOutput(`Opening ${repo.name} on GitHub...`, "info-text");
+    window.open(repo.githubUrl || repo.url, "_blank");
+    return;
+  }
+
+  const repo = findRepoEntry(groups, args);
+  if (repo) {
+    appendOutput(buildRepoDetailOutput(repo), "info-text");
+    return;
+  }
+
+  appendOutput(
+    `repo: no repository matches '${args}'. Run 'repo --search ${args}' or 'repo' to browse.`,
+    "error-text",
+  );
+}
+
 /**
  * Executes a command entered in the terminal interface.
  * @param {string} command - The command to execute.
@@ -799,12 +899,12 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
-  resume      view resume           grep        regex search/pipe
-  blog        read blog posts       matrix      digital rain
-  projects    projects pane         qr          QR code generator
-  close       close pane            weather     weather forecast
-                                    snake       play snake
+  repo        repo browser          fortune     random quote
+  repos       repo overview         grep        regex search/pipe
+  resume      view resume           matrix      digital rain
+  blog        read blog posts       qr          QR code generator
+  projects    projects pane         weather     weather forecast
+  close       close pane            snake       play snake
 
   SYSTEM                            AUTH & CONTENT (login required)
   ────────────────────────────────  ────────────────────────────────
@@ -891,7 +991,7 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput("alias gh='github'\nalias exit='close'", "info-text");
       break;
     case "skills":
       displaySkills();
@@ -1033,9 +1133,7 @@ Currently seeking opportunities in software engineering.`,
       }
       break;
     case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
+      handleRepoCommand();
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1054,6 +1152,9 @@ Currently seeking opportunities in software engineering.`,
       if (normalizedCommand === "converter") {
         appendOutput("Opening Link Converter...");
         window.open("https://convert.jjalangtry.com", "_blank");
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        handleRepoCommand(command.substring(5));
         break;
       } else if (normalizedCommand.startsWith("theme ")) {
         const arg = normalizedCommand.substring(6).trim();
@@ -2960,9 +3061,8 @@ function getHelpDetails() {
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
-      examples: ["github", "repo"],
-      notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
+      examples: ["github"],
+      notes: "Use 'repo' to browse individual GitHub repositories.",
     },
     grep: {
       desc: "Search with regex patterns, wildcards, and flags.",
@@ -3033,9 +3133,9 @@ function getHelpDetails() {
     repos: {
       desc: "Display GitHub repositories and contributions in a terminal-style ASCII view.",
       usage: "repos",
-      examples: ["repos"],
+      examples: ["repos", "repo", "repo --lang C"],
       notes:
-        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+        "Shows a compact overview. Run 'repo' for the searchable repository browser or 'projects' for the interactive pane.",
     },
     close: {
       desc: "Close the tmux-style projects split pane.",
@@ -3045,10 +3145,17 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Browse, inspect, filter, and open individual GitHub repositories.",
+      usage: "repo [--lang language|--systems|--search term|id|name]",
+      examples: [
+        "repo",
+        "repo --lang C",
+        "repo --systems",
+        "repo Unix-Permissions-Game",
+        "repo open 5",
+      ],
+      notes:
+        "Use numeric ids or repository names from the browser output. The --systems filter highlights C, Assembly, and Shell projects.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",
@@ -4196,6 +4303,36 @@ function initCLI() {
             .filter((s) => s.startsWith(arg));
         } else if (baseCmd === "theme") {
           completions = ["dark", "light"].filter((s) => s.startsWith(arg));
+        } else if (baseCmd === "repo") {
+          const repos = flattenRepoGroups(terminalData.projectGroups);
+          const repoTargets = repos.flatMap((repo) => [
+            String(repo.id),
+            repo.slug,
+            repo.name,
+          ]);
+          const languages = [
+            ...new Set(
+              repos
+                .map((repo) => repo.language)
+                .filter(Boolean)
+                .map((language) => `--lang ${language}`),
+            ),
+          ];
+
+          if (arg.startsWith("open ")) {
+            const targetArg = arg.substring(5);
+            completions = repoTargets
+              .filter((target) => target.toLowerCase().startsWith(targetArg))
+              .map((target) => `open ${target}`);
+          } else {
+            completions = [
+              "--systems",
+              "--search ",
+              "open ",
+              ...languages,
+              ...repoTargets,
+            ].filter((target) => target.toLowerCase().startsWith(arg));
+          }
         } else if (baseCmd === "man" || baseCmd === "help") {
           completions = commandList.filter((c) => c.startsWith(arg));
         } else if (currentLower.startsWith("skills --category ")) {

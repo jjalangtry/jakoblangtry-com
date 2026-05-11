@@ -518,6 +518,209 @@ export function buildReposOutput(projectGroups) {
   return lines.join("\n");
 }
 
+export const SYSTEMS_REPO_LANGUAGES = ["c", "assembly", "shell"];
+
+const REPO_GROUPS = [
+  { key: "featured", label: "Deployed" },
+  { key: "contributions", label: "Contribution" },
+  { key: "github", label: "GitHub" },
+];
+
+function slugifyRepoName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function normalizeRepoTarget(target) {
+  return String(target || "")
+    .trim()
+    .replace(/^#/, "")
+    .toLowerCase();
+}
+
+function repoUrlTail(url) {
+  return String(url || "")
+    .replace(/\/$/, "")
+    .split("/")
+    .pop()
+    .toLowerCase();
+}
+
+function isSystemsRepo(repo) {
+  return SYSTEMS_REPO_LANGUAGES.includes(
+    String(repo.language || "").toLowerCase(),
+  );
+}
+
+function repoMatchesQuery(repo, query) {
+  const needle = String(query || "")
+    .trim()
+    .toLowerCase();
+
+  return [
+    repo.name,
+    repo.description,
+    repo.language,
+    repo.section,
+    repo.slug,
+    repo.githubUrl,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(needle));
+}
+
+function truncateRepoField(value, width) {
+  const text = String(value || "");
+  if (text.length <= width) return text.padEnd(width);
+  return `${text.slice(0, Math.max(0, width - 1))}…`;
+}
+
+export function flattenRepoGroups(projectGroups) {
+  const groups = projectGroups || {};
+  const repos = [];
+
+  REPO_GROUPS.forEach((group) => {
+    const projects = Array.isArray(groups[group.key]) ? groups[group.key] : [];
+    projects.forEach((project) => {
+      if (!project || !project.name) return;
+
+      const githubUrl = project.repo || project.url || "";
+      if (!githubUrl) return;
+
+      const homepage =
+        project.url && project.url !== githubUrl ? project.url : undefined;
+      const slug = slugifyRepoName(project.name);
+
+      repos.push({
+        ...project,
+        id: repos.length + 1,
+        section: group.label,
+        group: group.key,
+        githubUrl,
+        homepage,
+        slug,
+        cloneUrl: githubUrl ? `${githubUrl.replace(/\/$/, "")}.git` : "",
+      });
+    });
+  });
+
+  return repos;
+}
+
+export function findRepoEntry(projectGroups, target) {
+  const normalized = normalizeRepoTarget(target);
+  if (!normalized) return null;
+
+  const repos = flattenRepoGroups(projectGroups);
+  return (
+    repos.find((repo) => {
+      const id = String(repo.id);
+      const name = String(repo.name || "").toLowerCase();
+      const slug = repo.slug || "";
+      const tail = repoUrlTail(repo.githubUrl);
+
+      return (
+        id === normalized ||
+        name === normalized ||
+        slug === normalized ||
+        tail === normalized
+      );
+    }) || null
+  );
+}
+
+export function buildRepoBrowserOutput(projectGroups, filters = {}) {
+  const allRepos = flattenRepoGroups(projectGroups);
+  if (allRepos.length === 0) {
+    return "No repositories configured. Add entries to public/data/projects.json.";
+  }
+
+  const language = String(filters.language || "").trim();
+  const query = String(filters.query || "").trim();
+  let repos = allRepos;
+
+  if (filters.systemsOnly) {
+    repos = repos.filter(isSystemsRepo);
+  }
+
+  if (language) {
+    repos = repos.filter(
+      (repo) =>
+        String(repo.language || "").toLowerCase() === language.toLowerCase(),
+    );
+  }
+
+  if (query) {
+    repos = repos.filter((repo) => repoMatchesQuery(repo, query));
+  }
+
+  if (repos.length === 0) {
+    const activeFilters = [
+      filters.systemsOnly ? "systems repos" : "",
+      language ? `language=${language}` : "",
+      query ? `search=${query}` : "",
+    ].filter(Boolean);
+    return `No repositories match ${activeFilters.join(", ")}. Try 'repo' to list everything.`;
+  }
+
+  const title = filters.systemsOnly
+    ? "Repository browser --systems"
+    : language
+      ? `Repository browser --lang ${language}`
+      : query
+        ? `Repository browser --search ${query}`
+        : "Repository browser";
+
+  const lines = [];
+  lines.push(title);
+  lines.push(`Showing ${repos.length} of ${allRepos.length} repositories`);
+  lines.push("");
+  lines.push(" ID   Repository              Lang        Area");
+  lines.push(" ──   ──────────────────────  ──────────  ────────────");
+
+  repos.forEach((repo) => {
+    const id = `#${String(repo.id).padStart(2, "0")}`.padEnd(5);
+    const name = truncateRepoField(repo.name, 22);
+    const languageLabel = truncateRepoField(repo.language || "n/a", 10);
+    const section = truncateRepoField(repo.section, 12);
+    lines.push(` ${id}${name}  ${languageLabel}  ${section}`);
+    if (repo.description) {
+      lines.push(`      ${repo.description}`);
+    }
+  });
+
+  lines.push("");
+  lines.push("Use: repo <id|name>  ·  repo --lang C  ·  repo --systems");
+  lines.push("Open: repo open <id|name>");
+  return lines.join("\n");
+}
+
+export function buildRepoDetailOutput(repo) {
+  if (!repo) return null;
+
+  const lines = [];
+  lines.push(`Repository #${repo.id}: ${repo.name}`);
+  lines.push("─".repeat(Math.min(64, Math.max(24, repo.name.length + 16))));
+  lines.push(`Area:      ${repo.section || "GitHub"}`);
+  lines.push(`Language:  ${repo.language || "n/a"}`);
+  if (repo.description) {
+    lines.push(`Summary:   ${repo.description}`);
+  }
+  lines.push(`GitHub:    ${repo.githubUrl || repo.url}`);
+  if (repo.homepage) {
+    lines.push(`Live site: ${repo.homepage}`);
+  }
+  if (repo.cloneUrl) {
+    lines.push(`Clone:     git clone ${repo.cloneUrl}`);
+  }
+  lines.push("");
+  lines.push(`Open in browser: repo open ${repo.id}`);
+  return lines.join("\n");
+}
+
 /**
  * Builds a terminal-style ASCII contribution chart from GitHub contributions API data.
  * @param {Array<{date: string, count: number, level: number}>} contributions - Array of {date, count, level}

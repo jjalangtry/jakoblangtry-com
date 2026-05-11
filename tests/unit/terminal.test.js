@@ -25,6 +25,10 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  flattenRepoGroups,
+  findRepoEntry,
+  buildRepoBrowserOutput,
+  buildRepoDetailOutput,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -108,6 +112,130 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  const repoGroups = {
+    featured: [
+      {
+        name: "Link Converter",
+        url: "https://convert.jjalangtry.com",
+        repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+        description: "Convert music links",
+        language: "TypeScript",
+      },
+    ],
+    contributions: [
+      {
+        name: "BeyondRGB",
+        url: "https://github.com/BeyondRGB/beyondrgb.github.io",
+        repo: "https://github.com/BeyondRGB/beyondrgb.github.io",
+        description: "Multispectral imaging research",
+        language: "Python",
+      },
+    ],
+    github: [
+      {
+        name: "Unix-Permissions-Game",
+        url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+        description: "ncurses permissions quiz",
+        language: "C",
+      },
+      {
+        name: "NES-Pong",
+        url: "https://github.com/jjalangtry/NES-Pong",
+        description: "6502 assembly Pong",
+        language: "Assembly",
+      },
+    ],
+  };
+
+  it("flattens repository groups into numbered browser entries", () => {
+    const repos = flattenRepoGroups(repoGroups);
+
+    expect(repos).toHaveLength(4);
+    expect(repos[0]).toMatchObject({
+      id: 1,
+      section: "Deployed",
+      githubUrl: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+      homepage: "https://convert.jjalangtry.com",
+      slug: "link-converter",
+    });
+    expect(repos[2]).toMatchObject({
+      id: 3,
+      section: "GitHub",
+      cloneUrl: "https://github.com/jjalangtry/Unix-Permissions-Game.git",
+    });
+    expect(flattenRepoGroups({ featured: [null, { name: "No URL" }] })).toEqual(
+      [],
+    );
+  });
+
+  it("builds a repository browser with systems and language filters", () => {
+    const systemsOutput = buildRepoBrowserOutput(repoGroups, {
+      systemsOnly: true,
+    });
+    expect(systemsOutput).toContain("Repository browser --systems");
+    expect(systemsOutput).toContain("Unix-Permissions-Game");
+    expect(systemsOutput).toContain("NES-Pong");
+    expect(systemsOutput).not.toContain("Link Converter");
+
+    const cOutput = buildRepoBrowserOutput(repoGroups, { language: "C" });
+    expect(cOutput).toContain("Repository browser --lang C");
+    expect(cOutput).toContain("Unix-Permissions-Game");
+    expect(cOutput).not.toContain("NES-Pong");
+
+    const queryOutput = buildRepoBrowserOutput(repoGroups, {
+      query: "multispectral",
+    });
+    expect(queryOutput).toContain("BeyondRGB");
+  });
+
+  it("finds repositories by id, slug, name, and URL tail", () => {
+    expect(findRepoEntry(repoGroups, "#3")?.name).toBe("Unix-Permissions-Game");
+    expect(findRepoEntry(repoGroups, "link-converter")?.name).toBe(
+      "Link Converter",
+    );
+    expect(findRepoEntry(repoGroups, "nes-pong")?.language).toBe("Assembly");
+    expect(findRepoEntry(repoGroups, "missing")).toBeNull();
+    expect(findRepoEntry(repoGroups, "")).toBeNull();
+  });
+
+  it("builds repository detail cards with clone and open hints", () => {
+    const repo = findRepoEntry(repoGroups, "1");
+    const output = buildRepoDetailOutput(repo);
+
+    expect(output).toContain("Repository #1: Link Converter");
+    expect(output).toContain("Live site: https://convert.jjalangtry.com");
+    expect(output).toContain(
+      "Clone:     git clone https://github.com/jjalangtry/convert-jakoblangtry-com.git",
+    );
+    expect(output).toContain("Open in browser: repo open 1");
+    expect(
+      buildRepoDetailOutput({
+        id: 9,
+        name: "Minimal",
+        githubUrl: "https://github.com/jjalangtry/minimal",
+      }),
+    ).toContain("Language:  n/a");
+    expect(buildRepoDetailOutput(null)).toBeNull();
+  });
+
+  it("reports empty or unmatched repository browser filters", () => {
+    expect(buildRepoBrowserOutput({})).toContain("No repositories configured");
+    expect(buildRepoBrowserOutput(repoGroups, { query: "rust" })).toContain(
+      "No repositories match search=rust",
+    );
+    expect(
+      buildRepoBrowserOutput({
+        github: [
+          {
+            name: "extremely-long-repository-name-for-terminal",
+            url: "https://github.com/jjalangtry/extremely-long-repository-name-for-terminal",
+            language: "TypeScript",
+          },
+        ],
+      }),
+    ).toContain("…");
   });
 
   it("builds contribution chart ASCII from API data", () => {
