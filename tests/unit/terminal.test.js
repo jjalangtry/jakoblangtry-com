@@ -280,6 +280,73 @@ describe("terminal helpers", () => {
     expect(clone).toContain("jakobs-ls-remake.git");
   });
 
+  it("handles repository browser empty and no-match states", () => {
+    expect(buildRepositoryIndex(null)).toEqual([]);
+    expect(
+      buildRepositoryIndex({
+        github: [
+          null,
+          { name: "" },
+          { name: "No URL" },
+          {
+            name: "Live Only",
+            url: "https://live.example.com",
+            language: "TypeScript",
+          },
+        ],
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        name: "Live Only",
+        repoUrl: "",
+        url: "https://live.example.com",
+        cloneUrl: "https://live.example.com",
+      }),
+    ]);
+
+    expect(buildRepoBrowserOutput({ github: [] })).toContain(
+      "No repositories configured",
+    );
+    expect(
+      buildRepoBrowserOutput(
+        {
+          github: [
+            {
+              name: "read-faster",
+              url: "https://github.com/jjalangtry/read-faster",
+              language: "Swift",
+            },
+          ],
+        },
+        { language: "C" },
+      ),
+    ).toContain("No C repositories found");
+  });
+
+  it("formats repository detail with topics, live URL, and null guards", () => {
+    const repo = buildRepositoryIndex({
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jjalangtry.com",
+          repo: "https://github.com/jjalangtry/convert",
+          language: "TypeScript",
+          description: "Convert music links",
+          topics: ["astro", "music"],
+        },
+      ],
+    })[0];
+
+    const detail = buildRepoDetailOutput(repo);
+    expect(detail).toContain("Topics:      astro, music");
+    expect(detail).toContain(
+      "Repository:  https://github.com/jjalangtry/convert",
+    );
+    expect(detail).toContain("Live:        https://convert.jjalangtry.com");
+    expect(buildRepoDetailOutput(null)).toBeNull();
+    expect(buildRepoCloneOutput(null)).toBeNull();
+  });
+
   it("builds contribution chart ASCII from API data", () => {
     const contributions = [
       { date: "2026-03-12", count: 4, level: 1 },
