@@ -14,6 +14,12 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepositoryIndex,
+  parseRepoCommandArgs,
+  findRepositoryBySelector,
+  buildRepoBrowserOutput,
+  buildRepoDetailOutput,
+  buildRepoCloneOutput,
   buildContributionChartAscii,
   getRandomFortune,
   flipText,
@@ -770,6 +776,70 @@ function openResume() {
   window.open(resumeUrl, "_blank");
 }
 
+function getRepoUsageOutput() {
+  return [
+    "Usage: repo [list|<id|name>|open <id|name>|clone <id|name>|--lang LANG|--systems|--search TERM]",
+    "",
+    "Examples:",
+    "  repo",
+    "  repo --systems",
+    "  repo --lang C",
+    "  repo unix-permissions-game",
+    "  repo open 5",
+    "  repo clone wordlehelper",
+  ].join("\n");
+}
+
+function executeRepoCommand(argsString = "") {
+  const parsed = parseRepoCommandArgs(argsString);
+
+  if (parsed.action === "usage") {
+    appendOutput(getRepoUsageOutput(), "info-text");
+    return;
+  }
+
+  if (parsed.action === "list") {
+    appendOutput(
+      buildRepoBrowserOutput(terminalData.projectGroups, parsed.options),
+      "info-text",
+    );
+    return;
+  }
+
+  const repository = findRepositoryBySelector(
+    terminalData.projectGroups,
+    parsed.selector,
+  );
+  if (!repository) {
+    appendOutput(
+      `repo: no repository matched '${parsed.selector}'. Try 'repo list' or 'repo --systems'.`,
+      "error-text",
+    );
+    return;
+  }
+
+  if (parsed.action === "open") {
+    appendOutput(`Opening ${repository.name} repository...`, "info-text");
+    window.open(repository.repoUrl || repository.url, "_blank");
+    return;
+  }
+
+  if (parsed.action === "clone") {
+    appendOutput(buildRepoCloneOutput(repository), "info-text");
+    return;
+  }
+
+  appendOutput(buildRepoDetailOutput(repository), "info-text");
+}
+
+function getRepositoryCompletionTerms() {
+  return buildRepositoryIndex(terminalData.projectGroups).flatMap((repo) => [
+    String(repo.id),
+    repo.slug,
+    repo.name.toLowerCase(),
+  ]);
+}
+
 /**
  * Executes a command entered in the terminal interface.
  * @param {string} command - The command to execute.
@@ -799,12 +869,12 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
-  resume      view resume           grep        regex search/pipe
-  blog        read blog posts       matrix      digital rain
-  projects    projects pane         qr          QR code generator
-  close       close pane            weather     weather forecast
-                                    snake       play snake
+  repo        browse repositories   fortune     random quote
+  repos       ascii repo overview   grep        regex search/pipe
+  resume      view resume           matrix      digital rain
+  blog        read blog posts       qr          QR code generator
+  projects    projects pane         weather     weather forecast
+  close       close pane            snake       play snake
 
   SYSTEM                            AUTH & CONTENT (login required)
   ────────────────────────────────  ────────────────────────────────
@@ -891,7 +961,10 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput(
+        "alias repos='repo list'\nalias systems='repo --systems'\nalias exit='close'",
+        "info-text",
+      );
       break;
     case "skills":
       displaySkills();
@@ -1033,9 +1106,7 @@ Currently seeking opportunities in software engineering.`,
       }
       break;
     case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
+      executeRepoCommand();
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1054,6 +1125,9 @@ Currently seeking opportunities in software engineering.`,
       if (normalizedCommand === "converter") {
         appendOutput("Opening Link Converter...");
         window.open("https://convert.jjalangtry.com", "_blank");
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        executeRepoCommand(command.substring(5).trim());
         break;
       } else if (normalizedCommand.startsWith("theme ")) {
         const arg = normalizedCommand.substring(6).trim();
@@ -2960,9 +3034,9 @@ function getHelpDetails() {
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
-      examples: ["github", "repo"],
+      examples: ["github"],
       notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
+        "Use 'repo' when you want to browse individual repositories from inside the terminal.",
     },
     grep: {
       desc: "Search with regex patterns, wildcards, and flags.",
@@ -3033,9 +3107,9 @@ function getHelpDetails() {
     repos: {
       desc: "Display GitHub repositories and contributions in a terminal-style ASCII view.",
       usage: "repos",
-      examples: ["repos"],
+      examples: ["repos", "repo --systems"],
       notes:
-        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+        "Shows deployed projects, contributions to other repos, and more. Use 'repo' for searchable details.",
     },
     close: {
       desc: "Close the tmux-style projects split pane.",
@@ -3045,10 +3119,19 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Browse indexed GitHub repositories from the terminal.",
+      usage:
+        "repo [list|<id|name>|open <id|name>|clone <id|name>|--lang LANG|--systems|--search TERM]",
+      examples: [
+        "repo",
+        "repo --systems",
+        "repo --lang C",
+        "repo unix-permissions-game",
+        "repo open 5",
+        "repo clone wordlehelper",
+      ],
+      notes:
+        "Repository data comes from public/data/projects.json so systems programming projects can be exposed directly on the website.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",
@@ -4198,6 +4281,25 @@ function initCLI() {
           completions = ["dark", "light"].filter((s) => s.startsWith(arg));
         } else if (baseCmd === "man" || baseCmd === "help") {
           completions = commandList.filter((c) => c.startsWith(arg));
+        } else if (baseCmd === "repo") {
+          const repoTerms = getRepositoryCompletionTerms();
+          if (arg.startsWith("open ") || arg.startsWith("clone ")) {
+            const [action, ...rest] = arg.split(" ");
+            const selector = rest.join(" ");
+            completions = repoTerms
+              .filter((term) => term.startsWith(selector))
+              .map((term) => `${action} ${term}`);
+          } else {
+            completions = [
+              "list",
+              "--systems",
+              "--lang C",
+              "--search ",
+              "open ",
+              "clone ",
+              ...repoTerms,
+            ].filter((term) => term.startsWith(arg));
+          }
         } else if (currentLower.startsWith("skills --category ")) {
           const catArg = currentLower.substring(18);
           completions = (terminalData.skills || [])
