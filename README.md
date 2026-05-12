@@ -28,6 +28,21 @@ Terminal-style personal website with command-driven navigation.
 - Project/domain list: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
 
+## Terminal Repository Browser
+
+The terminal exposes GitHub project data with:
+
+```bash
+repo                 # indexed repository list
+repo --systems       # systems-oriented repos (C, Assembly, Rust, etc.)
+repo --lang C        # language filter
+repo <id-or-name>    # detail view with clone/open commands
+repo open <id>       # open the GitHub repository
+```
+
+Add or update entries in `public/data/projects.json` to make more repositories
+available through the website terminal.
+
 ## Build
 
 ```bash

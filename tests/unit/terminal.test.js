@@ -25,6 +25,14 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepositoryIndex,
+  isSystemsRepository,
+  filterRepositoryIndex,
+  parseRepoCommandArgs,
+  findRepositoryBySelector,
+  buildRepoBrowserOutput,
+  buildRepoDetailOutput,
+  buildRepoCloneOutput,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -108,6 +116,168 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  it("builds an indexed repository browser from project groups", () => {
+    const projectGroups = {
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jakoblangtry.com",
+          repo: "https://github.com/jjalangtry/convert",
+          language: "TypeScript",
+          description: "Convert music links",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "Unix-Permissions-Game",
+          url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+          language: "C",
+          description: "ncurses quiz game",
+          topics: ["unix", "systems"],
+        },
+      ],
+    };
+
+    const index = buildRepositoryIndex(projectGroups);
+    expect(index).toHaveLength(2);
+    expect(index[0]).toMatchObject({
+      id: 1,
+      slug: "link-converter",
+      groupLabel: "deployed",
+      repoUrl: "https://github.com/jjalangtry/convert",
+      liveUrl: "https://convert.jakoblangtry.com",
+    });
+    expect(index[1].cloneUrl).toBe(
+      "https://github.com/jjalangtry/Unix-Permissions-Game.git",
+    );
+
+    const output = buildRepoBrowserOutput(projectGroups);
+    expect(output).toContain("Repository browser (2/2 all repositories)");
+    expect(output).toContain("Link Converter");
+    expect(output).toContain("Unix-Permissions-Game");
+    expect(output).toContain("repo --systems");
+  });
+
+  it("filters repository browser output by language, systems, and search", () => {
+    const repositories = buildRepositoryIndex({
+      github: [
+        {
+          name: "NES-Pong",
+          url: "https://github.com/jjalangtry/NES-Pong",
+          language: "Assembly",
+          description: "Pong for the NES",
+        },
+        {
+          name: "read-faster",
+          url: "https://github.com/jjalangtry/read-faster",
+          language: "Swift",
+          description: "RSVP speed reading app",
+        },
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          language: "C",
+          description: "Wordle solver",
+        },
+      ],
+    });
+
+    expect(filterRepositoryIndex(repositories, { language: "C" })).toHaveLength(
+      1,
+    );
+    expect(
+      filterRepositoryIndex(repositories, { query: "speed" }),
+    ).toHaveLength(1);
+    expect(
+      filterRepositoryIndex(repositories, { systemsOnly: true }).map(
+        (repo) => repo.name,
+      ),
+    ).toEqual(["NES-Pong", "wordlehelper"]);
+    expect(isSystemsRepository(repositories[0])).toBe(true);
+    expect(isSystemsRepository(repositories[1])).toBe(false);
+  });
+
+  it("parses repo command arguments", () => {
+    expect(parseRepoCommandArgs("")).toEqual({ action: "list", options: {} });
+    expect(parseRepoCommandArgs("list")).toEqual({
+      action: "list",
+      options: {},
+    });
+    expect(parseRepoCommandArgs("--systems")).toEqual({
+      action: "list",
+      options: { systemsOnly: true },
+    });
+    expect(parseRepoCommandArgs("--lang C")).toEqual({
+      action: "list",
+      options: { language: "C" },
+    });
+    expect(parseRepoCommandArgs("--search unix permissions")).toEqual({
+      action: "list",
+      options: { query: "unix permissions" },
+    });
+    expect(parseRepoCommandArgs("open 5")).toEqual({
+      action: "open",
+      selector: "5",
+    });
+    expect(parseRepoCommandArgs("clone wordlehelper")).toEqual({
+      action: "clone",
+      selector: "wordlehelper",
+    });
+    expect(parseRepoCommandArgs("--lang")).toEqual({ action: "usage" });
+  });
+
+  it("finds repositories by id, name, slug, and unique partial", () => {
+    const projectGroups = {
+      github: [
+        {
+          name: "Unix-Permissions-Game",
+          url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+          language: "C",
+        },
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          language: "C",
+        },
+      ],
+    };
+
+    expect(findRepositoryBySelector(projectGroups, "1").name).toBe(
+      "Unix-Permissions-Game",
+    );
+    expect(
+      findRepositoryBySelector(projectGroups, "unix-permissions-game").id,
+    ).toBe(1);
+    expect(findRepositoryBySelector(projectGroups, "wordle").name).toBe(
+      "wordlehelper",
+    );
+    expect(findRepositoryBySelector(projectGroups, "missing")).toBeNull();
+  });
+
+  it("formats repository detail and clone output", () => {
+    const repo = buildRepositoryIndex({
+      github: [
+        {
+          name: "jakobs-ls-remake",
+          url: "https://github.com/jjalangtry/jakobs-ls-remake",
+          language: "C",
+          description: "Reimplementation of ls using low-level C",
+        },
+      ],
+    })[0];
+
+    const detail = buildRepoDetailOutput(repo);
+    expect(detail).toContain("repo/jakobs-ls-remake");
+    expect(detail).toContain("Language:    C");
+    expect(detail).toContain("git clone");
+    expect(detail).toContain("repo open 1");
+
+    const clone = buildRepoCloneOutput(repo);
+    expect(clone).toContain("$ git clone");
+    expect(clone).toContain("jakobs-ls-remake.git");
   });
 
   it("builds contribution chart ASCII from API data", () => {
