@@ -14,9 +14,16 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoHelpOutput,
+  buildRepositoryBrowserOutput,
+  buildRepositoryDetailOutput,
   buildContributionChartAscii,
+  buildGitCloneCommand,
+  getRepositoryUrl,
   getRandomFortune,
   flipText,
+  parseRepoCommand,
+  resolveRepositoryTarget,
   safeCalc,
   renderBigTime,
 } from "../lib/terminal/index.js";
@@ -799,12 +806,12 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
-  resume      view resume           grep        regex search/pipe
-  blog        read blog posts       matrix      digital rain
-  projects    projects pane         qr          QR code generator
-  close       close pane            weather     weather forecast
-                                    snake       play snake
+  repo        repo browser          fortune     random quote
+  repos       github overview       grep        regex search/pipe
+  resume      view resume           matrix      digital rain
+  blog        read blog posts       qr          QR code generator
+  projects    projects pane         weather     weather forecast
+  close       close pane            snake       play snake
 
   SYSTEM                            AUTH & CONTENT (login required)
   ────────────────────────────────  ────────────────────────────────
@@ -891,7 +898,10 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput(
+        "alias repo='repository-browser'\nalias exit='close'",
+        "info-text",
+      );
       break;
     case "skills":
       displaySkills();
@@ -1033,9 +1043,7 @@ Currently seeking opportunities in software engineering.`,
       }
       break;
     case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
+      executeRepoCommand("");
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1083,6 +1091,9 @@ Currently seeking opportunities in software engineering.`,
         } else {
           appendOutput(`cd: no such file or directory: ${dir}`, "error-text");
         }
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        executeRepoCommand(command.substring(5).trim());
         break;
       } else if (normalizedCommand.startsWith("curl ")) {
         const args = parseCurlCommand(command.substring(5).trim());
@@ -2738,6 +2749,72 @@ function displayNeofetch() {
   );
 }
 
+function executeRepoCommand(argsString) {
+  const parsed = parseRepoCommand(argsString);
+
+  if (parsed.action === "error") {
+    appendOutput(parsed.message, "error-text");
+    return;
+  }
+  if (parsed.action === "help") {
+    appendOutput(buildRepoHelpOutput(), "info-text");
+    return;
+  }
+  if (parsed.action === "profile") {
+    appendOutput("Opening GitHub profile...");
+    window.open("https://github.com/JJALANGTRY", "_blank");
+    return;
+  }
+  if (parsed.action === "list") {
+    appendOutput(
+      buildRepositoryBrowserOutput(terminalData.projectGroups, parsed.filters),
+      "info-text",
+    );
+    return;
+  }
+
+  const result = resolveRepositoryTarget(
+    parsed.target,
+    terminalData.projectGroups,
+  );
+  if (result.error) {
+    appendOutput(result.error, "error-text");
+    return;
+  }
+
+  if (parsed.action === "open") {
+    const url = getRepositoryUrl(result.project);
+    if (!url) {
+      appendOutput(
+        `No source repository URL configured for ${result.project.name}.`,
+        "error-text",
+      );
+      return;
+    }
+    appendOutput(`Opening ${result.project.name} source...`);
+    window.open(url, "_blank");
+    return;
+  }
+
+  if (parsed.action === "clone") {
+    const cloneCommand = buildGitCloneCommand(result.project);
+    if (!cloneCommand) {
+      appendOutput(
+        `No clone URL configured for ${result.project.name}.`,
+        "error-text",
+      );
+      return;
+    }
+    appendOutput(cloneCommand, "success-text");
+    return;
+  }
+
+  appendOutput(
+    buildRepositoryDetailOutput(result.project, result.index),
+    "info-text",
+  );
+}
+
 function executeStandaloneGrep(argsString) {
   const args = parseGrepArgs(argsString);
   if (!args.pattern) {
@@ -2774,6 +2851,7 @@ function executeStandaloneGrep(argsString) {
       p.description || "",
       p.language || "",
       p.url || "",
+      p.repo || "",
     ].join(" ");
     const matches = regex.test(searchable);
     return args.invert ? !matches : matches;
@@ -2960,9 +3038,9 @@ function getHelpDetails() {
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
-      examples: ["github", "repo"],
+      examples: ["github", "repo profile"],
       notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
+        'Use "repo" for the repository browser or "repo profile" for the GitHub profile.',
     },
     grep: {
       desc: "Search with regex patterns, wildcards, and flags.",
@@ -2979,7 +3057,7 @@ function getHelpDetails() {
         "ls | grep -v sudo",
       ],
       notes:
-        "Supports full regex: . * + ? ^ $ [ ] ( ) | \\. Flags: -i case-insensitive (default), -v invert match, -n line numbers, -c count only. Standalone searches projects, commands, and blog posts. In a pipe, filters output line-by-line.",
+        "Supports full regex: . * + ? ^ $ [ ] ( ) | \\. Flags: -i case-insensitive (default), -v invert match, -n line numbers, -c count only. Standalone searches projects, repository URLs, commands, and blog posts. In a pipe, filters output line-by-line.",
     },
     help: {
       desc: "Display a list of available commands with brief descriptions.",
@@ -3035,7 +3113,7 @@ function getHelpDetails() {
       usage: "repos",
       examples: ["repos"],
       notes:
-        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+        "Shows deployed projects, contributions to other repos, and more. Run 'repo' for the searchable repository browser.",
     },
     close: {
       desc: "Close the tmux-style projects split pane.",
@@ -3045,10 +3123,19 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Browse, filter, open, and clone configured GitHub repositories.",
+      usage: "repo [command|filter|name|number]",
+      examples: [
+        "repo",
+        "repo --systems",
+        "repo --lang C",
+        "repo show Unix-Permissions-Game",
+        "repo open 5",
+        "repo clone wordlehelper",
+        "repo profile",
+      ],
+      notes:
+        "Use --systems to surface low-level C/Assembly/Rust-style projects. Repository data comes from public/data/projects.json.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",
@@ -4190,6 +4277,17 @@ function initCLI() {
           completions = getAllPosts()
             .map((p) => p.slug)
             .filter((s) => s.startsWith(arg));
+        } else if (baseCmd === "repo") {
+          completions = [
+            "list",
+            "show",
+            "open",
+            "clone",
+            "profile",
+            "--systems",
+            "--lang",
+            "--search",
+          ].filter((s) => s.startsWith(arg));
         } else if (baseCmd === "delete") {
           completions = loadLocalPosts()
             .map((p) => p.slug)
