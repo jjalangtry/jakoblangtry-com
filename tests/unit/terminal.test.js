@@ -176,6 +176,20 @@ describe("terminal helpers", () => {
 
   it("parses repo browser commands", () => {
     expect(parseRepoCommand("")).toEqual({ action: "list", filters: {} });
+    expect(parseRepoCommand("help")).toEqual({ action: "help" });
+    expect(parseRepoCommand("github")).toEqual({ action: "profile" });
+    expect(parseRepoCommand("list")).toEqual({
+      action: "list",
+      filters: { languages: [], systems: false, search: "" },
+    });
+    expect(parseRepoCommand("--all")).toEqual({
+      action: "list",
+      filters: { languages: [], systems: false, search: "" },
+    });
+    expect(parseRepoCommand("systems")).toEqual({
+      action: "list",
+      filters: { languages: [], systems: true, search: "" },
+    });
     expect(parseRepoCommand("--systems")).toEqual({
       action: "list",
       filters: { languages: [], systems: true, search: "" },
@@ -184,11 +198,31 @@ describe("terminal helpers", () => {
       action: "list",
       filters: { languages: ["C"], systems: false, search: "ncurses" },
     });
+    expect(parseRepoCommand("--lang=Assembly")).toEqual({
+      action: "list",
+      filters: { languages: ["Assembly"], systems: false, search: "" },
+    });
+    expect(parseRepoCommand("--search=permissions")).toEqual({
+      action: "list",
+      filters: { languages: [], systems: false, search: "permissions" },
+    });
+    expect(parseRepoCommand("list permissions")).toEqual({
+      action: "list",
+      filters: { languages: [], systems: false, search: "permissions" },
+    });
     expect(parseRepoCommand('show "Unix-Permissions-Game"')).toEqual({
       action: "detail",
       target: "Unix-Permissions-Game",
     });
+    expect(parseRepoCommand("info NES-Pong")).toEqual({
+      action: "detail",
+      target: "NES-Pong",
+    });
     expect(parseRepoCommand("open 3")).toEqual({
+      action: "open",
+      target: "3",
+    });
+    expect(parseRepoCommand("browse 3")).toEqual({
       action: "open",
       target: "3",
     });
@@ -197,6 +231,34 @@ describe("terminal helpers", () => {
       target: "NES-Pong",
     });
     expect(parseRepoCommand("profile")).toEqual({ action: "profile" });
+    expect(parseRepoCommand("open")).toEqual({
+      action: "error",
+      message: "Usage: repo open [name|number]",
+    });
+    expect(parseRepoCommand("clone")).toEqual({
+      action: "error",
+      message: "Usage: repo clone [name|number]",
+    });
+    expect(parseRepoCommand("show")).toEqual({
+      action: "error",
+      message: "Usage: repo show [name|number]",
+    });
+    expect(parseRepoCommand("--lang")).toEqual({
+      action: "error",
+      message: "Usage: repo --lang [language]",
+    });
+    expect(parseRepoCommand("--lang=")).toEqual({
+      action: "error",
+      message: "Usage: repo --lang [language]",
+    });
+    expect(parseRepoCommand("--search")).toEqual({
+      action: "error",
+      message: "Usage: repo --search [term]",
+    });
+    expect(parseRepoCommand("--search=")).toEqual({
+      action: "error",
+      message: "Usage: repo --search [term]",
+    });
     expect(parseRepoCommand("--missing")).toEqual({
       action: "error",
       message: "Unknown repo option: --missing",
@@ -229,6 +291,13 @@ describe("terminal helpers", () => {
     expect(resolveRepositoryTarget("missing", repoGroups).error).toContain(
       "No repository found",
     );
+    expect(resolveRepositoryTarget("", repoGroups).error).toContain("Usage");
+    expect(resolveRepositoryTarget("99", repoGroups).error).toContain(
+      "No repository at index",
+    );
+    expect(resolveRepositoryTarget("github", repoGroups).error).toContain(
+      "Multiple repositories match",
+    );
     expect(resolveRepositoryTarget("converter", repoGroups).project.name).toBe(
       "Link Converter",
     );
@@ -242,6 +311,9 @@ describe("terminal helpers", () => {
     expect(output).toContain("NES-Pong");
     expect(output).not.toContain("read-faster");
     expect(output).toContain("repo open 5");
+    expect(
+      buildRepositoryBrowserOutput(repoGroups, { languages: ["Swift"] }),
+    ).toContain("Filters: lang=Swift");
     expect(buildRepositoryBrowserOutput({}, {})).toContain(
       "No repositories configured",
     );
@@ -264,6 +336,13 @@ describe("terminal helpers", () => {
     expect(output).toContain("Live:");
     expect(output).toContain("repo clone 1");
     expect(buildRepoHelpOutput()).toContain("repo --systems");
+    expect(buildRepositoryDetailOutput(null, 1)).toBeNull();
+    expect(getRepositoryUrl(null)).toBe("");
+    expect(getRepositoryUrl({ url: "https://example.com" })).toBe("");
+    expect(buildGitCloneCommand({ url: "https://example.com" })).toBe("");
+    expect(
+      buildGitCloneCommand({ repo: "https://git.example.com/team/repo" }),
+    ).toBe("git clone https://git.example.com/team/repo");
   });
 
   it("builds contribution chart ASCII from API data", () => {
@@ -901,6 +980,12 @@ describe("terminal helpers", () => {
   it("safeCalc returns error for invalid characters", () => {
     const result = safeCalc("require('fs')");
     expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc returns error for invalid expressions", () => {
+    expect(safeCalc("sqrt(")).toEqual({
+      error: "Could not evaluate expression.",
+    });
   });
 
   it("safeCalc handles division by zero as Infinity", () => {
