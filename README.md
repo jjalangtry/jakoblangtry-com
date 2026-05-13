@@ -25,8 +25,22 @@ Terminal-style personal website with command-driven navigation.
 ## Editable Content
 
 - Resume path: `public/data/site-config.json`
-- Project/domain list: `public/data/projects.json`
+- Project/domain/repository list: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
+
+## Terminal Repository Browser
+
+The `repo` command exposes the configured GitHub inventory from
+`public/data/projects.json`:
+
+```bash
+repo                  # list repositories
+repo --systems        # C/Assembly/Rust-style systems projects
+repo --lang C         # filter by language
+repo show wordlehelper
+repo open 5
+repo clone Unix-Permissions-Game
+```
 
 ## Build
 

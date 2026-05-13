@@ -25,11 +25,20 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoHelpOutput,
+  buildRepositoryBrowserOutput,
+  buildRepositoryDetailOutput,
   buildContributionChartAscii,
+  buildGitCloneCommand,
   estimateReadingTime,
+  filterRepositories,
+  flattenRepositoryGroups,
+  getRepositoryUrl,
   getRandomFortune,
   FORTUNE_QUOTES,
   flipText,
+  parseRepoCommand,
+  resolveRepositoryTarget,
   safeCalc,
   renderBigTime,
 } from "../../src/lib/terminal/index.js";
@@ -58,6 +67,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
+    expect(COMMAND_LIST).toContain("repo");
     expect(COMMAND_LIST).toContain("repos");
     expect(COMMAND_LIST).toContain("calc");
     expect(COMMAND_LIST).toContain("countdown");
@@ -108,6 +118,152 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  const repoGroups = {
+    featured: [
+      {
+        name: "Link Converter",
+        url: "https://convert.jjalangtry.com",
+        repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+        language: "TypeScript",
+        description: "Convert music links",
+      },
+    ],
+    contributions: [
+      {
+        name: "SSE Website",
+        url: "https://sse.rit.edu",
+        repo: "https://github.com/rit-sse/WebsiteTheSSEquel",
+        description: "Active contributor",
+      },
+    ],
+    github: [
+      {
+        name: "Unix-Permissions-Game",
+        url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+        language: "C",
+        description: "ncurses permissions quiz",
+      },
+      {
+        name: "NES-Pong",
+        url: "https://github.com/jjalangtry/NES-Pong",
+        language: "Assembly",
+        description: "Pong for the NES",
+      },
+      {
+        name: "read-faster",
+        url: "https://github.com/jjalangtry/read-faster",
+        language: "Swift",
+      },
+    ],
+  };
+
+  it("flattens repository groups with section metadata", () => {
+    const repos = flattenRepositoryGroups(repoGroups);
+    expect(repos).toHaveLength(5);
+    expect(repos[0]).toMatchObject({
+      name: "Link Converter",
+      section: "deployed",
+      index: 1,
+    });
+    expect(repos[2]).toMatchObject({
+      name: "Unix-Permissions-Game",
+      section: "github",
+      index: 3,
+    });
+  });
+
+  it("parses repo browser commands", () => {
+    expect(parseRepoCommand("")).toEqual({ action: "list", filters: {} });
+    expect(parseRepoCommand("--systems")).toEqual({
+      action: "list",
+      filters: { languages: [], systems: true, search: "" },
+    });
+    expect(parseRepoCommand("--lang C --search ncurses")).toEqual({
+      action: "list",
+      filters: { languages: ["C"], systems: false, search: "ncurses" },
+    });
+    expect(parseRepoCommand('show "Unix-Permissions-Game"')).toEqual({
+      action: "detail",
+      target: "Unix-Permissions-Game",
+    });
+    expect(parseRepoCommand("open 3")).toEqual({
+      action: "open",
+      target: "3",
+    });
+    expect(parseRepoCommand("clone NES-Pong")).toEqual({
+      action: "clone",
+      target: "NES-Pong",
+    });
+    expect(parseRepoCommand("profile")).toEqual({ action: "profile" });
+    expect(parseRepoCommand("--missing")).toEqual({
+      action: "error",
+      message: "Unknown repo option: --missing",
+    });
+  });
+
+  it("filters repositories by systems language, language, and search", () => {
+    const repos = flattenRepositoryGroups(repoGroups);
+    expect(
+      filterRepositories(repos, { systems: true }).map((r) => r.name),
+    ).toEqual(["Unix-Permissions-Game", "NES-Pong"]);
+    expect(
+      filterRepositories(repos, { languages: ["Swift"] }).map((r) => r.name),
+    ).toEqual(["read-faster"]);
+    expect(filterRepositories(repos, { search: "permissions" })[0].name).toBe(
+      "Unix-Permissions-Game",
+    );
+  });
+
+  it("resolves repository targets by number, name, slug, and basename", () => {
+    expect(resolveRepositoryTarget("3", repoGroups).project.name).toBe(
+      "Unix-Permissions-Game",
+    );
+    expect(
+      resolveRepositoryTarget("unix-permissions-game", repoGroups).project.name,
+    ).toBe("Unix-Permissions-Game");
+    expect(
+      resolveRepositoryTarget("WebsiteTheSSEquel", repoGroups).project.name,
+    ).toBe("SSE Website");
+    expect(resolveRepositoryTarget("missing", repoGroups).error).toContain(
+      "No repository found",
+    );
+    expect(resolveRepositoryTarget("converter", repoGroups).project.name).toBe(
+      "Link Converter",
+    );
+  });
+
+  it("builds repository browser output with actionable commands", () => {
+    const output = buildRepositoryBrowserOutput(repoGroups, { systems: true });
+    expect(output).toContain("Repository browser");
+    expect(output).toContain("Filters: systems");
+    expect(output).toContain("Unix-Permissions-Game");
+    expect(output).toContain("NES-Pong");
+    expect(output).not.toContain("read-faster");
+    expect(output).toContain("repo open 5");
+    expect(buildRepositoryBrowserOutput({}, {})).toContain(
+      "No repositories configured",
+    );
+    expect(
+      buildRepositoryBrowserOutput(repoGroups, { search: "zzz" }),
+    ).toContain("No repositories matched");
+  });
+
+  it("builds repository detail and clone commands", () => {
+    const target = resolveRepositoryTarget("Link Converter", repoGroups);
+    expect(getRepositoryUrl(target.project)).toBe(
+      "https://github.com/jjalangtry/convert-jakoblangtry-com",
+    );
+    expect(buildGitCloneCommand(target.project)).toBe(
+      "git clone https://github.com/jjalangtry/convert-jakoblangtry-com.git",
+    );
+    const output = buildRepositoryDetailOutput(target.project, target.index);
+    expect(output).toContain("Link Converter");
+    expect(output).toContain("Source:");
+    expect(output).toContain("Live:");
+    expect(output).toContain("repo clone 1");
+    expect(buildRepoHelpOutput()).toContain("repo --systems");
   });
 
   it("builds contribution chart ASCII from API data", () => {

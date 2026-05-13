@@ -96,6 +96,123 @@
       "url": "https://github.com/jjalangtry/python-sim-prototype",
       "description": "Simulation prototype",
       "language": "Python"
+    },
+    {
+      "name": "jjalangtry",
+      "url": "https://github.com/jjalangtry/jjalangtry",
+      "description": "GitHub profile README and account config"
+    },
+    {
+      "name": "jakoblangtry-com",
+      "url": "https://github.com/jjalangtry/jakoblangtry-com",
+      "description": "Terminal-style personal website and portfolio",
+      "language": "JavaScript"
+    },
+    {
+      "name": "mosaic",
+      "url": "https://github.com/jjalangtry/mosaic",
+      "description": "Collage studio for Instagram on macOS and iOS",
+      "language": "Swift"
+    },
+    {
+      "name": "t3code",
+      "url": "https://github.com/jjalangtry/t3code",
+      "description": "TypeScript project",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "openclaw-lark",
+      "url": "https://github.com/jjalangtry/openclaw-lark",
+      "description": "Fork of an OpenClaw Feishu/Lark channel plugin",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "kana-dojo",
+      "url": "https://github.com/jjalangtry/kana-dojo",
+      "description": "Fork of a platform for learning Japanese kana",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "openui",
+      "url": "https://github.com/jjalangtry/openui",
+      "description": "Fork of the OpenUI generative UI standard",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "caliber",
+      "url": "https://github.com/jjalangtry/caliber",
+      "description": "Fork of an AI agent config generator",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "skales",
+      "url": "https://github.com/jjalangtry/skales",
+      "description": "Fork of an AI desktop agent",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "resume",
+      "url": "https://github.com/jjalangtry/resume",
+      "description": "Resume site source",
+      "language": "Astro"
+    },
+    {
+      "name": "instructor",
+      "url": "https://github.com/jjalangtry/instructor",
+      "description": "Fork of structured output helpers for LLMs",
+      "language": "Python",
+      "fork": true
+    },
+    {
+      "name": "cue.rit.edu",
+      "url": "https://github.com/jjalangtry/cue.rit.edu",
+      "description": "RIT CUE website source"
+    },
+    {
+      "name": "desolate",
+      "url": "https://github.com/jjalangtry/desolate",
+      "description": "Band website"
+    },
+    {
+      "name": "SSEqualNative",
+      "url": "https://github.com/jjalangtry/SSEqualNative",
+      "description": "Native client project"
+    },
+    {
+      "name": "treeplum",
+      "url": "https://github.com/jjalangtry/treeplum",
+      "description": "Tree website",
+      "language": "HTML"
+    },
+    {
+      "name": "samfrostisstillworking",
+      "url": "https://github.com/jjalangtry/samfrostisstillworking",
+      "description": "Personal website project",
+      "language": "HTML"
+    },
+    {
+      "name": "aprilfools",
+      "url": "https://github.com/jjalangtry/aprilfools",
+      "description": "April Fools web project",
+      "language": "JavaScript"
+    },
+    {
+      "name": "applemusic-spotify-link",
+      "url": "https://github.com/jjalangtry/applemusic-spotify-link",
+      "description": "Find a matching Spotify link from an Apple Music URL",
+      "language": "JavaScript"
+    },
+    {
+      "name": "jl-test-node-app",
+      "url": "https://github.com/jjalangtry/jl-test-node-app",
+      "description": "Node app test project",
+      "language": "HTML"
     }
   ]
 }

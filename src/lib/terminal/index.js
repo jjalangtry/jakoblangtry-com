@@ -513,9 +513,387 @@ export function buildReposOutput(projectGroups) {
   }
 
   lines.push("├" + "─".repeat(W) + "┤");
-  lines.push(row(" Tip: 'projects' for full pane  ·  github.com/JJALANGTRY"));
+  lines.push(row(" Tip: 'repo --systems' for low-level repos"));
   lines.push("└" + "─".repeat(W) + "┘");
   return lines.join("\n");
+}
+
+const SYSTEMS_REPOSITORY_LANGUAGES = new Set([
+  "assembly",
+  "c",
+  "c++",
+  "go",
+  "rust",
+  "zig",
+]);
+
+function stripProtocol(url) {
+  return String(url || "")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
+}
+
+function repoSlug(project) {
+  return String(project?.name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function repoBasename(project) {
+  const url = getRepositoryUrl(project) || project?.url || "";
+  const cleaned = stripProtocol(url).replace(/\.git$/i, "");
+  const parts = cleaned.split("/").filter(Boolean);
+  return (parts[parts.length - 1] || "").toLowerCase();
+}
+
+function tokenizeRepoArgs(argsString) {
+  const tokens = [];
+  let current = "";
+  let quote = null;
+
+  for (const ch of String(argsString || "")) {
+    if ((ch === '"' || ch === "'") && !quote) {
+      quote = ch;
+    } else if (ch === quote) {
+      quote = null;
+    } else if (/\s/.test(ch) && !quote) {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+    } else {
+      current += ch;
+    }
+  }
+
+  if (current) tokens.push(current);
+  return tokens;
+}
+
+export function flattenRepositoryGroups(projectGroups) {
+  const groups = projectGroups || {};
+  const sections = [
+    ["featured", "deployed"],
+    ["contributions", "contribution"],
+    ["github", "github"],
+  ];
+  const repos = [];
+
+  sections.forEach(([key, label]) => {
+    const items = Array.isArray(groups[key]) ? groups[key] : [];
+    items.forEach((project) => {
+      if (!project || !project.name) return;
+      repos.push({
+        ...project,
+        section: label,
+        index: repos.length + 1,
+      });
+    });
+  });
+
+  return repos;
+}
+
+export function getRepositoryUrl(project) {
+  if (!project) return "";
+  if (project.repo) return project.repo;
+  const url = project.url || "";
+  return /^https?:\/\/github\.com\//i.test(url) ? url : "";
+}
+
+export function buildGitCloneCommand(project) {
+  const repoUrl = getRepositoryUrl(project);
+  if (!repoUrl) return "";
+
+  const cleaned = repoUrl.replace(/\/$/, "");
+  if (/^https:\/\/github\.com\/[^/]+\/[^/]+$/i.test(cleaned)) {
+    return `git clone ${cleaned}.git`;
+  }
+  return `git clone ${cleaned}`;
+}
+
+export function parseRepoCommand(argsString) {
+  const tokens = tokenizeRepoArgs(argsString);
+  if (tokens.length === 0) {
+    return { action: "list", filters: {} };
+  }
+
+  const first = tokens[0].toLowerCase();
+  if (first === "--help" || first === "-h" || first === "help") {
+    return { action: "help" };
+  }
+  if (first === "profile" || first === "github") {
+    return { action: "profile" };
+  }
+  if (first === "open" || first === "browse") {
+    const target = tokens.slice(1).join(" ").trim();
+    return target
+      ? { action: "open", target }
+      : { action: "error", message: "Usage: repo open [name|number]" };
+  }
+  if (first === "clone") {
+    const target = tokens.slice(1).join(" ").trim();
+    return target
+      ? { action: "clone", target }
+      : { action: "error", message: "Usage: repo clone [name|number]" };
+  }
+  if (first === "show" || first === "info" || first === "detail") {
+    const target = tokens.slice(1).join(" ").trim();
+    return target
+      ? { action: "detail", target }
+      : { action: "error", message: "Usage: repo show [name|number]" };
+  }
+
+  const filters = { languages: [], systems: false, search: "" };
+  const positional = [];
+  let hasListToken = false;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    const lower = token.toLowerCase();
+
+    if (lower === "list" || lower === "--all") {
+      hasListToken = true;
+    } else if (lower === "--systems" || lower === "systems") {
+      filters.systems = true;
+    } else if (lower === "--lang" || lower === "-l") {
+      const language = tokens[i + 1];
+      if (!language) {
+        return { action: "error", message: "Usage: repo --lang [language]" };
+      }
+      filters.languages.push(language);
+      i++;
+    } else if (lower.startsWith("--lang=")) {
+      const language = token.slice(7).trim();
+      if (!language) {
+        return { action: "error", message: "Usage: repo --lang [language]" };
+      }
+      filters.languages.push(language);
+    } else if (lower === "--search" || lower === "-s") {
+      const search = tokens[i + 1];
+      if (!search) {
+        return { action: "error", message: "Usage: repo --search [term]" };
+      }
+      filters.search = search;
+      i++;
+    } else if (lower.startsWith("--search=")) {
+      const search = token.slice(9).trim();
+      if (!search) {
+        return { action: "error", message: "Usage: repo --search [term]" };
+      }
+      filters.search = search;
+    } else if (lower.startsWith("-")) {
+      return { action: "error", message: `Unknown repo option: ${token}` };
+    } else {
+      positional.push(token);
+    }
+  }
+
+  const hasFilters =
+    filters.systems || filters.languages.length > 0 || Boolean(filters.search);
+  if (hasFilters || hasListToken) {
+    if (positional.length > 0 && !filters.search) {
+      filters.search = positional.join(" ");
+    }
+    return { action: "list", filters };
+  }
+
+  return { action: "detail", target: positional.join(" ") };
+}
+
+export function filterRepositories(repositories, filters = {}) {
+  let result = Array.isArray(repositories) ? repositories : [];
+
+  if (filters.systems) {
+    result = result.filter((repo) =>
+      SYSTEMS_REPOSITORY_LANGUAGES.has(
+        String(repo.language || "").toLowerCase(),
+      ),
+    );
+  }
+
+  if (Array.isArray(filters.languages) && filters.languages.length > 0) {
+    const languageSet = new Set(
+      filters.languages.map((lang) => String(lang).toLowerCase()),
+    );
+    result = result.filter((repo) =>
+      languageSet.has(String(repo.language || "").toLowerCase()),
+    );
+  }
+
+  if (filters.search) {
+    const term = String(filters.search).toLowerCase();
+    result = result.filter((repo) =>
+      [
+        repo.name,
+        repo.description,
+        repo.language,
+        repo.url,
+        repo.repo,
+        repo.section,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(term),
+    );
+  }
+
+  return result;
+}
+
+export function resolveRepositoryTarget(target, projectGroups) {
+  const repositories = flattenRepositoryGroups(projectGroups);
+  const rawTarget = String(target || "").trim();
+  const normalized = rawTarget.toLowerCase();
+
+  if (!normalized) {
+    return { error: "Usage: repo [name|number]" };
+  }
+
+  if (/^\d+$/.test(normalized)) {
+    const index = Number(normalized);
+    const project = repositories[index - 1];
+    return project
+      ? { project, index }
+      : { error: `No repository at index ${index}. Run 'repo' to list repos.` };
+  }
+
+  const exact = repositories.find((repo) => {
+    const name = String(repo.name || "").toLowerCase();
+    return (
+      name === normalized ||
+      repoSlug(repo) === normalized ||
+      repoBasename(repo) === normalized
+    );
+  });
+  if (exact) return { project: exact, index: exact.index };
+
+  const partial = repositories.filter((repo) => {
+    const haystack = [
+      repo.name,
+      repoSlug(repo),
+      repoBasename(repo),
+      repo.description,
+      getRepositoryUrl(repo),
+      repo.url,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(normalized);
+  });
+
+  if (partial.length === 1) {
+    return { project: partial[0], index: partial[0].index };
+  }
+  if (partial.length > 1) {
+    return {
+      error: `Multiple repositories match '${rawTarget}': ${partial
+        .slice(0, 5)
+        .map((repo) => `${repo.index}. ${repo.name}`)
+        .join(", ")}`,
+    };
+  }
+
+  return {
+    error: `No repository found for '${rawTarget}'. Run 'repo' to list repos.`,
+  };
+}
+
+export function buildRepositoryBrowserOutput(projectGroups, filters = {}) {
+  const repositories = flattenRepositoryGroups(projectGroups);
+  if (repositories.length === 0) {
+    return "No repositories configured. Add entries to public/data/projects.json.";
+  }
+
+  const filtered = filterRepositories(repositories, filters);
+  if (filtered.length === 0) {
+    return "No repositories matched. Try 'repo', 'repo --systems', or 'repo --lang C'.";
+  }
+
+  const activeFilters = [];
+  if (filters.systems) activeFilters.push("systems");
+  if (filters.languages?.length)
+    activeFilters.push(`lang=${filters.languages.join(",")}`);
+  if (filters.search) activeFilters.push(`search=${filters.search}`);
+
+  const lines = [
+    "Repository browser",
+    activeFilters.length > 0 ? `Filters: ${activeFilters.join("  ")}` : "",
+    "",
+    "  #  name                         lang        section       source",
+    "  -- ---------------------------- ----------- ------------ ---------------------------",
+  ].filter((line) => line !== "");
+
+  filtered.forEach((repo) => {
+    const source = stripProtocol(getRepositoryUrl(repo) || repo.url);
+    const fork = repo.fork ? " fork" : "";
+    lines.push(
+      `  ${String(repo.index).padStart(2)} ${String(
+        repo.name || "Untitled",
+      ).padEnd(28)} ${String(repo.language || "-").padEnd(11)} ${String(
+        repo.section || "-",
+      ).padEnd(12)} ${source}${fork}`,
+    );
+  });
+
+  lines.push("");
+  lines.push(
+    "Try: repo show 5  |  repo open 5  |  repo clone 5  |  repo --systems",
+  );
+  return lines.join("\n");
+}
+
+export function buildRepositoryDetailOutput(project, index) {
+  if (!project) return null;
+
+  const repoUrl = getRepositoryUrl(project);
+  const liveUrl = project.url && project.url !== repoUrl ? project.url : "";
+  const cloneCommand = buildGitCloneCommand(project);
+  const lines = [
+    `${project.name}`,
+    "─".repeat(String(project.name).length),
+    `Index:       ${index || project.index || "-"}`,
+    `Section:     ${project.section || "github"}`,
+  ];
+
+  if (project.language) lines.push(`Language:    ${project.language}`);
+  if (project.fork) lines.push("Type:        fork");
+  if (project.description) lines.push(`Summary:     ${project.description}`);
+  if (repoUrl) lines.push(`Source:      ${repoUrl}`);
+  if (liveUrl) lines.push(`Live:        ${liveUrl}`);
+  if (cloneCommand) lines.push(`Clone:       ${cloneCommand}`);
+
+  lines.push("");
+  lines.push(
+    `Commands:    repo open ${index || project.index || project.name}`,
+  );
+  if (cloneCommand) {
+    lines.push(
+      `             repo clone ${index || project.index || project.name}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+export function buildRepoHelpOutput() {
+  return [
+    "Usage: repo [command|filter|name|number]",
+    "",
+    "Commands:",
+    "  repo                     List configured repositories",
+    "  repo show [name|number]  Show repository details",
+    "  repo open [name|number]  Open the source repository",
+    "  repo clone [name|number] Print a git clone command",
+    "  repo profile             Open the GitHub profile",
+    "",
+    "Filters:",
+    "  repo --systems           Show low-level systems repos (C, Assembly, Rust, etc.)",
+    "  repo --lang C            Show repositories by language",
+    "  repo --search ncurses    Search names, descriptions, languages, and URLs",
+  ].join("\n");
 }
 
 /**
