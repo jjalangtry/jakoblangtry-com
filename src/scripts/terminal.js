@@ -14,9 +14,16 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoCloneCommand,
+  buildRepoDetailOutput,
+  buildRepoHelpOutput,
+  buildRepoListOutput,
   buildContributionChartAscii,
   getRandomFortune,
   flipText,
+  normalizeRepoGroups,
+  parseRepoCommandArgs,
+  resolveRepoIdentifier,
   safeCalc,
   renderBigTime,
 } from "../lib/terminal/index.js";
@@ -770,6 +777,56 @@ function openResume() {
   window.open(resumeUrl, "_blank");
 }
 
+function executeRepoCommand(argsString = "") {
+  const parsed = parseRepoCommandArgs(argsString);
+  const repos = normalizeRepoGroups(terminalData.projectGroups);
+
+  if (parsed.action === "error") {
+    appendOutput(`${parsed.message}\n\n${buildRepoHelpOutput()}`, "error-text");
+    return;
+  }
+
+  if (parsed.action === "help") {
+    appendOutput(buildRepoHelpOutput(), "info-text");
+    return;
+  }
+
+  if (parsed.action === "list") {
+    appendOutput(
+      buildRepoListOutput(terminalData.projectGroups, parsed.filters),
+      "info-text",
+    );
+    return;
+  }
+
+  if (!parsed.identifier) {
+    appendOutput(buildRepoHelpOutput(), "info-text");
+    return;
+  }
+
+  const repo = resolveRepoIdentifier(repos, parsed.identifier);
+  if (!repo) {
+    appendOutput(
+      `Repository not found: ${parsed.identifier}\nTry 'repo' to list available repositories.`,
+      "error-text",
+    );
+    return;
+  }
+
+  if (parsed.action === "open") {
+    appendOutput(`Opening ${repo.name} repository...`);
+    window.open(repo.repoUrl, "_blank");
+    return;
+  }
+
+  if (parsed.action === "clone") {
+    appendOutput(buildRepoCloneCommand(repo), "info-text");
+    return;
+  }
+
+  appendOutput(buildRepoDetailOutput(repo), "info-text");
+}
+
 /**
  * Executes a command entered in the terminal interface.
  * @param {string} command - The command to execute.
@@ -799,10 +856,11 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
-  resume      view resume           grep        regex search/pipe
-  blog        read blog posts       matrix      digital rain
-  projects    projects pane         qr          QR code generator
+  repo        repo browser          fortune     random quote
+  repos       github overview       grep        regex search/pipe
+  resume      view resume           matrix      digital rain
+  blog        read blog posts       qr          QR code generator
+  projects    projects pane
   close       close pane            weather     weather forecast
                                     snake       play snake
 
@@ -891,7 +949,10 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput(
+        "alias repos='github overview'\nalias exit='close'",
+        "info-text",
+      );
       break;
     case "skills":
       displaySkills();
@@ -1023,6 +1084,9 @@ Currently seeking opportunities in software engineering.`,
       appendOutput(buildReposOutput(terminalData.projectGroups), "info-text");
       fetchContributionChart();
       break;
+    case "repo":
+      executeRepoCommand();
+      break;
     case "close":
     case "exit":
       if (tmuxActive) {
@@ -1031,11 +1095,6 @@ Currently seeking opportunities in software engineering.`,
       } else {
         appendOutput("No pane to close.", "info-text");
       }
-      break;
-    case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1093,6 +1152,9 @@ Currently seeking opportunities in software engineering.`,
         }
 
         executeCurlCommand(args);
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        executeRepoCommand(command.substring(5).trim());
         break;
       } else if (normalizedCommand.startsWith("qr ")) {
         const target = command.substring(3).trim();
@@ -3045,10 +3107,19 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Browse Jakob's public repositories from the terminal.",
+      usage:
+        "repo [list|<id|name>|open|clone] [--systems] [--lang language] [--search term]",
+      examples: [
+        "repo",
+        "repo --systems",
+        "repo --lang C",
+        "repo jakobs-ls-remake",
+        "repo open NES-Pong",
+        "repo clone 7",
+      ],
+      notes:
+        "Indexes deployed projects, contributions, and public GitHub repositories. Systems-programming projects are marked in list output.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",
@@ -4198,6 +4269,44 @@ function initCLI() {
           completions = ["dark", "light"].filter((s) => s.startsWith(arg));
         } else if (baseCmd === "man" || baseCmd === "help") {
           completions = commandList.filter((c) => c.startsWith(arg));
+        } else if (baseCmd === "repo") {
+          const repoNames = normalizeRepoGroups(terminalData.projectGroups).map(
+            (repo) => repo.name.toLowerCase(),
+          );
+          if (arg.startsWith("open ")) {
+            const repoArg = arg.substring(5);
+            completions = repoNames
+              .filter((name) => name.startsWith(repoArg))
+              .map((name) => `open ${name}`);
+          } else if (arg.startsWith("clone ")) {
+            const repoArg = arg.substring(6);
+            completions = repoNames
+              .filter((name) => name.startsWith(repoArg))
+              .map((name) => `clone ${name}`);
+          } else if (arg.startsWith("--lang ")) {
+            const langArg = arg.substring(7);
+            const languages = [
+              ...new Set(
+                normalizeRepoGroups(terminalData.projectGroups)
+                  .map((repo) => repo.language)
+                  .filter(Boolean)
+                  .map((language) => language.toLowerCase()),
+              ),
+            ];
+            completions = languages
+              .filter((language) => language.startsWith(langArg))
+              .map((language) => `--lang ${language}`);
+          } else {
+            completions = [
+              "list",
+              "open",
+              "clone",
+              "--systems",
+              "--lang",
+              "--search",
+              ...repoNames,
+            ].filter((item) => item.startsWith(arg));
+          }
         } else if (currentLower.startsWith("skills --category ")) {
           const catArg = currentLower.substring(18);
           completions = (terminalData.skills || [])

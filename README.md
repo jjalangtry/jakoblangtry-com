@@ -28,6 +28,23 @@ Terminal-style personal website with command-driven navigation.
 - Project/domain list: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
 
+## Terminal Repository Browser
+
+The `repo` command turns the site into a GitHub repository browser:
+
+```bash
+repo                  # list indexed repositories
+repo --systems        # highlight systems-programming work
+repo --lang C         # filter by language
+repo --search unix    # search names/descriptions/URLs
+repo NES-Pong         # show details
+repo open 4           # open a repository
+repo clone wordlehelper
+```
+
+Repository metadata lives in `public/data/projects.json` and is embedded into
+the terminal at build time.
+
 ## Build
 
 ```bash
