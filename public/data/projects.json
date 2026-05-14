@@ -11,7 +11,7 @@
       "name": "Playlist Converter",
       "url": "https://playlist.jjalangtry.com",
       "repo": "https://github.com/jjalangtry/playlist",
-      "description": "Convert and share playlists between Spotify and Apple Music — no sign-in required",
+      "description": "Convert and share playlists between Spotify and Apple Music \u2014 no sign-in required",
       "language": "TypeScript"
     },
     {
@@ -27,20 +27,136 @@
       "name": "SSE RIT Website",
       "url": "https://sse.rit.edu",
       "repo": "https://github.com/rit-sse/WebsiteTheSSEquel",
-      "description": "The official RIT Society of Software Engineers website — active contributor"
+      "description": "The official RIT Society of Software Engineers website \u2014 active contributor"
     },
     {
       "name": "BeyondRGB",
       "url": "https://github.com/BeyondRGB/beyondrgb.github.io",
       "repo": "https://github.com/BeyondRGB/beyondrgb.github.io",
-      "description": "Open-source multispectral imaging research tool — major contributor"
+      "description": "Open-source multispectral imaging research tool \u2014 major contributor"
     }
   ],
   "github": [
     {
+      "name": "jjalangtry",
+      "url": "https://github.com/jjalangtry/jjalangtry",
+      "description": "Config files for my GitHub profile"
+    },
+    {
+      "name": "jakoblangtry-com",
+      "url": "https://github.com/jjalangtry/jakoblangtry-com",
+      "description": "Terminal-style personal website and portfolio",
+      "language": "JavaScript"
+    },
+    {
+      "name": "mosaic",
+      "url": "https://github.com/jjalangtry/mosaic",
+      "description": "Collage studio for Instagram on macOS and iOS",
+      "language": "Swift"
+    },
+    {
+      "name": "t3code",
+      "url": "https://github.com/jjalangtry/t3code",
+      "description": "TypeScript project workspace",
+      "language": "TypeScript"
+    },
+    {
+      "name": "openclaw-lark",
+      "url": "https://github.com/jjalangtry/openclaw-lark",
+      "description": "OpenClaw Feishu/Lark channel plugin",
+      "language": "TypeScript"
+    },
+    {
+      "name": "kana-dojo",
+      "url": "https://github.com/jjalangtry/kana-dojo",
+      "description": "Minimal Japanese-learning platform inspired by Duolingo and Monkeytype",
+      "language": "TypeScript"
+    },
+    {
+      "name": "openui",
+      "url": "https://github.com/jjalangtry/openui",
+      "description": "The Open Standard for Generative UI",
+      "language": "TypeScript"
+    },
+    {
+      "name": "caliber",
+      "url": "https://github.com/jjalangtry/caliber",
+      "description": "Generate optimized AI agent configs for Claude Code, Cursor, and Codex",
+      "language": "TypeScript"
+    },
+    {
+      "name": "skales",
+      "url": "https://github.com/jjalangtry/skales",
+      "description": "AI desktop agent for Windows, macOS, and Linux",
+      "language": "TypeScript"
+    },
+    {
+      "name": "resume",
+      "url": "https://github.com/jjalangtry/resume",
+      "description": "Resume website source",
+      "language": "Astro"
+    },
+    {
+      "name": "instructor",
+      "url": "https://github.com/jjalangtry/instructor",
+      "description": "Structured outputs for LLMs",
+      "language": "Python"
+    },
+    {
+      "name": "cue.rit.edu",
+      "url": "https://github.com/jjalangtry/cue.rit.edu",
+      "description": "CUE RIT website source"
+    },
+    {
+      "name": "desolate",
+      "url": "https://github.com/jjalangtry/desolate",
+      "description": "Band website for Desolate"
+    },
+    {
       "name": "read-faster",
       "url": "https://github.com/jjalangtry/read-faster",
       "description": "RSVP speed reading app for Mac and iOS",
+      "language": "Swift"
+    },
+    {
+      "name": "jakobs-ls-remake",
+      "url": "https://github.com/jjalangtry/jakobs-ls-remake",
+      "description": "Reimplementation of ls using low-level C systems programming",
+      "language": "C"
+    },
+    {
+      "name": "SSEqualNative",
+      "url": "https://github.com/jjalangtry/SSEqualNative",
+      "description": "Native app experiment for SSEqual"
+    },
+    {
+      "name": "python-sim-prototype",
+      "url": "https://github.com/jjalangtry/python-sim-prototype",
+      "description": "Simulation prototype",
+      "language": "Python"
+    },
+    {
+      "name": "treeplum",
+      "url": "https://github.com/jjalangtry/treeplum",
+      "description": "Trees website",
+      "language": "HTML"
+    },
+    {
+      "name": "samfrostisstillworking",
+      "url": "https://github.com/jjalangtry/samfrostisstillworking",
+      "description": "Static site project",
+      "language": "HTML"
+    },
+    {
+      "name": "aprilfools",
+      "url": "https://github.com/jjalangtry/aprilfools",
+      "description": "April Fools web project",
+      "language": "JavaScript"
+    },
+    {
+      "name": "nudge-app",
+      "url": "https://github.com/jjalangtry/nudge-app",
+      "description": "Native iOS app built with Swift",
       "language": "Swift"
     },
     {
@@ -50,40 +166,16 @@
       "language": "Assembly"
     },
     {
-      "name": "nudge-app",
-      "url": "https://github.com/jjalangtry/nudge-app",
-      "description": "Native iOS app built with Swift",
-      "language": "Swift"
+      "name": "applemusic-spotify-link",
+      "url": "https://github.com/jjalangtry/applemusic-spotify-link",
+      "description": "Find and copy the corresponding Spotify link for an Apple Music link",
+      "language": "JavaScript"
     },
     {
-      "name": "Dice-E-Store",
-      "url": "https://github.com/jjalangtry/Dice-E-Store",
-      "description": "Full-stack e-commerce store — Angular frontend, Java backend",
-      "language": "Java"
-    },
-    {
-      "name": "Unix-Permissions-Game",
-      "url": "https://github.com/jjalangtry/Unix-Permissions-Game",
-      "description": "ncurses quiz game for unix permission strings and octal",
-      "language": "C"
-    },
-    {
-      "name": "wordlehelper",
-      "url": "https://github.com/jjalangtry/wordlehelper",
-      "description": "Wordle solver — an exercise in systems programming",
-      "language": "C"
-    },
-    {
-      "name": "jakobs-ls-remake",
-      "url": "https://github.com/jjalangtry/jakobs-ls-remake",
-      "description": "Reimplementation of ls using low-level C",
-      "language": "C"
-    },
-    {
-      "name": "utmpMangler",
-      "url": "https://github.com/jjalangtry/utmpMangler",
-      "description": "Filter, organize, and search through utmp files",
-      "language": "C"
+      "name": "jl-test-node-app",
+      "url": "https://github.com/jjalangtry/jl-test-node-app",
+      "description": "Node app test project",
+      "language": "HTML"
     },
     {
       "name": "Grade-Figure-Outerer",
@@ -92,10 +184,28 @@
       "language": "Shell"
     },
     {
-      "name": "python-sim-prototype",
-      "url": "https://github.com/jjalangtry/python-sim-prototype",
-      "description": "Simulation prototype",
-      "language": "Python"
+      "name": "Unix-Permissions-Game",
+      "url": "https://github.com/jjalangtry/Unix-Permissions-Game",
+      "description": "ncurses quiz game for Unix permission strings and octal",
+      "language": "C"
+    },
+    {
+      "name": "Dice-E-Store",
+      "url": "https://github.com/jjalangtry/Dice-E-Store",
+      "description": "Full-stack e-commerce store with Angular and Java",
+      "language": "Java"
+    },
+    {
+      "name": "utmpMangler",
+      "url": "https://github.com/jjalangtry/utmpMangler",
+      "description": "Filter, organize, and search through utmp files",
+      "language": "C"
+    },
+    {
+      "name": "wordlehelper",
+      "url": "https://github.com/jjalangtry/wordlehelper",
+      "description": "Wordle helper built as a systems programming exercise",
+      "language": "C"
     }
   ]
 }
