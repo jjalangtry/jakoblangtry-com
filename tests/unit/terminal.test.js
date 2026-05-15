@@ -25,6 +25,14 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  flattenRepoGroups,
+  isSystemsRepo,
+  parseRepoCommand,
+  filterRepos,
+  buildRepoListOutput,
+  resolveRepo,
+  getRepoCloneUrl,
+  buildRepoDetailOutput,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -108,6 +116,189 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  const repoGroups = {
+    featured: [
+      {
+        name: "Link Converter",
+        url: "https://convert.jjalangtry.com",
+        repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+        language: "TypeScript",
+        description: "Convert music links",
+      },
+    ],
+    contributions: [
+      {
+        name: "BeyondRGB",
+        url: "https://github.com/BeyondRGB/beyondrgb.github.io",
+        repo: "https://github.com/BeyondRGB/beyondrgb.github.io",
+        description: "Multispectral imaging research tool",
+      },
+    ],
+    github: [
+      {
+        name: "jakobs-ls-remake",
+        url: "https://github.com/jjalangtry/jakobs-ls-remake",
+        language: "C",
+        description: "Reimplementation of ls using low-level C",
+      },
+      {
+        name: "Unix-Permissions-Game",
+        url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+        language: "C",
+        description: "ncurses quiz game for unix permissions",
+      },
+      {
+        name: "read-faster",
+        url: "https://github.com/jjalangtry/read-faster",
+        language: "Swift",
+        description: "RSVP speed reading app",
+      },
+    ],
+  };
+
+  it("flattens repository groups with stable ids and clone targets", () => {
+    const repos = flattenRepoGroups(repoGroups);
+
+    expect(repos).toHaveLength(5);
+    expect(repos[0]).toMatchObject({
+      id: 1,
+      name: "Link Converter",
+      group: "featured",
+      groupLabel: "deployed",
+      repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+    });
+    expect(repos[2]).toMatchObject({
+      id: 3,
+      name: "jakobs-ls-remake",
+      groupLabel: "github",
+    });
+    expect(flattenRepoGroups({ github: [null, { name: "" }] })).toEqual([]);
+  });
+
+  it("detects systems repositories by language and description", () => {
+    expect(isSystemsRepo({ language: "C" })).toBe(true);
+    expect(isSystemsRepo({ language: "Assembly" })).toBe(true);
+    expect(isSystemsRepo({ description: "low-level unix tool" })).toBe(true);
+    expect(isSystemsRepo({ language: "Swift", description: "iOS app" })).toBe(
+      false,
+    );
+    expect(isSystemsRepo(null)).toBe(false);
+  });
+
+  it("parses repo command variants and validation errors", () => {
+    expect(parseRepoCommand("")).toEqual({
+      action: "list",
+      systems: false,
+      language: "",
+      search: "",
+      target: "",
+      error: "",
+    });
+    expect(parseRepoCommand("--help")).toMatchObject({ action: "help" });
+    expect(parseRepoCommand("open jakobs-ls-remake")).toMatchObject({
+      action: "open",
+      target: "jakobs-ls-remake",
+    });
+    expect(parseRepoCommand("clone")).toMatchObject({
+      action: "clone",
+      error: "Usage: repo clone [number|name]",
+    });
+    expect(parseRepoCommand("show 'Unix-Permissions-Game'")).toMatchObject({
+      action: "show",
+      target: "Unix-Permissions-Game",
+    });
+    expect(parseRepoCommand("list --systems --lang=C")).toMatchObject({
+      action: "list",
+      systems: true,
+      language: "C",
+    });
+    expect(
+      parseRepoCommand("--language Swift --search read faster"),
+    ).toMatchObject({
+      language: "Swift",
+      search: "read faster",
+    });
+    expect(parseRepoCommand("--lang")).toMatchObject({
+      error: "Usage: repo --lang [language]",
+    });
+    expect(parseRepoCommand("--search")).toMatchObject({
+      error: "Usage: repo --search [term]",
+    });
+    expect(parseRepoCommand("--unknown")).toMatchObject({
+      error: "Unknown repo option: --unknown",
+    });
+    expect(parseRepoCommand("jakobs-ls-remake")).toMatchObject({
+      action: "show",
+      target: "jakobs-ls-remake",
+    });
+  });
+
+  it("filters and renders repository explorer output", () => {
+    const repos = flattenRepoGroups(repoGroups);
+
+    expect(
+      filterRepos(repos, { systems: true }).map((repo) => repo.name),
+    ).toEqual(["jakobs-ls-remake", "Unix-Permissions-Game"]);
+    expect(
+      filterRepos(repos, { language: "swift" }).map((repo) => repo.name),
+    ).toEqual(["read-faster"]);
+    expect(
+      filterRepos(repos, { search: "music" }).map((repo) => repo.name),
+    ).toEqual(["Link Converter"]);
+    expect(filterRepos(null)).toEqual([]);
+
+    const systemsOutput = buildRepoListOutput(repoGroups, { systems: true });
+    expect(systemsOutput).toContain("Repository Explorer");
+    expect(systemsOutput).toContain("Showing 2 of 5 repos");
+    expect(systemsOutput).toContain("jakobs-ls-remake");
+    expect(systemsOutput).not.toContain("read-faster");
+
+    expect(
+      buildRepoListOutput(repoGroups, { search: "does-not-exist" }),
+    ).toContain("No repositories match");
+    expect(buildRepoListOutput({ featured: [], github: [] })).toBe(
+      "No repositories configured yet.",
+    );
+  });
+
+  it("resolves repositories by id, exact name, slug, and partial matches", () => {
+    expect(resolveRepo(repoGroups, "3").repo.name).toBe("jakobs-ls-remake");
+    expect(resolveRepo(repoGroups, "Unix-Permissions-Game").repo.id).toBe(4);
+    expect(resolveRepo(repoGroups, "unix permissions game").repo.name).toBe(
+      "Unix-Permissions-Game",
+    );
+    expect(resolveRepo(repoGroups, "read").repo.name).toBe("read-faster");
+
+    const ambiguous = resolveRepo(repoGroups, "e");
+    expect(ambiguous.repo).toBeNull();
+    expect(ambiguous.matches.length).toBeGreaterThan(1);
+
+    expect(resolveRepo(repoGroups, "99")).toEqual({ repo: null, matches: [] });
+    expect(resolveRepo(repoGroups, "")).toEqual({ repo: null, matches: [] });
+  });
+
+  it("builds repository detail and clone output", () => {
+    const repo = resolveRepo(repoGroups, "1").repo;
+    const detail = buildRepoDetailOutput(repo);
+
+    expect(detail).toContain("repo #1: Link Converter");
+    expect(detail).toContain("website:     https://convert.jjalangtry.com");
+    expect(detail).toContain(
+      "repository:  https://github.com/jjalangtry/convert-jakoblangtry-com",
+    );
+    expect(detail).toContain(
+      "clone:       git clone https://github.com/jjalangtry/convert-jakoblangtry-com.git",
+    );
+    expect(getRepoCloneUrl({ repo: "https://github.com/a/b.git" })).toBe(
+      "https://github.com/a/b.git",
+    );
+    expect(getRepoCloneUrl({ url: "https://example.com/project" })).toBe(
+      "https://example.com/project",
+    );
+    expect(getRepoCloneUrl(null)).toBe("");
+    expect(buildRepoDetailOutput(null)).toBeNull();
   });
 
   it("builds contribution chart ASCII from API data", () => {

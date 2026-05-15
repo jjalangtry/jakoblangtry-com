@@ -28,6 +28,22 @@ Terminal-style personal website with command-driven navigation.
 - Project/domain list: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
 
+## Repository Explorer
+
+The terminal includes a GitHub repository explorer:
+
+```bash
+repo                 # list configured repositories
+repo --systems       # focus C/Assembly/Shell and systems-style projects
+repo --lang C        # filter by language
+repo --search unix   # search names, descriptions, URLs, and languages
+repo 5               # show repository details
+repo open 5          # open a repository on GitHub
+repo clone 5         # print a git clone command
+```
+
+Repository data is maintained in `public/data/projects.json`.
+
 ## Build
 
 ```bash

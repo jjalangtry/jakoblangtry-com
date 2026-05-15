@@ -14,6 +14,11 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoListOutput,
+  parseRepoCommand,
+  resolveRepo,
+  getRepoCloneUrl,
+  buildRepoDetailOutput,
   buildContributionChartAscii,
   getRandomFortune,
   flipText,
@@ -770,6 +775,90 @@ function openResume() {
   window.open(resumeUrl, "_blank");
 }
 
+function getRepoOpenUrl(repo) {
+  return repo?.repo || repo?.url || "";
+}
+
+function resolveRepoForCommand(target) {
+  const resolved = resolveRepo(terminalData.projectGroups, target);
+  if (resolved.repo) return resolved.repo;
+
+  if (resolved.matches.length > 1) {
+    appendOutput(
+      `Ambiguous repo '${target}'. Matches:\n` +
+        resolved.matches
+          .map((repo) => `  ${repo.id}. ${repo.name}`)
+          .join("\n") +
+        "\nUse a number or the full repo name.",
+      "error-text",
+    );
+    return null;
+  }
+
+  appendOutput(
+    `repo: ${target}: not found. Try 'repo list' or 'repo --search ${target}'.`,
+    "error-text",
+  );
+  return null;
+}
+
+function displayRepoUsage() {
+  appendOutput(
+    [
+      "Usage: repo [list|show|open|clone] [options] [number|name]",
+      "",
+      "Examples:",
+      "  repo",
+      "  repo --systems",
+      "  repo --lang C",
+      "  repo --search unix",
+      "  repo 5",
+      "  repo open jakobs-ls-remake",
+      "  repo clone Unix-Permissions-Game",
+    ].join("\n"),
+    "info-text",
+  );
+}
+
+function handleRepoCommand(argsString = "") {
+  const parsed = parseRepoCommand(argsString);
+
+  if (parsed.action === "help") {
+    displayRepoUsage();
+    return;
+  }
+
+  if (parsed.error) {
+    appendOutput(parsed.error, "error-text");
+    return;
+  }
+
+  if (parsed.action === "list") {
+    appendOutput(
+      buildRepoListOutput(terminalData.projectGroups, parsed),
+      "info-text",
+    );
+    return;
+  }
+
+  const repo = resolveRepoForCommand(parsed.target);
+  if (!repo) return;
+
+  if (parsed.action === "open") {
+    const url = getRepoOpenUrl(repo);
+    appendOutput(`Opening ${repo.name}...`, "info-text");
+    window.open(url, "_blank");
+    return;
+  }
+
+  if (parsed.action === "clone") {
+    appendOutput(`git clone ${getRepoCloneUrl(repo)}`, "info-text");
+    return;
+  }
+
+  appendOutput(buildRepoDetailOutput(repo), "info-text");
+}
+
 /**
  * Executes a command entered in the terminal interface.
  * @param {string} command - The command to execute.
@@ -799,7 +888,8 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
+  repo        repo explorer         fortune     random quote
+  repos       repo overview
   resume      view resume           grep        regex search/pipe
   blog        read blog posts       matrix      digital rain
   projects    projects pane         qr          QR code generator
@@ -891,7 +981,7 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput("alias repo='repo list'\nalias exit='close'", "info-text");
       break;
     case "skills":
       displaySkills();
@@ -1033,9 +1123,7 @@ Currently seeking opportunities in software engineering.`,
       }
       break;
     case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
+      handleRepoCommand();
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1144,6 +1232,9 @@ Currently seeking opportunities in software engineering.`,
             selection.addRange(selectionRange);
           }, 0);
         }
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        handleRepoCommand(command.substring(5).trim());
         break;
       } else if (normalizedCommand.startsWith("history ")) {
         const arg = command.substring(8).trim();
@@ -2960,9 +3051,9 @@ function getHelpDetails() {
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
-      examples: ["github", "repo"],
+      examples: ["github"],
       notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
+        "Use the separate 'repo' command to browse individual GitHub repositories from the terminal.",
     },
     grep: {
       desc: "Search with regex patterns, wildcards, and flags.",
@@ -3035,7 +3126,7 @@ function getHelpDetails() {
       usage: "repos",
       examples: ["repos"],
       notes:
-        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+        "Shows deployed projects, contributions to other repos, and more. Use 'repo' for searchable repository details.",
     },
     close: {
       desc: "Close the tmux-style projects split pane.",
@@ -3045,10 +3136,20 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Browse GitHub repositories like a terminal package index.",
+      usage:
+        "repo [list|show|open|clone] [--systems] [--lang language] [--search term] [number|name]",
+      examples: [
+        "repo",
+        "repo --systems",
+        "repo --lang C",
+        "repo --search unix",
+        "repo 5",
+        "repo open jakobs-ls-remake",
+        "repo clone Unix-Permissions-Game",
+      ],
+      notes:
+        "Lists all configured public repositories, filters by language or systems-programming signal, shows repo details, opens GitHub, or prints a git clone command.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",
