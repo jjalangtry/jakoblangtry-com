@@ -256,6 +256,146 @@ describe("terminal helpers", () => {
     expect(detail).toContain("Language: C");
   });
 
+  it("handles repository catalog fallback and API edge cases", () => {
+    expect(buildRepositoryCatalog(null, null)).toEqual([]);
+
+    const catalog = buildRepositoryCatalog(
+      {
+        featured: [
+          null,
+          { name: "No URL" },
+          {
+            name: "Demo Only",
+            url: "https://demo.example.com",
+            demo: "https://demo-alt.example.com",
+          },
+          {
+            name: "Git URL",
+            url: "https://github.com/jjalangtry/git-url.git",
+            topics: "not-an-array",
+          },
+        ],
+        contributions: [
+          {
+            name: "Contrib",
+            url: "https://example.org/project",
+            repo: "https://github.com/example/project",
+            updated_at: "not-a-date",
+          },
+        ],
+      },
+      [
+        null,
+        { name: "No html url" },
+        {
+          name: "forked-tool",
+          html_url: "https://github.com/jjalangtry/forked-tool",
+          fork: true,
+          updated_at: "2026-04-01T00:00:00Z",
+          topics: "not-an-array",
+        },
+        {
+          name: "plain-tool",
+          html_url: "https://github.com/jjalangtry/plain-tool",
+          homepage: "",
+          stargazers_count: undefined,
+          updated_at: "2026-03-01T00:00:00Z",
+        },
+      ],
+    );
+
+    expect(catalog.map((repo) => repo.name)).toEqual(
+      expect.arrayContaining([
+        "Demo Only",
+        "Git URL",
+        "Contrib",
+        "forked-tool",
+      ]),
+    );
+    expect(findRepositoryByQuery("git-url", catalog).url).toBe(
+      "https://github.com/jjalangtry/git-url",
+    );
+    expect(findRepositoryByQuery("forked-tool", catalog).section).toBe("forks");
+    expect(
+      buildRepositoryBrowserOutput(catalog, { query: "missing" }),
+    ).toContain('No repositories found for query="missing"');
+  });
+
+  it("parses repository command flag variants", () => {
+    expect(parseRepositoryCommandArgs("-l C -n 2 -s kernel")).toMatchObject({
+      query: "kernel",
+      language: "C",
+      limit: 2,
+    });
+    expect(
+      parseRepositoryCommandArgs("--language=Assembly --limit=3 --search=nes"),
+    ).toMatchObject({
+      query: "nes",
+      language: "Assembly",
+      limit: 3,
+    });
+    expect(parseRepositoryCommandArgs("--all --limit nope repo name")).toEqual({
+      query: "repo name",
+      language: "",
+      limit: Infinity,
+      list: false,
+      refresh: false,
+    });
+    expect(parseRepositoryCommandArgs("--lang")).toMatchObject({
+      language: "",
+      query: "",
+    });
+  });
+
+  it("covers repository filtering, lookup, and output fallbacks", () => {
+    const catalog = [
+      null,
+      {
+        name: "Systems Notes",
+        slug: "systems-notes",
+        url: "https://github.com/jjalangtry/systems-notes",
+        homepage: "https://systems.example.com",
+        description: "",
+        language: "",
+        section: "github",
+        stars: 4,
+        updatedAt: "bad-date",
+        topics: ["c", "unix"],
+      },
+      {
+        name: "Swift App",
+        slug: "swift-app",
+        url: "https://github.com/jjalangtry/swift-app",
+        description: "iOS app",
+        language: "Swift",
+        section: "github",
+        updatedAt: "2026-05-01T00:00:00Z",
+        topics: [],
+      },
+    ];
+
+    expect(filterRepositoryCatalog(null)).toEqual([]);
+    expect(filterRepositoryCatalog(catalog, { language: "Rust" })).toEqual([]);
+    expect(filterRepositoryCatalog(catalog, { query: "unix" })[0].name).toBe(
+      "Systems Notes",
+    );
+    expect(findRepositoryByQuery("", catalog)).toBeNull();
+    expect(findRepositoryByQuery("swift app", null)).toBeNull();
+    expect(findRepositoryByQuery("swift-app", catalog).name).toBe("Swift App");
+
+    const limited = buildRepositoryBrowserOutput(catalog, { limit: 1 });
+    expect(limited).toContain("Showing 1 of 2");
+    expect(buildRepositoryBrowserOutput(undefined)).toContain(
+      "No repositories found",
+    );
+
+    const detail = buildRepositoryDetailOutput(catalog[1]);
+    expect(detail).toContain("Stars:    4");
+    expect(detail).toContain("Topics:   c, unix");
+    expect(detail).toContain("Demo:     https://systems.example.com");
+    expect(buildRepositoryDetailOutput(null)).toBeNull();
+  });
+
   it("builds contribution chart ASCII from API data", () => {
     const contributions = [
       { date: "2026-03-12", count: 4, level: 1 },
