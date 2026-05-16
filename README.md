@@ -25,8 +25,25 @@ Terminal-style personal website with command-driven navigation.
 ## Editable Content
 
 - Resume path: `public/data/site-config.json`
+- GitHub owner for live repository browsing: `public/data/site-config.json`
 - Project/domain list: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
+
+## Terminal Repository Browser
+
+The site can surface Jakob's public GitHub repositories directly from the
+terminal:
+
+```bash
+repo --list
+repo --lang C
+repo jakobs-ls-remake
+repos systems
+```
+
+Curated project metadata from `public/data/projects.json` is merged with the
+GitHub public repositories API at runtime, so deployed demos and source links
+stay discoverable even if the live API is temporarily unavailable.
 
 ## Build
 

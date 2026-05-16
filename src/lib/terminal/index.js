@@ -49,6 +49,8 @@ export const COMMAND_LIST = [
   "exit",
 ];
 
+export const DEFAULT_GITHUB_OWNER = "jjalangtry";
+
 export function buildProjectsListOutput(projects) {
   if (!Array.isArray(projects) || projects.length === 0) {
     return "No projects are configured yet.";
@@ -513,8 +515,359 @@ export function buildReposOutput(projectGroups) {
   }
 
   lines.push("├" + "─".repeat(W) + "┤");
-  lines.push(row(" Tip: 'projects' for full pane  ·  github.com/JJALANGTRY"));
+  lines.push(row(" Tip: 'repo --lang C'  ·  'repo [name]' opens source"));
   lines.push("└" + "─".repeat(W) + "┘");
+  return lines.join("\n");
+}
+
+function slugifyRepositoryName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function stripGitSuffix(url) {
+  return String(url || "").replace(/\.git$/i, "");
+}
+
+function normalizeRepositoryUrl(url) {
+  return stripGitSuffix(url)
+    .trim()
+    .replace(/^git\+/, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
+}
+
+function isGithubUrl(url) {
+  return /^https?:\/\/github\.com\//i.test(String(url || ""));
+}
+
+function formatRepoDate(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeCuratedRepository(project, section) {
+  if (!project || !project.name) return null;
+
+  const sourceUrl =
+    project.repo || (isGithubUrl(project.url) ? project.url : "");
+  const homepage =
+    project.homepage ||
+    project.demo ||
+    (sourceUrl && project.url && !isGithubUrl(project.url) ? project.url : "");
+  const fallbackUrl = sourceUrl || project.url || "";
+
+  if (!fallbackUrl) return null;
+
+  return {
+    name: project.name,
+    slug: slugifyRepositoryName(project.name),
+    url: stripGitSuffix(fallbackUrl),
+    homepage: homepage || "",
+    description: project.description || "",
+    language: project.language || "",
+    section,
+    source: "curated",
+    isFork: Boolean(project.isFork),
+    stars: Number(project.stars || 0),
+    updatedAt: project.updatedAt || project.updated_at || "",
+    topics: Array.isArray(project.topics) ? project.topics : [],
+  };
+}
+
+function normalizeGithubApiRepository(repo) {
+  if (!repo || !repo.name || !repo.html_url) return null;
+
+  return {
+    name: repo.name,
+    slug: slugifyRepositoryName(repo.name),
+    url: stripGitSuffix(repo.html_url),
+    homepage: repo.homepage || "",
+    description: repo.description || "",
+    language: repo.language || "",
+    section: repo.fork ? "forks" : "github",
+    source: "github-api",
+    isFork: Boolean(repo.fork),
+    stars: Number(repo.stargazers_count || 0),
+    updatedAt: repo.pushed_at || repo.updated_at || "",
+    topics: Array.isArray(repo.topics) ? repo.topics : [],
+  };
+}
+
+function mergeRepository(existing, incoming) {
+  if (!existing) return incoming;
+  const topics = Array.from(
+    new Set([...(existing.topics || []), ...(incoming.topics || [])]),
+  );
+
+  return {
+    ...existing,
+    description: existing.description || incoming.description || "",
+    language: existing.language || incoming.language || "",
+    homepage: existing.homepage || incoming.homepage || "",
+    isFork: existing.isFork || incoming.isFork,
+    stars: Math.max(existing.stars || 0, incoming.stars || 0),
+    updatedAt: incoming.updatedAt || existing.updatedAt || "",
+    topics,
+    source:
+      existing.source === incoming.source
+        ? existing.source
+        : `${existing.source}+${incoming.source}`,
+  };
+}
+
+export function buildRepositoryCatalog(projectGroups, apiRepos = []) {
+  const groups = projectGroups || {};
+  const entries = [];
+
+  ["featured", "contributions", "github"].forEach((section) => {
+    (groups[section] || []).forEach((project) => {
+      const repo = normalizeCuratedRepository(project, section);
+      if (repo) entries.push(repo);
+    });
+  });
+
+  if (Array.isArray(apiRepos)) {
+    apiRepos.forEach((repo) => {
+      const normalized = normalizeGithubApiRepository(repo);
+      if (normalized) entries.push(normalized);
+    });
+  }
+
+  const byKey = new Map();
+  entries.forEach((repo) => {
+    const urlKey = normalizeRepositoryUrl(repo.url);
+    const key = urlKey || repo.slug;
+    byKey.set(key, mergeRepository(byKey.get(key), repo));
+  });
+
+  const sectionOrder = {
+    featured: 0,
+    github: 1,
+    contributions: 2,
+    forks: 3,
+  };
+
+  return Array.from(byKey.values()).sort((a, b) => {
+    const sectionDiff =
+      (sectionOrder[a.section] ?? 9) - (sectionOrder[b.section] ?? 9);
+    if (sectionDiff !== 0) return sectionDiff;
+
+    const aUpdated = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    const bUpdated = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    if (aUpdated !== bUpdated) return bUpdated - aUpdated;
+
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function tokenizeRepositoryArgs(argsString) {
+  const tokens = [];
+  let current = "";
+  let quote = null;
+
+  for (const ch of String(argsString || "")) {
+    if ((ch === '"' || ch === "'") && !quote) {
+      quote = ch;
+    } else if (ch === quote) {
+      quote = null;
+    } else if (/\s/.test(ch) && !quote) {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+    } else {
+      current += ch;
+    }
+  }
+
+  if (current) tokens.push(current);
+  return tokens;
+}
+
+export function parseRepositoryCommandArgs(argsString) {
+  const result = {
+    query: "",
+    language: "",
+    limit: 12,
+    list: false,
+    refresh: false,
+  };
+  const queryParts = [];
+  const tokens = tokenizeRepositoryArgs(argsString);
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    const lower = token.toLowerCase();
+
+    if (lower === "--list" || lower === "-a") {
+      result.list = true;
+      result.limit = Infinity;
+    } else if (lower === "--all") {
+      result.limit = Infinity;
+    } else if (lower === "--refresh") {
+      result.refresh = true;
+    } else if (lower === "--lang" || lower === "--language" || lower === "-l") {
+      result.language = tokens[i + 1] || "";
+      i++;
+    } else if (lower.startsWith("--lang=")) {
+      result.language = token.slice(7);
+    } else if (lower.startsWith("--language=")) {
+      result.language = token.slice(11);
+    } else if (lower === "--limit" || lower === "-n") {
+      const parsed = Number.parseInt(tokens[i + 1], 10);
+      if (Number.isFinite(parsed) && parsed > 0) result.limit = parsed;
+      i++;
+    } else if (lower.startsWith("--limit=")) {
+      const parsed = Number.parseInt(token.slice(8), 10);
+      if (Number.isFinite(parsed) && parsed > 0) result.limit = parsed;
+    } else if (lower === "--search" || lower === "-s") {
+      if (tokens[i + 1]) queryParts.push(tokens[i + 1]);
+      i++;
+    } else if (lower.startsWith("--search=")) {
+      queryParts.push(token.slice(9));
+    } else {
+      queryParts.push(token);
+    }
+  }
+
+  result.query = queryParts.join(" ").trim();
+  return result;
+}
+
+export function filterRepositoryCatalog(catalog, options = {}) {
+  if (!Array.isArray(catalog)) return [];
+  const query = String(options.query || "")
+    .trim()
+    .toLowerCase();
+  const querySlug = slugifyRepositoryName(query);
+  const language = String(options.language || "")
+    .trim()
+    .toLowerCase();
+
+  return catalog.filter((repo) => {
+    if (!repo) return false;
+    if (language && String(repo.language || "").toLowerCase() !== language) {
+      return false;
+    }
+    if (!query) return true;
+
+    const searchable = [
+      repo.name,
+      repo.slug,
+      repo.description,
+      repo.language,
+      repo.url,
+      repo.homepage,
+      ...(repo.topics || []),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return searchable.includes(query) || repo.slug.includes(querySlug);
+  });
+}
+
+export function findRepositoryByQuery(query, catalog) {
+  const normalized = String(query || "")
+    .trim()
+    .toLowerCase();
+  const slug = slugifyRepositoryName(normalized);
+  if (!normalized || !Array.isArray(catalog)) return null;
+
+  return (
+    catalog.find((repo) => {
+      if (!repo) return false;
+      const urlName = String(repo.url || "")
+        .replace(/\/$/, "")
+        .split("/")
+        .pop()
+        .toLowerCase();
+      return (
+        String(repo.name || "").toLowerCase() === normalized ||
+        repo.slug === slug ||
+        urlName === normalized ||
+        slugifyRepositoryName(urlName) === slug
+      );
+    }) || null
+  );
+}
+
+export function buildRepositoryBrowserOutput(catalog, options = {}) {
+  const repos = Array.isArray(catalog) ? catalog : [];
+  const matches = filterRepositoryCatalog(repos, options);
+  const limit = Number.isFinite(options.limit) ? options.limit : matches.length;
+  const visible = matches.slice(0, limit);
+  const filters = [];
+
+  if (options.language) filters.push(`language=${options.language}`);
+  if (options.query) filters.push(`query="${options.query}"`);
+
+  if (matches.length === 0) {
+    const suffix = filters.length ? ` for ${filters.join(", ")}` : "";
+    return `No repositories found${suffix}. Try 'repo --list' or 'repo --lang C'.`;
+  }
+
+  const lines = [];
+  lines.push(
+    `Repository catalog (${matches.length}${matches.length !== repos.length ? ` of ${repos.length}` : ""})`,
+  );
+  if (filters.length) lines.push(`Filters: ${filters.join("  ")}`);
+  lines.push("");
+  lines.push("  NAME                         LANG       UPDATED     COMMAND");
+  lines.push(
+    "  ---------------------------  ---------  ----------  ----------------",
+  );
+
+  visible.forEach((repo) => {
+    const name = String(repo.name || "untitled")
+      .slice(0, 27)
+      .padEnd(27);
+    const language = String(repo.language || "n/a")
+      .slice(0, 9)
+      .padEnd(9);
+    const updated = (formatRepoDate(repo.updatedAt) || repo.section || "n/a")
+      .slice(0, 10)
+      .padEnd(10);
+    lines.push(`  ${name}  ${language}  ${updated}  repo ${repo.slug}`);
+  });
+
+  if (visible.length < matches.length) {
+    lines.push("");
+    lines.push(
+      `  Showing ${visible.length} of ${matches.length}. Use 'repo --list' or 'repo --limit ${matches.length}' for more.`,
+    );
+  }
+
+  lines.push("");
+  lines.push("Open a repo with: repo [name-or-slug]");
+  lines.push("Filter examples: repo --lang C  |  repo --search systems");
+  return lines.join("\n");
+}
+
+export function buildRepositoryDetailOutput(repo) {
+  if (!repo) return null;
+  const lines = [];
+  lines.push(`${repo.name}`);
+  lines.push("=".repeat(String(repo.name || "").length));
+  if (repo.description) lines.push(repo.description);
+  lines.push("");
+  lines.push(`Language: ${repo.language || "n/a"}`);
+  if (repo.updatedAt) lines.push(`Updated:  ${formatRepoDate(repo.updatedAt)}`);
+  if (repo.stars) lines.push(`Stars:    ${repo.stars}`);
+  if (repo.topics && repo.topics.length > 0) {
+    lines.push(`Topics:   ${repo.topics.join(", ")}`);
+  }
+  lines.push(`Source:   ${repo.url}`);
+  if (repo.homepage) lines.push(`Demo:     ${repo.homepage}`);
+  lines.push("");
+  lines.push(`Command:  repo ${repo.slug}`);
   return lines.join("\n");
 }
 
