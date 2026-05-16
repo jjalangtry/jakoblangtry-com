@@ -25,6 +25,12 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepositoryCatalog,
+  buildRepositoryBrowserOutput,
+  buildRepositoryDetailOutput,
+  filterRepositoryCatalog,
+  findRepositoryByQuery,
+  parseRepositoryCommandArgs,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -108,6 +114,146 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  it("merges curated projects with live GitHub repository metadata", () => {
+    const catalog = buildRepositoryCatalog(
+      {
+        featured: [
+          {
+            name: "Link Converter",
+            url: "https://convert.jjalangtry.com",
+            repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+            description: "Convert music links",
+            language: "TypeScript",
+          },
+        ],
+        contributions: [],
+        github: [
+          {
+            name: "jakobs-ls-remake",
+            url: "https://github.com/jjalangtry/jakobs-ls-remake",
+            description: "Reimplementation of ls using low-level C",
+            language: "C",
+          },
+        ],
+      },
+      [
+        {
+          name: "convert-jakoblangtry-com",
+          html_url: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          description: "GitHub API description",
+          language: "TypeScript",
+          homepage: "https://convert.jjalangtry.com",
+          stargazers_count: 7,
+          pushed_at: "2026-05-01T12:00:00Z",
+          topics: ["astro"],
+        },
+        {
+          name: "wordlehelper",
+          html_url: "https://github.com/jjalangtry/wordlehelper",
+          description: "Systems programming wordle solver",
+          language: "C",
+          stargazers_count: 2,
+          pushed_at: "2026-04-30T12:00:00Z",
+          topics: ["systems"],
+        },
+      ],
+    );
+
+    expect(catalog.map((repo) => repo.name)).toContain("Link Converter");
+    expect(catalog.map((repo) => repo.name)).toContain("wordlehelper");
+
+    const converter = findRepositoryByQuery(
+      "convert-jakoblangtry-com",
+      catalog,
+    );
+    expect(converter.description).toBe("Convert music links");
+    expect(converter.stars).toBe(7);
+    expect(converter.topics).toContain("astro");
+    expect(converter.source).toContain("curated");
+    expect(converter.source).toContain("github-api");
+  });
+
+  it("parses repository command filters and quoted searches", () => {
+    expect(
+      parseRepositoryCommandArgs('--lang C --limit 5 "systems code"'),
+    ).toEqual({
+      query: "systems code",
+      language: "C",
+      limit: 5,
+      list: false,
+      refresh: false,
+    });
+
+    expect(parseRepositoryCommandArgs("--list --refresh")).toEqual({
+      query: "",
+      language: "",
+      limit: Infinity,
+      list: true,
+      refresh: true,
+    });
+  });
+
+  it("filters repository catalog by language and search text", () => {
+    const catalog = buildRepositoryCatalog(
+      {
+        featured: [],
+        contributions: [],
+        github: [
+          {
+            name: "Unix-Permissions-Game",
+            url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+            description: "ncurses quiz game",
+            language: "C",
+          },
+          {
+            name: "read-faster",
+            url: "https://github.com/jjalangtry/read-faster",
+            description: "RSVP speed reading app",
+            language: "Swift",
+          },
+        ],
+      },
+      [],
+    );
+
+    expect(filterRepositoryCatalog(catalog, { language: "C" })).toHaveLength(1);
+    expect(
+      filterRepositoryCatalog(catalog, { query: "permission" })[0].name,
+    ).toBe("Unix-Permissions-Game");
+    expect(
+      findRepositoryByQuery("unix-permissions-game", catalog).language,
+    ).toBe("C");
+  });
+
+  it("builds repository browser and detail terminal output", () => {
+    const catalog = buildRepositoryCatalog(
+      {
+        featured: [],
+        contributions: [],
+        github: [
+          {
+            name: "jakobs-ls-remake",
+            url: "https://github.com/jjalangtry/jakobs-ls-remake",
+            description: "Reimplementation of ls using low-level C",
+            language: "C",
+            updatedAt: "2026-05-01T12:00:00Z",
+          },
+        ],
+      },
+      [],
+    );
+
+    const output = buildRepositoryBrowserOutput(catalog, { language: "C" });
+    expect(output).toContain("Repository catalog");
+    expect(output).toContain("Filters: language=C");
+    expect(output).toContain("repo jakobs-ls-remake");
+
+    const detail = buildRepositoryDetailOutput(catalog[0]);
+    expect(detail).toContain("jakobs-ls-remake");
+    expect(detail).toContain("Source:");
+    expect(detail).toContain("Language: C");
   });
 
   it("builds contribution chart ASCII from API data", () => {
