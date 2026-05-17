@@ -143,7 +143,7 @@ describe("terminal helpers", () => {
       "featured",
     );
     expect(curated.name).toBe("Link Converter");
-    expect(curated.repoName).toBe("Link Converter");
+    expect(curated.repoName).toBe("convert-jakoblangtry-com");
     expect(curated.fullName).toBe("jjalangtry/convert-jakoblangtry-com");
     expect(curated.homepage).toBe("https://convert.jakoblangtry.com");
     expect(curated.section).toBe("featured");
