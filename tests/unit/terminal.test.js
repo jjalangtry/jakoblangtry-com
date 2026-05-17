@@ -264,6 +264,57 @@ describe("terminal helpers", () => {
     );
   });
 
+  it("parses repository command aliases, equals options, help, and refresh", () => {
+    expect(parseRepositoryCommand("repo show 'Unix Permissions Game'")).toEqual(
+      expect.objectContaining({
+        action: "detail",
+        target: "Unix Permissions Game",
+      }),
+    );
+    expect(parseRepositoryCommand("repo list --system --refresh")).toEqual(
+      expect.objectContaining({
+        action: "list",
+        refresh: true,
+        filters: expect.objectContaining({ systems: true }),
+      }),
+    );
+    expect(parseRepositoryCommand("repo --lang=C --search=unix")).toEqual(
+      expect.objectContaining({
+        filters: { language: "C", search: "unix", systems: false },
+      }),
+    );
+    expect(parseRepositoryCommand("repo --help").action).toBe("help");
+    expect(parseRepositoryCommand("repo -h").action).toBe("help");
+  });
+
+  it("handles repository normalization edge cases", () => {
+    expect(normalizeRepository(null)).toBeNull();
+    expect(normalizeRepository({})).toBeNull();
+
+    const apiShape = normalizeRepository({
+      name: "api-repo",
+      html_url: "https://github.com/jjalangtry/api-repo.git",
+      primaryLanguage: { name: "Rust" },
+      repositoryTopics: [{ name: "kernel" }],
+      archived: true,
+    });
+    expect(apiShape.fullName).toBe("jjalangtry/api-repo");
+    expect(apiShape.repoSlug).toBe("api-repo");
+    expect(apiShape.language).toBe("Rust");
+    expect(apiShape.topics).toEqual(["kernel"]);
+    expect(apiShape.archived).toBe(true);
+    expect(apiShape.systems).toBe(true);
+
+    const stringLanguage = normalizeRepository({
+      name: "go-tool",
+      url: "https://github.com/jjalangtry/go-tool",
+      primaryLanguage: "Go",
+      isArchived: true,
+    });
+    expect(stringLanguage.language).toBe("Go");
+    expect(stringLanguage.archived).toBe(true);
+  });
+
   it("filters and resolves repository records", () => {
     const repos = [
       normalizeRepository({
@@ -294,7 +345,11 @@ describe("terminal helpers", () => {
     expect(filterRepositories(repos, { search: "reader" })).toEqual([repos[1]]);
     expect(resolveRepository(repos, "2")).toBe(repos[1]);
     expect(resolveRepository(repos, "nes pong")).toBe(repos[2]);
+    expect(resolveRepository(repos, "jjalangtry/NES-Pong")).toBe(repos[2]);
+    expect(resolveRepository(repos, "99")).toBeNull();
+    expect(resolveRepository(null, "1")).toBeNull();
     expect(resolveRepository(repos, "missing")).toBeNull();
+    expect(filterRepositories(null, { systems: true })).toEqual([]);
   });
 
   it("builds repository list, detail, help, and clone outputs", () => {
@@ -331,6 +386,16 @@ describe("terminal helpers", () => {
     expect(buildRepoHelpOutput()).toContain("repo --systems");
     expect(buildRepoListOutput([])).toContain("No repositories match");
     expect(buildRepoDetailOutput(null)).toBe("Repository not found.");
+
+    const sparse = normalizeRepository({
+      name: "archive",
+      url: "https://github.com/jjalangtry/archive.git",
+      archived: true,
+    });
+    const sparseList = buildRepoListOutput([sparse]);
+    expect(sparseList).toContain("old");
+    expect(buildRepoDetailOutput(sparse)).toContain("Repository: archive");
+    expect(buildRepoCloneOutput({})).toContain("No clone URL");
   });
 
   it("builds contribution chart ASCII from API data", () => {
