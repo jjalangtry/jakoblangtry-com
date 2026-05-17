@@ -25,7 +25,19 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoCloneOutput,
+  buildRepoDetailOutput,
+  buildRepoHelpOutput,
+  buildRepoListOutput,
   buildContributionChartAscii,
+  filterRepositories,
+  flattenRepositoryGroups,
+  isSystemsRepository,
+  mergeRepositories,
+  normalizeRepository,
+  parseRepositoryCommand,
+  resolveRepository,
+  slugifyRepoName,
   estimateReadingTime,
   getRandomFortune,
   FORTUNE_QUOTES,
@@ -108,6 +120,282 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  it("slugifies repository names for command lookup", () => {
+    expect(slugifyRepoName("Unix Permissions Game")).toBe(
+      "unix-permissions-game",
+    );
+    expect(slugifyRepoName("jjalangtry/wordlehelper")).toBe(
+      "jjalangtry-wordlehelper",
+    );
+    expect(slugifyRepoName("")).toBe("");
+  });
+
+  it("normalizes repositories from curated and GitHub API shapes", () => {
+    const curated = normalizeRepository(
+      {
+        name: "Link Converter",
+        repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+        url: "https://convert.jakoblangtry.com",
+        language: "TypeScript",
+      },
+      "featured",
+    );
+    expect(curated.name).toBe("Link Converter");
+    expect(curated.repoName).toBe("convert-jakoblangtry-com");
+    expect(curated.fullName).toBe("jjalangtry/convert-jakoblangtry-com");
+    expect(curated.homepage).toBe("https://convert.jakoblangtry.com");
+    expect(curated.section).toBe("featured");
+
+    const apiRepo = normalizeRepository({
+      name: "wordlehelper",
+      full_name: "jjalangtry/wordlehelper",
+      html_url: "https://github.com/jjalangtry/wordlehelper",
+      language: "C",
+      topics: ["systems"],
+      stargazers_count: 2,
+      forks_count: 1,
+    });
+    expect(apiRepo.language).toBe("C");
+    expect(apiRepo.stars).toBe(2);
+    expect(apiRepo.forks).toBe(1);
+    expect(apiRepo.systems).toBe(true);
+  });
+
+  it("flattens project groups into repository records", () => {
+    const repos = flattenRepositoryGroups({
+      featured: [
+        {
+          name: "Website",
+          repo: "https://github.com/jjalangtry/jakoblangtry-com",
+          url: "https://jjalangtry.com",
+          language: "JavaScript",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "NES-Pong",
+          url: "https://github.com/jjalangtry/NES-Pong",
+          language: "Assembly",
+        },
+      ],
+    });
+    expect(repos).toHaveLength(2);
+    expect(repos[0].section).toBe("featured");
+    expect(repos[1].systems).toBe(true);
+  });
+
+  it("merges fetched GitHub metadata without duplicating curated repos", () => {
+    const merged = mergeRepositories(
+      [
+        {
+          name: "Link Converter",
+          repoName: "convert-jakoblangtry-com",
+          url: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          description: "Curated description",
+          language: "TypeScript",
+          slug: "link-converter",
+          repoSlug: "convert-jakoblangtry-com",
+          fullName: "jjalangtry/convert-jakoblangtry-com",
+        },
+      ],
+      [
+        {
+          name: "convert-jakoblangtry-com",
+          html_url: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          language: "TypeScript",
+          stargazers_count: 3,
+        },
+        {
+          name: "wordlehelper",
+          html_url: "https://github.com/jjalangtry/wordlehelper",
+          language: "C",
+        },
+      ],
+    );
+
+    expect(merged).toHaveLength(2);
+    expect(merged[0].name).toBe("Link Converter");
+    expect(merged[0].stars).toBe(3);
+    expect(merged[1].name).toBe("wordlehelper");
+  });
+
+  it("parses repository browser commands", () => {
+    expect(parseRepositoryCommand("repo")).toMatchObject({
+      action: "list",
+      filters: { language: "", search: "", systems: false },
+    });
+    expect(parseRepositoryCommand("repo --systems --lang C")).toMatchObject({
+      action: "list",
+      filters: { language: "C", systems: true },
+    });
+    expect(parseRepositoryCommand("repo --search terminal")).toMatchObject({
+      action: "list",
+      filters: { search: "terminal" },
+    });
+    expect(parseRepositoryCommand("repo wordlehelper")).toMatchObject({
+      action: "detail",
+      target: "wordlehelper",
+    });
+    expect(parseRepositoryCommand("repo open jakobs-ls-remake")).toMatchObject({
+      action: "open",
+      target: "jakobs-ls-remake",
+    });
+    expect(parseRepositoryCommand("repo clone 2")).toMatchObject({
+      action: "clone",
+      target: "2",
+    });
+  });
+
+  it("returns helpful parse errors for invalid repo commands", () => {
+    expect(parseRepositoryCommand("repo --lang").error).toContain(
+      "--lang requires",
+    );
+    expect(parseRepositoryCommand("repo --search").error).toContain(
+      "--search requires",
+    );
+    expect(parseRepositoryCommand("repo --bad").error).toContain(
+      "unknown option",
+    );
+    expect(parseRepositoryCommand("repo open").error).toContain(
+      "requires a repository",
+    );
+  });
+
+  it("parses repository command aliases, equals options, help, and refresh", () => {
+    expect(parseRepositoryCommand("repo show 'Unix Permissions Game'")).toEqual(
+      expect.objectContaining({
+        action: "detail",
+        target: "Unix Permissions Game",
+      }),
+    );
+    expect(parseRepositoryCommand("repo list --system --refresh")).toEqual(
+      expect.objectContaining({
+        action: "list",
+        refresh: true,
+        filters: expect.objectContaining({ systems: true }),
+      }),
+    );
+    expect(parseRepositoryCommand("repo --lang=C --search=unix")).toEqual(
+      expect.objectContaining({
+        filters: { language: "C", search: "unix", systems: false },
+      }),
+    );
+    expect(parseRepositoryCommand("repo --help").action).toBe("help");
+    expect(parseRepositoryCommand("repo -h").action).toBe("help");
+  });
+
+  it("handles repository normalization edge cases", () => {
+    expect(normalizeRepository(null)).toBeNull();
+    expect(normalizeRepository({})).toBeNull();
+
+    const apiShape = normalizeRepository({
+      name: "api-repo",
+      html_url: "https://github.com/jjalangtry/api-repo.git",
+      primaryLanguage: { name: "Rust" },
+      repositoryTopics: [{ name: "kernel" }],
+      archived: true,
+    });
+    expect(apiShape.fullName).toBe("jjalangtry/api-repo");
+    expect(apiShape.repoSlug).toBe("api-repo");
+    expect(apiShape.language).toBe("Rust");
+    expect(apiShape.topics).toEqual(["kernel"]);
+    expect(apiShape.archived).toBe(true);
+    expect(apiShape.systems).toBe(true);
+
+    const stringLanguage = normalizeRepository({
+      name: "go-tool",
+      url: "https://github.com/jjalangtry/go-tool",
+      primaryLanguage: "Go",
+      isArchived: true,
+    });
+    expect(stringLanguage.language).toBe("Go");
+    expect(stringLanguage.archived).toBe(true);
+  });
+
+  it("filters and resolves repository records", () => {
+    const repos = [
+      normalizeRepository({
+        name: "wordlehelper",
+        url: "https://github.com/jjalangtry/wordlehelper",
+        description: "Exercise in systems programming",
+        language: "C",
+      }),
+      normalizeRepository({
+        name: "read-faster",
+        url: "https://github.com/jjalangtry/read-faster",
+        description: "RSVP reader",
+        language: "Swift",
+      }),
+      normalizeRepository({
+        name: "NES-Pong",
+        url: "https://github.com/jjalangtry/NES-Pong",
+        description: "6502 assembly Pong",
+        language: "Assembly",
+      }),
+    ];
+
+    expect(filterRepositories(repos, { language: "C" })).toEqual([repos[0]]);
+    expect(filterRepositories(repos, { systems: true })).toEqual([
+      repos[0],
+      repos[2],
+    ]);
+    expect(filterRepositories(repos, { search: "reader" })).toEqual([repos[1]]);
+    expect(resolveRepository(repos, "2")).toBe(repos[1]);
+    expect(resolveRepository(repos, "nes pong")).toBe(repos[2]);
+    expect(resolveRepository(repos, "jjalangtry/NES-Pong")).toBe(repos[2]);
+    expect(resolveRepository(repos, "99")).toBeNull();
+    expect(resolveRepository(null, "1")).toBeNull();
+    expect(resolveRepository(repos, "missing")).toBeNull();
+    expect(filterRepositories(null, { systems: true })).toEqual([]);
+  });
+
+  it("builds repository list, detail, help, and clone outputs", () => {
+    const repo = normalizeRepository({
+      name: "Unix-Permissions-Game",
+      url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+      description: "ncurses quiz game for unix permissions",
+      language: "C",
+      pushedAt: "2023-07-10T02:05:30Z",
+      stargazerCount: 1,
+      forkCount: 0,
+    });
+
+    expect(isSystemsRepository(repo)).toBe(true);
+
+    const list = buildRepoListOutput([repo], { systems: true });
+    expect(list).toContain("Repository browser: 1 repo");
+    expect(list).toContain("Unix-Permissions-Game");
+    expect(list).toContain("sys");
+    expect(list).toContain("repo --lang C");
+
+    const detail = buildRepoDetailOutput(repo);
+    expect(detail).toContain("Repository: Unix-Permissions-Game");
+    expect(detail).toContain("Language:   C");
+    expect(detail).toContain("Updated:    2023-07-10");
+    expect(detail).toContain("repo open unix-permissions-game");
+    expect(detail).toContain(
+      "git clone https://github.com/jjalangtry/Unix-Permissions-Game.git",
+    );
+
+    expect(buildRepoCloneOutput(repo)).toBe(
+      "git clone https://github.com/jjalangtry/Unix-Permissions-Game.git",
+    );
+    expect(buildRepoHelpOutput()).toContain("repo --systems");
+    expect(buildRepoListOutput([])).toContain("No repositories match");
+    expect(buildRepoDetailOutput(null)).toBe("Repository not found.");
+
+    const sparse = normalizeRepository({
+      name: "archive",
+      url: "https://github.com/jjalangtry/archive.git",
+      archived: true,
+    });
+    const sparseList = buildRepoListOutput([sparse]);
+    expect(sparseList).toContain("old");
+    expect(buildRepoDetailOutput(sparse)).toContain("Repository: archive");
+    expect(buildRepoCloneOutput({})).toContain("No clone URL");
   });
 
   it("builds contribution chart ASCII from API data", () => {
