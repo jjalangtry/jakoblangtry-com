@@ -14,8 +14,17 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoCloneOutput,
+  buildRepoDetailOutput,
+  buildRepoHelpOutput,
+  buildRepoListOutput,
   buildContributionChartAscii,
+  filterRepositories,
+  flattenRepositoryGroups,
   getRandomFortune,
+  mergeRepositories,
+  parseRepositoryCommand,
+  resolveRepository,
   flipText,
   safeCalc,
   renderBigTime,
@@ -38,6 +47,7 @@ let countdownActive = false;
 let countdownInterval = null;
 let editorState = null; // null | { phase: "title" } | { phase: "body", title, lines } | { phase: "login" }
 let isAdmin = false;
+let repositoryCatalogCache = null;
 
 async function hashPassword(password) {
   const data = new TextEncoder().encode(password);
@@ -763,6 +773,104 @@ function findProjectByCommand(command) {
   });
 }
 
+function getStaticRepositoryCatalog() {
+  return flattenRepositoryGroups(terminalData.projectGroups || {});
+}
+
+function mapGithubApiRepository(repo) {
+  return {
+    name: repo.name,
+    full_name: repo.full_name,
+    html_url: repo.html_url,
+    description: repo.description || "",
+    language: repo.language,
+    topics: repo.topics || [],
+    stargazers_count: repo.stargazers_count,
+    forks_count: repo.forks_count,
+    pushed_at: repo.pushed_at,
+    archived: repo.archived,
+  };
+}
+
+async function getRepositoryCatalog(refresh = false) {
+  const staticRepos = getStaticRepositoryCatalog();
+  if (repositoryCatalogCache && !refresh) {
+    return repositoryCatalogCache;
+  }
+
+  repositoryCatalogCache = staticRepos;
+  if (typeof fetch !== "function") return repositoryCatalogCache;
+
+  try {
+    const response = await fetch(
+      "https://api.github.com/users/jjalangtry/repos?per_page=100&sort=pushed",
+      {
+        headers: { Accept: "application/vnd.github+json" },
+      },
+    );
+    if (!response.ok) return repositoryCatalogCache;
+    const githubRepos = await response.json();
+    repositoryCatalogCache = mergeRepositories(
+      staticRepos,
+      Array.isArray(githubRepos) ? githubRepos.map(mapGithubApiRepository) : [],
+    );
+  } catch {
+    // The static catalog keeps the command useful offline or if rate limited.
+  }
+
+  return repositoryCatalogCache;
+}
+
+function getRepositoryCompletionCandidates() {
+  return getStaticRepositoryCatalog()
+    .flatMap((repo) => [repo.slug, repo.repoSlug, repo.name, repo.repoName])
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+}
+
+async function handleRepoCommand(command) {
+  const parsed = parseRepositoryCommand(command);
+  if (parsed.error) {
+    appendOutput(`${parsed.error}\n\n${buildRepoHelpOutput()}`, "error-text");
+    return;
+  }
+
+  if (parsed.action === "help") {
+    appendOutput(buildRepoHelpOutput(), "info-text");
+    return;
+  }
+
+  const repositories = await getRepositoryCatalog(parsed.refresh);
+  const filtered = filterRepositories(repositories, parsed.filters);
+
+  if (parsed.action === "list") {
+    appendOutput(buildRepoListOutput(filtered, parsed.filters), "info-text");
+    return;
+  }
+
+  const repo = resolveRepository(filtered, parsed.target);
+  if (!repo) {
+    appendOutput(
+      `Repository not found: ${parsed.target}\n\n${buildRepoListOutput(filtered, parsed.filters)}`,
+      "error-text",
+    );
+    return;
+  }
+
+  if (parsed.action === "open") {
+    appendOutput(`Opening ${repo.name} on GitHub...`, "info-text");
+    window.open(repo.url, "_blank");
+    return;
+  }
+
+  if (parsed.action === "clone") {
+    appendOutput(buildRepoCloneOutput(repo), "info-text");
+    return;
+  }
+
+  appendOutput(buildRepoDetailOutput(repo), "info-text");
+}
+
 function openResume() {
   const resumeUrl =
     terminalData.siteConfig?.resumeUrl || DEFAULT_SITE_CONFIG.resumeUrl;
@@ -799,9 +907,10 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
+  repo        repo browser          fortune     random quote
+  repos       repo dashboard        matrix      digital rain
   resume      view resume           grep        regex search/pipe
-  blog        read blog posts       matrix      digital rain
+  blog        read blog posts
   projects    projects pane         qr          QR code generator
   close       close pane            weather     weather forecast
                                     snake       play snake
@@ -891,7 +1000,7 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput("alias repos='repo list'\nalias exit='close'", "info-text");
       break;
     case "skills":
       displaySkills();
@@ -1033,9 +1142,7 @@ Currently seeking opportunities in software engineering.`,
       }
       break;
     case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
+      handleRepoCommand(command);
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1083,6 +1190,9 @@ Currently seeking opportunities in software engineering.`,
         } else {
           appendOutput(`cd: no such file or directory: ${dir}`, "error-text");
         }
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        handleRepoCommand(command);
         break;
       } else if (normalizedCommand.startsWith("curl ")) {
         const args = parseCurlCommand(command.substring(5).trim());
@@ -2960,9 +3070,9 @@ function getHelpDetails() {
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
-      examples: ["github", "repo"],
+      examples: ["github"],
       notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
+        "Use 'repo' for the terminal repository browser and per-repo details.",
     },
     grep: {
       desc: "Search with regex patterns, wildcards, and flags.",
@@ -3031,11 +3141,11 @@ function getHelpDetails() {
         "Click any project to open it. Type 'close' or press Ctrl+B then q to dismiss the pane.",
     },
     repos: {
-      desc: "Display GitHub repositories and contributions in a terminal-style ASCII view.",
+      desc: "Display GitHub repositories, contributions, and the contribution chart.",
       usage: "repos",
       examples: ["repos"],
       notes:
-        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+        "Shows deployed projects, contributions to other repos, and more. Use 'repo' for searchable per-repository details.",
     },
     close: {
       desc: "Close the tmux-style projects split pane.",
@@ -3045,10 +3155,19 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Browse Jakob's public GitHub repositories from the terminal.",
+      usage: "repo [filters] [name|number]",
+      examples: [
+        "repo",
+        "repo --systems",
+        "repo --lang C",
+        "repo --search terminal",
+        "repo wordlehelper",
+        "repo open jakobs-ls-remake",
+        "repo clone Unix-Permissions-Game",
+      ],
+      notes:
+        "Lists the static catalog immediately and refreshes from GitHub's public API when available. Supports --systems, --lang, --search, open, and clone.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",
@@ -3967,12 +4086,14 @@ function executePipeline(input) {
 
   const firstCmd = filtered[0].trim().toLowerCase();
   if (
+    firstCmd === "repo" ||
+    firstCmd.startsWith("repo ") ||
     firstCmd === "repos" ||
     firstCmd.startsWith("weather ") ||
     firstCmd.startsWith("curl ")
   ) {
     appendOutput(
-      "Pipe is not supported for async commands (repos, weather, curl).",
+      "Pipe is not supported for async commands (repo, repos, weather, curl).",
       "error-text",
     );
     return;
@@ -4198,6 +4319,15 @@ function initCLI() {
           completions = ["dark", "light"].filter((s) => s.startsWith(arg));
         } else if (baseCmd === "man" || baseCmd === "help") {
           completions = commandList.filter((c) => c.startsWith(arg));
+        } else if (baseCmd === "repo") {
+          completions = [
+            "open",
+            "clone",
+            "--systems",
+            "--lang",
+            "--search",
+            ...getRepositoryCompletionCandidates(),
+          ].filter((s) => s.startsWith(arg));
         } else if (currentLower.startsWith("skills --category ")) {
           const catArg = currentLower.substring(18);
           completions = (terminalData.skills || [])

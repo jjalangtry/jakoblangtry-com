@@ -28,6 +28,24 @@ Terminal-style personal website with command-driven navigation.
 - Project/domain list: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
 
+## Repository Terminal Browser
+
+The `repo` command turns the portfolio terminal into a GitHub repository
+browser:
+
+```bash
+repo                    # list repositories
+repo --systems          # focus on C/Assembly/Shell/systems repos
+repo --lang C           # filter by primary language
+repo --search terminal  # search names, descriptions, topics, and URLs
+repo wordlehelper       # show per-repository details
+repo open jakobs-ls-remake
+repo clone Unix-Permissions-Game
+```
+
+`public/data/projects.json` is the static fallback catalog. At runtime the
+browser also attempts to refresh metadata from GitHub's public repositories API.
+
 ## Build
 
 ```bash
