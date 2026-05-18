@@ -14,6 +14,9 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoExplorerOutput,
+  buildRepositoryCloneCommand,
+  resolveRepository,
   buildContributionChartAscii,
   getRandomFortune,
   flipText,
@@ -438,35 +441,49 @@ function renderProjectGroup(container, title, projects) {
   section.appendChild(header);
 
   projects.forEach((p) => {
-    const row = document.createElement("a");
+    const row = document.createElement("div");
     row.className = "proj-item";
-    row.href = p.url;
-    row.target = "_blank";
-    row.rel = "noopener noreferrer";
+
+    const mainLink = document.createElement("a");
+    mainLink.className = "proj-item-main";
+    mainLink.href = p.url;
+    mainLink.target = "_blank";
+    mainLink.rel = "noopener noreferrer";
 
     const name = document.createElement("span");
     name.className = "proj-item-name";
     name.textContent = p.name;
-    row.appendChild(name);
+    mainLink.appendChild(name);
 
     if (p.language) {
       const lang = document.createElement("span");
       lang.className = "proj-item-lang";
       lang.textContent = p.language;
-      row.appendChild(lang);
+      mainLink.appendChild(lang);
     }
 
     if (p.description) {
       const desc = document.createElement("span");
       desc.className = "proj-item-desc";
       desc.textContent = p.description;
-      row.appendChild(desc);
+      mainLink.appendChild(desc);
     }
 
     const url = document.createElement("span");
     url.className = "proj-item-url";
     url.textContent = p.url.replace("https://", "").replace("http://", "");
-    row.appendChild(url);
+    mainLink.appendChild(url);
+    row.appendChild(mainLink);
+
+    if (p.repo && p.repo !== p.url) {
+      const codeLink = document.createElement("a");
+      codeLink.className = "proj-item-code";
+      codeLink.href = p.repo;
+      codeLink.target = "_blank";
+      codeLink.rel = "noopener noreferrer";
+      codeLink.textContent = "source";
+      row.appendChild(codeLink);
+    }
 
     section.appendChild(row);
   });
@@ -506,7 +523,8 @@ function openProjectsPane() {
 
   const hint = document.createElement("div");
   hint.className = "proj-hint";
-  hint.textContent = "Type 'close' or press Ctrl+B then q to close this pane";
+  hint.textContent =
+    "Use source links for code. Type 'close' or press Ctrl+B then q to close.";
   bottomPane.appendChild(hint);
 
   layout.appendChild(bottomPane);
@@ -799,10 +817,11 @@ function executeCommand(command, options = {}) {
   contact     contact info          date        current date/time
   email       email jakob           echo        print text
   github      github profile        flip        upside-down text
-  repos       github repos          fortune     random quote
+  repo        repo explorer         repos       repo summary
   resume      view resume           grep        regex search/pipe
-  blog        read blog posts       matrix      digital rain
-  projects    projects pane         qr          QR code generator
+  blog        read blog posts       fortune     random quote
+  projects    projects pane         matrix      digital rain
+                                    qr          QR code generator
   close       close pane            weather     weather forecast
                                     snake       play snake
 
@@ -891,7 +910,7 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias repo='github'\nalias exit='close'", "info-text");
+      appendOutput("alias exit='close'", "info-text");
       break;
     case "skills":
       displaySkills();
@@ -1033,9 +1052,10 @@ Currently seeking opportunities in software engineering.`,
       }
       break;
     case "repo":
-      // Alias for github command
-      appendOutput("Opening GitHub profile...");
-      window.open("https://github.com/JJALANGTRY", "_blank");
+      appendOutput(
+        buildRepoExplorerOutput(terminalData.projectGroups),
+        "info-text",
+      );
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1197,6 +1217,49 @@ Currently seeking opportunities in software engineering.`,
           break;
         }
         executeStandaloneGrep(argsStr);
+        break;
+      } else if (normalizedCommand.startsWith("repo ")) {
+        const repoArgs = command.substring(5).trim();
+        const openMatch = repoArgs.match(/^(open|view)\s+(.+)$/i);
+        const cloneMatch = repoArgs.match(/^clone\s+(.+)$/i);
+
+        if (openMatch) {
+          const entry = resolveRepository(
+            terminalData.projectGroups,
+            openMatch[2],
+          );
+          if (entry) {
+            appendOutput(`Opening source for ${entry.name}...`);
+            window.open(entry.sourceUrl, "_blank");
+          } else {
+            appendOutput(
+              `No repository matches '${openMatch[2]}'.`,
+              "error-text",
+            );
+          }
+          break;
+        }
+
+        if (cloneMatch) {
+          const entry = resolveRepository(
+            terminalData.projectGroups,
+            cloneMatch[1],
+          );
+          if (entry) {
+            appendOutput(buildRepositoryCloneCommand(entry), "info-text");
+          } else {
+            appendOutput(
+              `No repository matches '${cloneMatch[1]}'.`,
+              "error-text",
+            );
+          }
+          break;
+        }
+
+        appendOutput(
+          buildRepoExplorerOutput(terminalData.projectGroups, repoArgs),
+          "info-text",
+        );
         break;
       } else if (normalizedCommand.startsWith("man ")) {
         const pattern = normalizedCommand.substring(4).trim();
@@ -2774,6 +2837,7 @@ function executeStandaloneGrep(argsString) {
       p.description || "",
       p.language || "",
       p.url || "",
+      p.repo || "",
     ].join(" ");
     const matches = regex.test(searchable);
     return args.invert ? !matches : matches;
@@ -2960,9 +3024,9 @@ function getHelpDetails() {
     github: {
       desc: "Open Jakob's GitHub profile in a new browser tab.",
       usage: "github",
-      examples: ["github", "repo"],
+      examples: ["github"],
       notes:
-        'The command "repo" is an alias for "github" and performs the same action.',
+        "Use the repo command to browse individual source repositories from the terminal catalog.",
     },
     grep: {
       desc: "Search with regex patterns, wildcards, and flags.",
@@ -3035,7 +3099,7 @@ function getHelpDetails() {
       usage: "repos",
       examples: ["repos"],
       notes:
-        "Shows deployed projects, contributions to other repos, and more. Run 'projects' for the interactive pane.",
+        "Shows deployed projects, contributions to other repos, and more. Run 'repo --systems' for source-level filtering.",
     },
     close: {
       desc: "Close the tmux-style projects split pane.",
@@ -3045,10 +3109,18 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: 'Alias for the "github" command. Opens Jakob\'s GitHub profile.',
-      usage: "repo",
-      examples: ["repo", "github"],
-      notes: "This is just an alternative way to access the github command.",
+      desc: "Browse, inspect, open, and clone source repositories from the terminal catalog.",
+      usage: "repo [--systems|--lang LANG|--search TERM|NAME|NUMBER]",
+      examples: [
+        "repo",
+        "repo --systems",
+        "repo --lang C",
+        "repo jakobs-ls-remake",
+        "repo open wordlehelper",
+        "repo clone 7",
+      ],
+      notes:
+        "The catalog is sourced from public/data/projects.json and includes deployed apps, contributions, GitHub repos, and forks.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",

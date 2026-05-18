@@ -609,10 +609,19 @@ pre {
   gap: 10px;
   align-items: baseline;
   padding: 2px 0;
-  text-decoration: none;
   color: var(--text-primary);
   transition: background 0.1s;
   border-radius: 2px;
+}
+
+.tmux-pane-projects .proj-item-main {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
 }
 
 .tmux-pane-projects .proj-item:hover {
@@ -645,6 +654,17 @@ pre {
   font-size: 11px;
   margin-left: auto;
   white-space: nowrap;
+}
+
+.tmux-pane-projects .proj-item-code {
+  color: var(--text-prompt);
+  font-size: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tmux-pane-projects .proj-item-code:hover {
+  text-decoration: underline;
 }
 
 .tmux-pane-projects .proj-hint {
