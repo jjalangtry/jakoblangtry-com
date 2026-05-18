@@ -25,8 +25,25 @@ Terminal-style personal website with command-driven navigation.
 ## Editable Content
 
 - Resume path: `public/data/site-config.json`
-- Project/domain list: `public/data/projects.json`
+- Project/domain/repository catalog: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
+
+## Terminal Repository Explorer
+
+The site includes a terminal command surface for browsing source repositories:
+
+```bash
+repo                  # list the catalog
+repo --systems        # focus C/Assembly/Shell/Rust-style systems work
+repo --lang C         # filter by language
+repo --search term    # search names, descriptions, languages, and URLs
+repo <name|number>    # show source/live/clone details
+repo open <name>      # open the source repository
+repo clone <name>     # print a git clone command
+```
+
+The catalog is static and sourced from `public/data/projects.json`, which keeps
+the website usable without GitHub API credentials at runtime.
 
 ## Build
 

@@ -38,10 +38,66 @@
   ],
   "github": [
     {
+      "name": "jjalangtry",
+      "url": "https://github.com/jjalangtry/jjalangtry",
+      "description": "GitHub profile configuration repository"
+    },
+    {
+      "name": "jakoblangtry-com",
+      "url": "https://github.com/jjalangtry/jakoblangtry-com",
+      "description": "Terminal-style personal website and portfolio",
+      "language": "JavaScript"
+    },
+    {
+      "name": "mosaic",
+      "url": "https://github.com/jjalangtry/mosaic",
+      "description": "Collage studio for macOS and iOS",
+      "language": "Swift"
+    },
+    {
+      "name": "resume",
+      "url": "https://github.com/jjalangtry/resume",
+      "description": "Resume website",
+      "language": "Astro"
+    },
+    {
+      "name": "cue.rit.edu",
+      "url": "https://github.com/jjalangtry/cue.rit.edu",
+      "description": "RIT CUE website repository"
+    },
+    {
+      "name": "desolate",
+      "url": "https://github.com/jjalangtry/desolate",
+      "description": "Band website for Desolate"
+    },
+    {
       "name": "read-faster",
       "url": "https://github.com/jjalangtry/read-faster",
       "description": "RSVP speed reading app for Mac and iOS",
       "language": "Swift"
+    },
+    {
+      "name": "SSEqualNative",
+      "url": "https://github.com/jjalangtry/SSEqualNative",
+      "description": "Native SSE application experiment"
+    },
+    {
+      "name": "treeplum",
+      "url": "https://github.com/jjalangtry/treeplum",
+      "description": "Trees website",
+      "language": "HTML"
+    },
+    {
+      "name": "samfrostisstillworking",
+      "url": "https://github.com/jjalangtry/samfrostisstillworking",
+      "description": "Static website project",
+      "language": "HTML"
+    },
+    {
+      "name": "aprilfools",
+      "url": "https://github.com/jjalangtry/aprilfools",
+      "description": "April Fools web project",
+      "language": "JavaScript"
     },
     {
       "name": "NES-Pong",
@@ -54,6 +110,12 @@
       "url": "https://github.com/jjalangtry/nudge-app",
       "description": "Native iOS app built with Swift",
       "language": "Swift"
+    },
+    {
+      "name": "applemusic-spotify-link",
+      "url": "https://github.com/jjalangtry/applemusic-spotify-link",
+      "description": "Find the matching Spotify link for an Apple Music track",
+      "language": "JavaScript"
     },
     {
       "name": "Dice-E-Store",
@@ -92,10 +154,65 @@
       "language": "Shell"
     },
     {
+      "name": "jl-test-node-app",
+      "url": "https://github.com/jjalangtry/jl-test-node-app",
+      "description": "Node app test project",
+      "language": "HTML"
+    },
+    {
       "name": "python-sim-prototype",
       "url": "https://github.com/jjalangtry/python-sim-prototype",
       "description": "Simulation prototype",
       "language": "Python"
+    },
+    {
+      "name": "t3code",
+      "url": "https://github.com/jjalangtry/t3code",
+      "description": "Forked TypeScript project",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "openclaw-lark",
+      "url": "https://github.com/jjalangtry/openclaw-lark",
+      "description": "Forked Lark channel plugin for OpenClaw",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "kana-dojo",
+      "url": "https://github.com/jjalangtry/kana-dojo",
+      "description": "Forked Japanese learning platform",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "openui",
+      "url": "https://github.com/jjalangtry/openui",
+      "description": "Forked generative UI standard project",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "caliber",
+      "url": "https://github.com/jjalangtry/caliber",
+      "description": "Forked AI agent configuration tool",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "skales",
+      "url": "https://github.com/jjalangtry/skales",
+      "description": "Forked desktop AI agent project",
+      "language": "TypeScript",
+      "fork": true
+    },
+    {
+      "name": "instructor",
+      "url": "https://github.com/jjalangtry/instructor",
+      "description": "Forked structured outputs library for LLMs",
+      "language": "Python",
+      "fork": true
     }
   ]
 }

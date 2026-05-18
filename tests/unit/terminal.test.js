@@ -25,6 +25,13 @@ import {
   buildContactOutput,
   buildStatsOutput,
   buildReposOutput,
+  buildRepoExplorerOutput,
+  buildRepositoryCatalog,
+  buildRepositoryCloneCommand,
+  getProjectSourceUrl,
+  getRepositorySlug,
+  isSystemsRepository,
+  resolveRepository,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -58,6 +65,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
+    expect(COMMAND_LIST).toContain("repo");
     expect(COMMAND_LIST).toContain("repos");
     expect(COMMAND_LIST).toContain("calc");
     expect(COMMAND_LIST).toContain("countdown");
@@ -108,6 +116,214 @@ describe("terminal helpers", () => {
       github: [],
     });
     expect(output).toContain("No repositories configured");
+  });
+
+  it("builds a source-oriented repository catalog", () => {
+    const groups = {
+      featured: [
+        {
+          name: "Live App",
+          url: "https://live.example.com",
+          repo: "https://github.com/jjalangtry/live-app",
+          description: "Deployed app",
+          language: "TypeScript",
+        },
+        null,
+      ],
+      contributions: [
+        {
+          name: "Live App Duplicate",
+          url: "https://github.com/jjalangtry/live-app",
+        },
+      ],
+      github: [
+        {
+          name: "Unix Tool",
+          url: "https://github.com/jjalangtry/unix-tool",
+          language: "C",
+          fork: true,
+        },
+        { name: "" },
+      ],
+    };
+
+    const catalog = buildRepositoryCatalog(groups);
+    expect(catalog).toHaveLength(2);
+    expect(catalog[0]).toMatchObject({
+      index: 1,
+      name: "Live App",
+      slug: "jjalangtry/live-app",
+      sourceUrl: "https://github.com/jjalangtry/live-app",
+      liveUrl: "https://live.example.com",
+      sectionLabel: "deployed",
+    });
+    expect(catalog[1]).toMatchObject({
+      index: 2,
+      name: "Unix Tool",
+      fork: true,
+      language: "C",
+    });
+  });
+
+  it("normalizes repository source urls and slugs", () => {
+    expect(getProjectSourceUrl(null)).toBe("");
+    expect(
+      getProjectSourceUrl({
+        url: "https://live.example.com",
+        repo: "https://github.com/jjalangtry/source",
+      }),
+    ).toBe("https://github.com/jjalangtry/source");
+    expect(getProjectSourceUrl({ url: "https://github.com/a/b" })).toBe(
+      "https://github.com/a/b",
+    );
+    expect(getRepositorySlug("https://github.com/jjalangtry/source.git")).toBe(
+      "jjalangtry/source",
+    );
+    expect(getRepositorySlug("https://example.com/source/")).toBe(
+      "example.com/source",
+    );
+  });
+
+  it("resolves repositories by index, name, slug, repo name, and search text", () => {
+    const groups = {
+      featured: [],
+      contributions: [],
+      github: [
+        {
+          name: "Unix Permissions Game",
+          url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+          description: "ncurses C quiz",
+          language: "C",
+        },
+      ],
+    };
+
+    expect(resolveRepository(groups, "1")?.name).toBe("Unix Permissions Game");
+    expect(resolveRepository(groups, "unix permissions game")?.language).toBe(
+      "C",
+    );
+    expect(
+      resolveRepository(groups, "jjalangtry/Unix-Permissions-Game")?.name,
+    ).toBe("Unix Permissions Game");
+    expect(resolveRepository(groups, "Unix-Permissions-Game")?.name).toBe(
+      "Unix Permissions Game",
+    );
+    expect(resolveRepository(groups, "ncurses")?.name).toBe(
+      "Unix Permissions Game",
+    );
+    expect(resolveRepository(groups, "")).toBeNull();
+    expect(resolveRepository(groups, "42")).toBeNull();
+  });
+
+  it("renders repository explorer lists, filters, and details", () => {
+    const groups = {
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jjalangtry.com",
+          repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          language: "TypeScript",
+          description: "Convert music links",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          description: "systems programming exercise",
+          language: "C",
+        },
+        {
+          name: "read-faster",
+          url: "https://github.com/jjalangtry/read-faster",
+          language: "Swift",
+        },
+      ],
+    };
+
+    const list = buildRepoExplorerOutput(groups);
+    expect(list).toContain("GitHub repository explorer");
+    expect(list).toContain("repo --systems");
+    expect(list).toContain("Link Converter");
+    expect(list).toContain("wordlehelper");
+
+    const systems = buildRepoExplorerOutput(groups, "--systems");
+    expect(systems).toContain("wordlehelper");
+    expect(systems).not.toContain("read-faster");
+
+    const language = buildRepoExplorerOutput(groups, "--lang Swift");
+    expect(language).toContain("read-faster");
+    expect(language).not.toContain("wordlehelper");
+
+    const languageEquals = buildRepoExplorerOutput(groups, "--lang=C");
+    expect(languageEquals).toContain("wordlehelper");
+    expect(languageEquals).not.toContain("read-faster");
+
+    const languageLong = buildRepoExplorerOutput(groups, "list --language C");
+    expect(languageLong).toContain("wordlehelper");
+    expect(languageLong).not.toContain("read-faster");
+
+    const search = buildRepoExplorerOutput(groups, "--search music");
+    expect(search).toContain("Link Converter");
+    expect(search).not.toContain("read-faster");
+
+    const shortSearch = buildRepoExplorerOutput(groups, "-s Swift");
+    expect(shortSearch).toContain("read-faster");
+    expect(shortSearch).not.toContain("wordlehelper");
+
+    const detail = buildRepoExplorerOutput(groups, "wordlehelper");
+    expect(detail).toContain("Repository: wordlehelper");
+    expect(detail).toContain(
+      "Source:     https://github.com/jjalangtry/wordlehelper",
+    );
+    expect(detail).toContain(
+      "Clone:      git clone https://github.com/jjalangtry/wordlehelper.git",
+    );
+  });
+
+  it("handles repository explorer edge cases", () => {
+    const emptyGroups = { featured: [], contributions: [], github: [] };
+    expect(buildRepoExplorerOutput(emptyGroups)).toContain(
+      "No repositories configured",
+    );
+    expect(buildRepoExplorerOutput(null)).toContain(
+      "No repositories configured",
+    );
+    expect(
+      buildRepoExplorerOutput(
+        {
+          featured: [],
+          contributions: [],
+          github: [
+            {
+              name: "read-faster",
+              url: "https://github.com/jjalangtry/read-faster",
+              language: "Swift",
+            },
+          ],
+        },
+        "--systems",
+      ),
+    ).toContain("No repositories match");
+  });
+
+  it("classifies systems repositories and formats clone commands", () => {
+    expect(isSystemsRepository({ language: "C" })).toBe(true);
+    expect(isSystemsRepository({ language: "Assembly" })).toBe(true);
+    expect(isSystemsRepository({ language: "Swift" })).toBe(false);
+    expect(isSystemsRepository(null)).toBe(false);
+    expect(
+      buildRepositoryCloneCommand({
+        sourceUrl: "https://github.com/jjalangtry/wordlehelper",
+      }),
+    ).toBe("git clone https://github.com/jjalangtry/wordlehelper.git");
+    expect(
+      buildRepositoryCloneCommand({
+        sourceUrl: "https://github.com/jjalangtry/wordlehelper.git",
+      }),
+    ).toBe("git clone https://github.com/jjalangtry/wordlehelper.git");
+    expect(buildRepositoryCloneCommand(null)).toBe("");
   });
 
   it("builds contribution chart ASCII from API data", () => {
