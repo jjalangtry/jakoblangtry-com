@@ -38,12 +38,18 @@ repo --systems        # focus C/Assembly/Shell/Rust-style systems work
 repo --lang C         # filter by language
 repo --search term    # search names, descriptions, languages, and URLs
 repo <name|number>    # show source/live/clone details
+repo files <name>     # list root files via the GitHub contents API
+repo tree <name> src  # list a directory path inside a repository
+repo readme <name>    # print the repository README in the terminal
 repo open <name>      # open the source repository
 repo clone <name>     # print a git clone command
 ```
 
 The catalog is static and sourced from `public/data/projects.json`, which keeps
-the website usable without GitHub API credentials at runtime.
+the website usable without GitHub API credentials at runtime. The `repo files`,
+`repo tree`, and `repo readme` subcommands optionally call GitHub's public
+contents API for GitHub-hosted repositories so visitors can inspect source
+structure without leaving the terminal UI.
 
 ## Build
 

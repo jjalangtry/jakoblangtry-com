@@ -28,10 +28,16 @@ import {
   buildRepoExplorerOutput,
   buildRepositoryCatalog,
   buildRepositoryCloneCommand,
+  buildGitHubContentsApiUrl,
+  buildGitHubReadmeApiUrl,
+  formatRepositoryContentsOutput,
+  formatRepositoryReadmeOutput,
+  getGitHubRepositoryPath,
   getProjectSourceUrl,
   getRepositorySlug,
   isSystemsRepository,
   resolveRepository,
+  resolveRepositoryContentTarget,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -324,6 +330,84 @@ describe("terminal helpers", () => {
       }),
     ).toBe("git clone https://github.com/jjalangtry/wordlehelper.git");
     expect(buildRepositoryCloneCommand(null)).toBe("");
+  });
+
+  it("builds GitHub content API urls and resolves content targets", () => {
+    const groups = {
+      featured: [],
+      contributions: [],
+      github: [
+        {
+          name: "Unix Permissions Game",
+          url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+          description: "ncurses C quiz",
+          language: "C",
+        },
+      ],
+    };
+    const entry = resolveRepository(groups, "Unix-Permissions-Game");
+
+    expect(getGitHubRepositoryPath("https://github.com/a/b.git")).toBe("a/b");
+    expect(getGitHubRepositoryPath("https://example.com/a/b")).toBe("");
+    expect(buildGitHubContentsApiUrl(entry)).toBe(
+      "https://api.github.com/repos/jjalangtry/Unix-Permissions-Game/contents",
+    );
+    expect(buildGitHubContentsApiUrl(entry, "src/main file.c")).toBe(
+      "https://api.github.com/repos/jjalangtry/Unix-Permissions-Game/contents/src/main%20file.c",
+    );
+    expect(
+      buildGitHubContentsApiUrl({ sourceUrl: "https://example.com/a/b" }),
+    ).toBe("");
+    expect(buildGitHubReadmeApiUrl(entry)).toBe(
+      "https://api.github.com/repos/jjalangtry/Unix-Permissions-Game/readme",
+    );
+
+    const target = resolveRepositoryContentTarget(
+      groups,
+      "Unix Permissions Game src",
+    );
+    expect(target.entry.name).toBe("Unix Permissions Game");
+    expect(target.path).toBe("src");
+    expect(resolveRepositoryContentTarget(groups, "").entry).toBeNull();
+  });
+
+  it("formats repository file listings and readme previews", () => {
+    const entry = {
+      name: "wordlehelper",
+      slug: "jjalangtry/wordlehelper",
+      sourceUrl: "https://github.com/jjalangtry/wordlehelper",
+    };
+    const files = formatRepositoryContentsOutput(entry, [
+      { name: "src", type: "dir" },
+      { name: "README.md", type: "file", size: 1536 },
+    ]);
+
+    expect(files).toContain("Files:  wordlehelper");
+    expect(files).toContain("dir     src/");
+    expect(files).toContain("file    README.md (1.5 KB)");
+    expect(files).toContain("repo readme jjalangtry/wordlehelper");
+
+    expect(formatRepositoryContentsOutput(entry, [], "src")).toContain(
+      "No files found in wordlehelper/src",
+    );
+    expect(formatRepositoryContentsOutput(null, [])).toBe(
+      "No repository selected.",
+    );
+    expect(formatRepositoryContentsOutput(entry, null)).toContain(
+      "No files returned",
+    );
+
+    const readme = formatRepositoryReadmeOutput(
+      entry,
+      ["# Wordle Helper", "A C solver", "extra"].join("\n"),
+      { maxLines: 2, maxChars: 100 },
+    );
+    expect(readme).toContain("README: wordlehelper");
+    expect(readme).toContain("# Wordle Helper");
+    expect(readme).toContain("[truncated]");
+    expect(formatRepositoryReadmeOutput(entry, "")).toContain(
+      "empty or unavailable",
+    );
   });
 
   it("builds contribution chart ASCII from API data", () => {
