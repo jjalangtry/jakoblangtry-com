@@ -274,6 +274,13 @@ describe("terminal helpers", () => {
     expect(search).toContain("Link Converter");
     expect(search).not.toContain("read-faster");
 
+    const liveUrlSearch = buildRepoExplorerOutput(
+      groups,
+      "convert.jjalangtry.com",
+    );
+    expect(liveUrlSearch).toContain("GitHub repository explorer");
+    expect(liveUrlSearch).toContain("Link Converter");
+
     const shortSearch = buildRepoExplorerOutput(groups, "-s Swift");
     expect(shortSearch).toContain("read-faster");
     expect(shortSearch).not.toContain("wordlehelper");
@@ -379,14 +386,25 @@ describe("terminal helpers", () => {
     };
     const files = formatRepositoryContentsOutput(entry, [
       { name: "src", type: "dir" },
-      { name: "README.md", type: "file", size: 1536 },
+      { name: "b.c", type: "file", size: 1536 },
+      { name: "a.c", type: "file", size: 128 },
     ]);
 
     expect(files).toContain("Files:  wordlehelper");
     expect(files).toContain("dir     src/");
-    expect(files).toContain("file    README.md (1.5 KB)");
+    expect(files).toContain("file    a.c (128 B)");
+    expect(files).toContain("file    b.c (1.5 KB)");
+    expect(files.indexOf("a.c")).toBeLessThan(files.indexOf("b.c"));
     expect(files).toContain("repo readme jjalangtry/wordlehelper");
 
+    const manyFiles = Array.from({ length: 61 }, (_, i) => ({
+      name: `file-${String(i).padStart(2, "0")}.c`,
+      type: "file",
+      size: -1,
+    }));
+    expect(formatRepositoryContentsOutput(entry, manyFiles)).toContain(
+      "... 1 more entries",
+    );
     expect(formatRepositoryContentsOutput(entry, [], "src")).toContain(
       "No files found in wordlehelper/src",
     );
@@ -405,6 +423,12 @@ describe("terminal helpers", () => {
     expect(readme).toContain("README: wordlehelper");
     expect(readme).toContain("# Wordle Helper");
     expect(readme).toContain("[truncated]");
+    expect(
+      formatRepositoryReadmeOutput(entry, "abcdef", {
+        maxLines: 10,
+        maxChars: 3,
+      }),
+    ).toContain("abc\n\n[truncated]");
     expect(formatRepositoryReadmeOutput(entry, "")).toContain(
       "empty or unavailable",
     );
@@ -1050,6 +1074,10 @@ describe("terminal helpers", () => {
   it("safeCalc handles division by zero as Infinity", () => {
     const result = safeCalc("1/0");
     expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc returns error for malformed expressions", () => {
+    expect(safeCalc("2+")).toEqual({ error: "Could not evaluate expression." });
   });
 
   // ── Countdown digits ─────────────────────────────────────────
