@@ -394,7 +394,9 @@ describe("terminal helpers", () => {
     expect(files).toContain("dir     src/");
     expect(files).toContain("file    a.c (128 B)");
     expect(files).toContain("file    b.c (1.5 KB)");
-    expect(files.indexOf("a.c")).toBeLessThan(files.indexOf("b.c"));
+    expect(files.indexOf("file    a.c")).toBeLessThan(
+      files.indexOf("file    b.c"),
+    );
     expect(files).toContain("repo readme jjalangtry/wordlehelper");
 
     const manyFiles = Array.from({ length: 61 }, (_, i) => ({
