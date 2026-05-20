@@ -553,6 +553,176 @@ export function buildRepositoryCloneCommand(entry) {
   return `git clone ${cloneUrl}`;
 }
 
+export function normalizeRepositoryPath(path) {
+  return String(path || "")
+    .trim()
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/");
+}
+
+export function getGitHubRepoParts(target) {
+  const sourceUrl =
+    typeof target === "string" ? target : getProjectSourceUrl(target);
+  const raw = String(sourceUrl || "")
+    .trim()
+    .replace(/\.git$/, "")
+    .replace(/\/$/, "");
+  const clean = raw.replace(/^https?:\/\//i, "");
+  const githubMatch = clean.match(/^github\.com\/([^/\s]+)\/([^/\s]+)$/i);
+  if (githubMatch) {
+    return { owner: githubMatch[1], repo: githubMatch[2] };
+  }
+
+  const sshMatch = raw.match(/^git@github\.com:([^/\s]+)\/([^/\s]+)$/i);
+  if (sshMatch) {
+    return { owner: sshMatch[1], repo: sshMatch[2] };
+  }
+
+  const slugMatch = raw.match(/^([^:/\s]+)\/([^/\s]+)$/);
+  if (!slugMatch) return null;
+  return { owner: slugMatch[1], repo: slugMatch[2] };
+}
+
+function encodeGitHubPath(path) {
+  const normalized = normalizeRepositoryPath(path);
+  return normalized
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+export function buildGitHubContentsApiUrl(entry, path = "") {
+  const parts = getGitHubRepoParts(entry);
+  if (!parts) return "";
+
+  const base = `https://api.github.com/repos/${encodeURIComponent(parts.owner)}/${encodeURIComponent(parts.repo)}/contents`;
+  const encodedPath = encodeGitHubPath(path);
+  return encodedPath ? `${base}/${encodedPath}` : base;
+}
+
+export function buildGitHubReadmeApiUrl(entry) {
+  const parts = getGitHubRepoParts(entry);
+  if (!parts) return "";
+
+  return `https://api.github.com/repos/${encodeURIComponent(parts.owner)}/${encodeURIComponent(parts.repo)}/readme`;
+}
+
+function formatRepositoryFileSize(bytes) {
+  const size = Number(bytes) || 0;
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function buildRepositoryFilesOutput(entry, contents, path = "") {
+  const displayPath = normalizeRepositoryPath(path);
+  const location = displayPath ? `${entry.name}/${displayPath}` : entry.name;
+  const items = Array.isArray(contents) ? contents : contents ? [contents] : [];
+
+  if (items.length === 0) {
+    return `No files found in ${location}.`;
+  }
+
+  const sorted = [...items].sort((a, b) => {
+    const aIsDir = a?.type === "dir";
+    const bIsDir = b?.type === "dir";
+    if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+    return String(a?.name || "").localeCompare(String(b?.name || ""));
+  });
+
+  const lines = [`Repository files: ${location}`, "──────────────────────────"];
+  sorted.forEach((item) => {
+    const type = item?.type === "dir" ? "dir" : "file";
+    const size =
+      item?.type === "dir" ? "-" : formatRepositoryFileSize(item?.size);
+    const name = item?.name || item?.path || "(unknown)";
+    lines.push(`${type.padEnd(5)} ${size.padStart(9)}  ${name}`);
+  });
+  lines.push("");
+  lines.push(
+    `Use: repo files ${entry.name} [path] · repo cat ${entry.name} <path>`,
+  );
+  return lines.join("\n");
+}
+
+export function buildRepositoryReadmeOutput(entry, text, maxChars = 6000) {
+  const content = String(text || "").trim();
+  if (!content) {
+    return `README for ${entry.name} is empty or unavailable.`;
+  }
+
+  const truncated = content.length > maxChars;
+  const body = truncated
+    ? `${content.slice(0, maxChars).trimEnd()}\n\n[README truncated; open the source repository for the rest.]`
+    : content;
+  return [`README: ${entry.name}`, `Source: ${entry.sourceUrl}`, "", body].join(
+    "\n",
+  );
+}
+
+export function buildRepositoryFileOutput(entry, path, text, maxChars = 6000) {
+  const normalizedPath = normalizeRepositoryPath(path);
+  const content = String(text || "");
+  if (!content) {
+    return `${entry.name}/${normalizedPath} is empty or unavailable.`;
+  }
+
+  const truncated = content.length > maxChars;
+  const body = truncated
+    ? `${content.slice(0, maxChars).trimEnd()}\n\n[file truncated; open the source repository for the rest.]`
+    : content;
+  return [
+    `File: ${entry.name}/${normalizedPath}`,
+    `Source: ${entry.sourceUrl}`,
+    "",
+    body,
+  ].join("\n");
+}
+
+export function parseRepositoryContentArgs(
+  projectGroups,
+  argsString,
+  options = {},
+) {
+  const tokens = String(argsString || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (tokens.length === 0) {
+    return {
+      entry: null,
+      path: "",
+      error: "Missing repository. Usage: repo files <name|number> [path]",
+    };
+  }
+
+  for (let end = tokens.length; end >= 1; end--) {
+    const query = tokens.slice(0, end).join(" ");
+    const entry = resolveRepository(projectGroups, query);
+    if (entry) {
+      const path = normalizeRepositoryPath(tokens.slice(end).join("/"));
+      if (options.requiresPath && !path) {
+        return {
+          entry,
+          path: "",
+          error: `Missing file path. Usage: repo cat ${entry.name} <path>`,
+        };
+      }
+      return { entry, path, error: "" };
+    }
+  }
+
+  return {
+    entry: null,
+    path: "",
+    error: `No repository matches '${argsString}'.`,
+  };
+}
+
 function parseRepoExplorerArgs(argsString) {
   const tokens = String(argsString || "")
     .trim()
@@ -660,6 +830,9 @@ export function buildRepoExplorerOutput(projectGroups, argsString = "") {
 
   lines.push("");
   lines.push("Use: repo <number|name> · repo open <name> · repo clone <name>");
+  lines.push(
+    "Browse: repo files <name> · repo readme <name> · repo cat <name> <path>",
+  );
   lines.push(
     "Filters: repo --systems · repo --lang C · repo --search terminal",
   );
