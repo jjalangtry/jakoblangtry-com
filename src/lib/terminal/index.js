@@ -3,6 +3,7 @@ export const COMMAND_LIST = [
   "banner",
   "blog",
   "calc",
+  "cat",
   "clear",
   "contact",
   "converter",
@@ -33,6 +34,7 @@ export const COMMAND_LIST = [
   "snake",
   "stats",
   "theme",
+  "tree",
   "uptime",
   "weather",
   "which",
@@ -742,6 +744,298 @@ export function buildReposOutput(projectGroups) {
   );
   lines.push("└" + "─".repeat(W) + "┘");
   return lines.join("\n");
+}
+
+const VIRTUAL_ROOT_ALIASES = new Set([
+  "",
+  ".",
+  "~",
+  "/",
+  "/home",
+  "/home/guest",
+  "home",
+  "home/guest",
+]);
+
+function slugifyVirtualSegment(value, fallback = "item") {
+  const slug = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug || fallback;
+}
+
+function uniqueVirtualPath(path, usedPaths) {
+  if (!usedPaths.has(path)) {
+    usedPaths.add(path);
+    return path;
+  }
+
+  const dotIndex = path.lastIndexOf(".");
+  const hasExtension = dotIndex > path.lastIndexOf("/");
+  const stem = hasExtension ? path.slice(0, dotIndex) : path;
+  const extension = hasExtension ? path.slice(dotIndex) : "";
+
+  let index = 2;
+  let candidate = `${stem}-${index}${extension}`;
+  while (usedPaths.has(candidate)) {
+    index++;
+    candidate = `${stem}-${index}${extension}`;
+  }
+  usedPaths.add(candidate);
+  return candidate;
+}
+
+export function normalizeVirtualPath(input = "") {
+  const raw = String(input || "").trim();
+  if (VIRTUAL_ROOT_ALIASES.has(raw)) return "";
+
+  let path = raw
+    .replace(/^~\/?/, "")
+    .replace(/^\/+/, "")
+    .replace(/^home\/guest\/?/, "")
+    .replace(/^home\/?$/, "");
+
+  const segments = [];
+  path.split("/").forEach((segment) => {
+    if (!segment || segment === ".") return;
+    if (segment === "..") {
+      segments.pop();
+      return;
+    }
+    segments.push(segment);
+  });
+
+  return segments.join("/");
+}
+
+function createProjectFileContent(project, sectionLabel) {
+  const lines = [`# ${project.name || "Untitled Project"}`, ""];
+  lines.push(`Type: ${sectionLabel}`);
+  if (project.language) lines.push(`Language: ${project.language}`);
+  if (project.url) lines.push(`URL: ${project.url}`);
+  if (project.repo && project.repo !== project.url) {
+    lines.push(`Source: ${project.repo}`);
+  }
+  if (project.description) {
+    lines.push("", project.description);
+  }
+  return lines.join("\n");
+}
+
+function createBlogFileContent(post) {
+  const lines = [`# ${post.title || "Untitled"}`];
+  if (post.date) lines.push("", `Date: ${post.date}`);
+  if (post.summary) lines.push("", post.summary);
+  if (post.content) lines.push("", post.content);
+  return lines.join("\n");
+}
+
+export function buildVirtualFilesystem(projectGroups = {}, posts = []) {
+  const entries = new Map();
+  const usedPaths = new Set();
+
+  const ensureDirectory = (path) => {
+    const normalized = normalizeVirtualPath(path);
+    if (entries.has(normalized)) return;
+
+    const parent = normalized.split("/").slice(0, -1).join("/");
+    if (parent) ensureDirectory(parent);
+
+    entries.set(normalized, {
+      path: normalized,
+      name: normalized ? normalized.split("/").pop() : ".",
+      type: "directory",
+    });
+  };
+
+  const addFile = (path, content) => {
+    const normalized = uniqueVirtualPath(normalizeVirtualPath(path), usedPaths);
+    const parent = normalized.split("/").slice(0, -1).join("/");
+    ensureDirectory(parent);
+    entries.set(normalized, {
+      path: normalized,
+      name: normalized.split("/").pop(),
+      type: "file",
+      content,
+    });
+  };
+
+  ensureDirectory("");
+  ensureDirectory("projects");
+  ensureDirectory("repos");
+  ensureDirectory("blog");
+  ensureDirectory("meta");
+
+  addFile(
+    "README.md",
+    [
+      "# jakoblangtry.com virtual filesystem",
+      "",
+      "This read-only filesystem mirrors the portfolio content exposed through the terminal.",
+      "",
+      "Try:",
+      "  tree",
+      "  cat about.txt",
+      "  cat contact.txt",
+      "  cat repos/index.txt",
+      "  cat projects/<project>.md",
+    ].join("\n"),
+  );
+  addFile(
+    "about.txt",
+    [
+      "Jakob Langtry",
+      "Software Engineering student at Rochester Institute of Technology.",
+      "Interests: web development, backend systems, systems programming, and terminal-first interfaces.",
+    ].join("\n"),
+  );
+  addFile(
+    "contact.txt",
+    [
+      "Email:    jjalangtry@gmail.com",
+      "GitHub:   https://github.com/JJALANGTRY",
+      "LinkedIn: https://linkedin.com/in/jjalangtry",
+      "Website:  https://jakoblangtry.com",
+    ].join("\n"),
+  );
+  addFile(
+    "meta/commands.txt",
+    COMMAND_LIST.map((command) => `/${command}`).join("\n"),
+  );
+
+  const sections = [
+    ["featured", "deployed project", projectGroups?.featured],
+    ["contributions", "contribution", projectGroups?.contributions],
+    ["github", "repository", projectGroups?.github],
+  ];
+  let projectCount = 0;
+
+  sections.forEach(([, sectionLabel, projects]) => {
+    if (!Array.isArray(projects)) return;
+    projects.forEach((project) => {
+      if (!project || !project.name) return;
+      const slug = slugifyVirtualSegment(project.name, "project");
+      addFile(
+        `projects/${slug}.md`,
+        createProjectFileContent(project, sectionLabel),
+      );
+      projectCount++;
+    });
+  });
+
+  if (projectCount === 0) {
+    addFile("projects/README.md", "No projects are configured yet.");
+  }
+
+  const catalog = buildRepositoryCatalog(projectGroups);
+  addFile(
+    "repos/index.txt",
+    catalog.length > 0
+      ? catalog
+          .map(
+            (entry) =>
+              `${String(entry.index).padStart(2)}  ${entry.slug}  ${entry.sourceUrl}`,
+          )
+          .join("\n")
+      : "No source repositories are configured yet.",
+  );
+
+  const postList = Array.isArray(posts) ? posts : [];
+  if (postList.length === 0) {
+    addFile("blog/README.md", "No blog posts are published yet.");
+  } else {
+    postList.forEach((post) => {
+      if (!post) return;
+      const slug = slugifyVirtualSegment(post.slug || post.title, "post");
+      addFile(`blog/${slug}.md`, createBlogFileContent(post));
+    });
+  }
+
+  return [...entries.values()].sort((a, b) => {
+    if (a.path === "") return -1;
+    if (b.path === "") return 1;
+    if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+    return a.path.localeCompare(b.path);
+  });
+}
+
+export function resolveVirtualPath(filesystem, target = "") {
+  if (!Array.isArray(filesystem)) return null;
+  const normalized = normalizeVirtualPath(target);
+  return filesystem.find((entry) => entry.path === normalized) || null;
+}
+
+export function listVirtualDirectory(filesystem, target = "") {
+  const directory = resolveVirtualPath(filesystem, target);
+  if (!directory || directory.type !== "directory") return [];
+
+  const base = directory.path ? `${directory.path}/` : "";
+  return filesystem
+    .filter((entry) => {
+      if (entry.path === directory.path) return false;
+      if (!entry.path.startsWith(base)) return false;
+      const remainder = entry.path.slice(base.length);
+      return remainder && !remainder.includes("/");
+    })
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+export function buildVirtualTreeOutput(filesystem, target = "") {
+  const entry = resolveVirtualPath(filesystem, target);
+  if (!entry) {
+    return `tree: ${target || "."}: No such file or directory`;
+  }
+
+  if (entry.type === "file") {
+    return entry.path || ".";
+  }
+
+  const lines = [entry.path || "."];
+  const renderDirectory = (directory, prefix = "") => {
+    const children = listVirtualDirectory(filesystem, directory.path);
+    children.forEach((child, index) => {
+      const last = index === children.length - 1;
+      const branch = last ? "└── " : "├── ";
+      lines.push(
+        `${prefix}${branch}${child.name}${child.type === "directory" ? "/" : ""}`,
+      );
+      if (child.type === "directory") {
+        renderDirectory(child, `${prefix}${last ? "    " : "│   "}`);
+      }
+    });
+  };
+
+  renderDirectory(entry);
+  return lines.join("\n");
+}
+
+export function buildVirtualCatOutput(filesystem, target = "") {
+  const displayTarget = String(target || "").trim();
+  if (!displayTarget) {
+    return "Usage: cat [file]\nTry: cat README.md";
+  }
+
+  const entry = resolveVirtualPath(filesystem, displayTarget);
+  if (!entry) {
+    return `cat: ${displayTarget}: No such file or directory`;
+  }
+  if (entry.type === "directory") {
+    return `cat: ${displayTarget}: Is a directory`;
+  }
+  return entry.content || "";
+}
+
+export function getVirtualPathCompletions(filesystem, partial = "") {
+  if (!Array.isArray(filesystem)) return [];
+  const normalized = normalizeVirtualPath(partial);
+  return filesystem
+    .filter((entry) => entry.path && entry.path.startsWith(normalized))
+    .map((entry) => `${entry.path}${entry.type === "directory" ? "/" : ""}`)
+    .sort();
 }
 
 /**
