@@ -564,7 +564,9 @@ export function normalizeRepositoryPath(path) {
 
 export function getGitHubRepoParts(target) {
   const sourceUrl =
-    typeof target === "string" ? target : getProjectSourceUrl(target);
+    typeof target === "string"
+      ? target
+      : target?.sourceUrl || getProjectSourceUrl(target);
   const raw = String(sourceUrl || "")
     .trim()
     .replace(/\.git$/, "")
