@@ -22,6 +22,12 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  VIRTUAL_HOME_DIRECTORY,
+  buildVirtualFilesystem,
+  listVirtualPath,
+  changeVirtualDirectory,
+  readVirtualFile,
+  buildVirtualTreeOutput,
 } from "../lib/terminal/index.js";
 
 // Global variables for managing input and command history
@@ -41,6 +47,7 @@ let countdownActive = false;
 let countdownInterval = null;
 let editorState = null; // null | { phase: "title" } | { phase: "body", title, lines } | { phase: "login" }
 let isAdmin = false;
+let currentDirectory = VIRTUAL_HOME_DIRECTORY;
 
 async function hashPassword(password) {
   const data = new TextEncoder().encode(password);
@@ -243,6 +250,8 @@ const commandList = [
   "snake",
   "stats",
   "theme",
+  "cat",
+  "tree",
   "uptime",
   "weather",
   "which",
@@ -396,8 +405,7 @@ function createInputLine() {
   inputLine.className = "terminal-input-line";
   const prompt = document.createElement("span");
   prompt.className = "prompt";
-  const user = isAdmin ? "admin" : "guest";
-  prompt.textContent = `${user}@jjalangtry.com:~$ `;
+  prompt.textContent = getPromptPrefix();
 
   const inputWrapper = document.createElement("div");
   inputWrapper.className = "input-wrapper";
@@ -754,6 +762,62 @@ function buildCommandsListOutput() {
   return output;
 }
 
+function buildCurrentVirtualFilesystem() {
+  return buildVirtualFilesystem({
+    ...terminalData,
+    posts: getAllPosts(),
+    customWhoami: loadCustomWhoami(),
+  });
+}
+
+function appendCommandResult(result) {
+  appendOutput(result.output, result.ok ? "info-text" : "error-text");
+}
+
+function displayVirtualDirectory(targetPath = "") {
+  appendCommandResult(
+    listVirtualPath(
+      buildCurrentVirtualFilesystem(),
+      currentDirectory,
+      targetPath,
+    ),
+  );
+}
+
+function changeDirectory(targetPath = "") {
+  const result = changeVirtualDirectory(
+    buildCurrentVirtualFilesystem(),
+    currentDirectory,
+    targetPath,
+  );
+  if (result.ok) {
+    currentDirectory = result.path;
+    updatePromptUser();
+  } else {
+    appendCommandResult(result);
+  }
+}
+
+function displayVirtualFile(targetPath = "") {
+  appendCommandResult(
+    readVirtualFile(
+      buildCurrentVirtualFilesystem(),
+      currentDirectory,
+      targetPath,
+    ),
+  );
+}
+
+function displayVirtualTree(targetPath = "") {
+  appendCommandResult(
+    buildVirtualTreeOutput(
+      buildCurrentVirtualFilesystem(),
+      currentDirectory,
+      targetPath,
+    ),
+  );
+}
+
 function buildProjectsListOutput() {
   const projects = terminalData.projects || [];
   if (!projects.length) {
@@ -829,9 +893,11 @@ function executeCommand(command, options = {}) {
   ────────────────────────────────  ────────────────────────────────
   help        this screen           login       authenticate
   man         command manual        logout      end session
-  ls          list commands         write       create blog post
-  history     command history       edit        edit site content
-  clear       clear terminal        export      export posts
+  ls          list files            write       create blog post
+  cat         read files            edit        edit site content
+  tree        show file tree        export      export posts
+  history     command history
+  clear       clear terminal
   theme       toggle dark/light
   uptime      session uptime
   neofetch    system info
@@ -845,14 +911,14 @@ function executeCommand(command, options = {}) {
   sudo        sudo mode
 
   ──────────────────────────────────────────────────────────────────────────
-  PIPES  help | grep [term]    ·    MAN  man [command]    ·    [cmd] --help
+  FILES  tree · cat about.txt  ·  PIPES  help | grep [term]  ·  MAN  man [cmd]
   ──────────────────────────────────────────────────────────────────────────`;
 
       // Create a div with pre-formatted text for help output
       appendOutput(helpText, "info-text");
       break;
     case "ls":
-      appendOutput(buildCommandsListOutput(), "info-text");
+      displayVirtualDirectory();
       break;
     case "clear":
       // Save the command history
@@ -904,7 +970,7 @@ Currently seeking opportunities in software engineering.`,
       displayContact();
       break;
     case "pwd":
-      appendOutput("/home/guest", "info-text");
+      appendOutput(currentDirectory, "info-text");
       break;
     case "hostname":
       appendOutput("jjalangtry.com", "info-text");
@@ -988,6 +1054,12 @@ Currently seeking opportunities in software engineering.`,
         "Usage: grep [pattern]\nSearches across projects and commands.\nCan also be used as a pipe filter: help | grep weather",
         "info-text",
       );
+      break;
+    case "cat":
+      appendOutput("Usage: cat [path]\nExample: cat about.txt", "info-text");
+      break;
+    case "tree":
+      displayVirtualTree();
       break;
     case "man":
       appendOutput(
@@ -1097,11 +1169,38 @@ Currently seeking opportunities in software engineering.`,
         normalizedCommand.startsWith("cd ") ||
         normalizedCommand === "cd"
       ) {
-        const dir = command.substring(3).trim();
-        if (!dir || dir === "~") {
-          appendOutput("You are already in your home directory.", "info-text");
+        const dir =
+          normalizedCommand === "cd" ? "" : command.substring(3).trim();
+        if (dir === "--help") {
+          displayCommandHelp("cd");
         } else {
-          appendOutput(`cd: no such file or directory: ${dir}`, "error-text");
+          changeDirectory(dir);
+        }
+        break;
+      } else if (normalizedCommand.startsWith("ls ")) {
+        const target = command.substring(3).trim();
+        if (target === "--help") {
+          displayCommandHelp("ls");
+        } else if (target === "--commands") {
+          appendOutput(buildCommandsListOutput(), "info-text");
+        } else {
+          displayVirtualDirectory(target);
+        }
+        break;
+      } else if (normalizedCommand.startsWith("cat ")) {
+        const target = command.substring(4).trim();
+        if (target === "--help") {
+          displayCommandHelp("cat");
+        } else {
+          displayVirtualFile(target);
+        }
+        break;
+      } else if (normalizedCommand.startsWith("tree ")) {
+        const target = command.substring(5).trim();
+        if (target === "--help") {
+          displayCommandHelp("tree");
+        } else {
+          displayVirtualTree(target);
         }
         break;
       } else if (normalizedCommand.startsWith("curl ")) {
@@ -3059,12 +3158,26 @@ function getHelpDetails() {
       notes:
         "History is persisted in localStorage (up to 50 commands). Use 'history clear' to reset.",
     },
-    ls: {
-      desc: "List available terminal commands.",
-      usage: "ls",
-      examples: ["ls"],
+    cat: {
+      desc: "Read a file from the read-only portfolio filesystem.",
+      usage: "cat [path]",
+      examples: ["cat about.txt", "cat README.md", "cat blog/terminal.md"],
       notes:
-        "This terminal-style ls command lists supported commands rather than filesystem entries.",
+        "Paths can be absolute, relative, or home-relative with ~. Directories cannot be read with cat; use ls or tree instead.",
+    },
+    cd: {
+      desc: "Change the current directory in the read-only portfolio filesystem.",
+      usage: "cd [path]",
+      examples: ["cd projects", "cd ..", "cd ~"],
+      notes:
+        "The prompt updates to show the active directory. The filesystem is generated from the site's portfolio data.",
+    },
+    ls: {
+      desc: "List files and directories in the read-only portfolio filesystem.",
+      usage: "ls [path]",
+      examples: ["ls", "ls projects", "ls --commands"],
+      notes:
+        "Use 'ls --commands' for the older command-list view. Directories are shown with a trailing slash.",
     },
     man: {
       desc: "Display the manual page for a command.",
@@ -3093,6 +3206,13 @@ function getHelpDetails() {
       examples: ["projects"],
       notes:
         "Click any project to open it. Type 'close' or press Ctrl+B then q to dismiss the pane.",
+    },
+    pwd: {
+      desc: "Print the current virtual working directory.",
+      usage: "pwd",
+      examples: ["pwd"],
+      notes:
+        "The terminal starts in /home/guest and supports relative navigation through the generated portfolio filesystem.",
     },
     repos: {
       desc: "Display GitHub repositories and contributions in a terminal-style ASCII view.",
@@ -3153,6 +3273,13 @@ function getHelpDetails() {
       examples: ["theme", "theme dark", "theme light"],
       notes:
         "Without arguments, toggles to the opposite theme. Preference is saved in your browser.",
+    },
+    tree: {
+      desc: "Display the portfolio filesystem as a directory tree.",
+      usage: "tree [path]",
+      examples: ["tree", "tree projects", "tree ~/blog"],
+      notes:
+        "The tree command is read-only and intentionally depth-limited so large catalogs stay readable.",
     },
     uptime: {
       desc: "Display how long the current terminal session has been active.",
@@ -3773,7 +3900,13 @@ function setPromptText(text) {
 
 function getPromptPrefix() {
   const user = isAdmin ? "admin" : "guest";
-  return `${user}@jjalangtry.com:~$ `;
+  const promptPath =
+    currentDirectory === VIRTUAL_HOME_DIRECTORY
+      ? "~"
+      : currentDirectory.startsWith(`${VIRTUAL_HOME_DIRECTORY}/`)
+        ? `~/${currentDirectory.slice(VIRTUAL_HOME_DIRECTORY.length + 1)}`
+        : currentDirectory;
+  return `${user}@jjalangtry.com:${promptPath}$ `;
 }
 
 function updatePromptUser() {
@@ -4034,7 +4167,7 @@ function executePipeline(input) {
 
   // Echo the full pipeline
   const echoLine = document.createElement("div");
-  echoLine.textContent = `guest@jjalangtry.com:~$ ${input}`;
+  echoLine.textContent = `${getPromptPrefix()}${input}`;
   cliOutput.insertBefore(echoLine, inputLine);
 
   const firstCmd = filtered[0].trim().toLowerCase();
@@ -4219,7 +4352,7 @@ function initCLI() {
       e.preventDefault();
       const currentText = e.target.value;
       const commandLine = document.createElement("div");
-      commandLine.textContent = `guest@jjalangtry.com:~$ ${currentText}^C`;
+      commandLine.textContent = `${getPromptPrefix()}${currentText}^C`;
       cliOutput.insertBefore(commandLine, inputLine);
 
       e.target.value = "";
@@ -4280,7 +4413,7 @@ function initCLI() {
           e.target.value = `${baseCmd} ${completions[0]}`;
         } else if (completions.length > 1) {
           const commandLine = document.createElement("div");
-          commandLine.textContent = `guest@jjalangtry.com:~$ ${currentText}`;
+          commandLine.textContent = `${getPromptPrefix()}${currentText}`;
           cliOutput.insertBefore(commandLine, inputLine);
           appendOutput(completions.join("  "), "info-text");
           cliOutput.scrollTop = cliOutput.scrollHeight;
@@ -4295,7 +4428,7 @@ function initCLI() {
         e.target.value = matches[0] + " ";
       } else if (matches.length > 1) {
         const commandLine = document.createElement("div");
-        commandLine.textContent = `guest@jjalangtry.com:~$ ${currentText}`;
+        commandLine.textContent = `${getPromptPrefix()}${currentText}`;
         cliOutput.insertBefore(commandLine, inputLine);
         appendOutput(matches.join("  "), "info-text");
         cliOutput.scrollTop = cliOutput.scrollHeight;

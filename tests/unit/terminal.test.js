@@ -24,6 +24,14 @@ import {
   buildBlogPostOutput,
   buildContactOutput,
   buildStatsOutput,
+  VIRTUAL_HOME_DIRECTORY,
+  buildVirtualFilesystem,
+  normalizeVirtualPath,
+  getVirtualNode,
+  listVirtualPath,
+  changeVirtualDirectory,
+  readVirtualFile,
+  buildVirtualTreeOutput,
   buildReposOutput,
   buildRepoExplorerOutput,
   buildRepositoryCatalog,
@@ -903,6 +911,186 @@ describe("terminal helpers", () => {
     expect(output).toContain("2025-01-01");
     expect(output).toContain("help");
     expect(output).toContain("10 times");
+  });
+
+  // ── Virtual filesystem ───────────────────────────────────────
+
+  const virtualFsData = {
+    version: "9.9.9",
+    siteConfig: { resumeUrl: "https://resume.example.com" },
+    customWhoami: "Custom terminal bio.",
+    projects: [
+      {
+        name: "Link Converter",
+        url: "https://convert.example.com",
+        repo: "https://github.com/jjalangtry/convert",
+        language: "TypeScript",
+        description: "Convert music links",
+      },
+    ],
+    projectGroups: {
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.example.com",
+          repo: "https://github.com/jjalangtry/convert",
+          language: "TypeScript",
+          description: "Convert music links",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          language: "C",
+          description: "systems programming exercise",
+        },
+      ],
+    },
+    skills: [
+      {
+        name: "Languages",
+        skills: [{ name: "JavaScript", level: 90 }],
+      },
+    ],
+    experience: [
+      {
+        title: "Software Engineer",
+        org: "Example Co",
+        period: "2025",
+        description: "Built terminal interfaces",
+      },
+    ],
+    posts: [
+      {
+        title: "Terminal Portfolio",
+        slug: "terminal-portfolio",
+        date: "2025-01-01",
+        summary: "How the terminal works",
+        content: "A post about the terminal.",
+      },
+    ],
+  };
+
+  it("includes filesystem commands in the command surface", () => {
+    expect(COMMAND_LIST).toContain("cat");
+    expect(COMMAND_LIST).toContain("tree");
+  });
+
+  it("builds a virtual portfolio filesystem from site data", () => {
+    const fs = buildVirtualFilesystem(virtualFsData);
+    const home = getVirtualNode(fs, VIRTUAL_HOME_DIRECTORY);
+
+    expect(home.type).toBe("directory");
+    expect(home.children["README.md"].content).toContain("v9.9.9");
+    expect(home.children["about.txt"].content).toBe("Custom terminal bio.");
+    expect(home.children["resume.url"].content).toBe(
+      "https://resume.example.com",
+    );
+  });
+
+  it("normalizes absolute, relative, parent, and home virtual paths", () => {
+    expect(normalizeVirtualPath("", "/home/guest/projects")).toBe(
+      "/home/guest/projects",
+    );
+    expect(normalizeVirtualPath("~/projects/../skills.txt")).toBe(
+      "/home/guest/skills.txt",
+    );
+    expect(normalizeVirtualPath("../blog", "/home/guest/projects")).toBe(
+      "/home/guest/blog",
+    );
+    expect(normalizeVirtualPath("/home/guest/./repos")).toBe(
+      "/home/guest/repos",
+    );
+  });
+
+  it("lists virtual directories and files with unix-like errors", () => {
+    const fs = buildVirtualFilesystem(virtualFsData);
+
+    expect(listVirtualPath(fs, VIRTUAL_HOME_DIRECTORY).output).toContain(
+      "projects/",
+    );
+    expect(listVirtualPath(fs, VIRTUAL_HOME_DIRECTORY, "projects").output).toBe(
+      "01-link-converter.txt",
+    );
+    expect(
+      listVirtualPath(
+        fs,
+        VIRTUAL_HOME_DIRECTORY,
+        "projects/01-link-converter.txt",
+      ),
+    ).toEqual({ ok: true, output: "01-link-converter.txt" });
+    expect(listVirtualPath(fs, VIRTUAL_HOME_DIRECTORY, "missing")).toEqual({
+      ok: false,
+      output: "ls: missing: No such file or directory",
+    });
+  });
+
+  it("changes virtual directories and rejects files", () => {
+    const fs = buildVirtualFilesystem(virtualFsData);
+
+    expect(
+      changeVirtualDirectory(fs, VIRTUAL_HOME_DIRECTORY, "projects"),
+    ).toEqual({
+      ok: true,
+      path: "/home/guest/projects",
+      output: "",
+    });
+    expect(
+      changeVirtualDirectory(fs, VIRTUAL_HOME_DIRECTORY, "about.txt"),
+    ).toEqual({
+      ok: false,
+      path: VIRTUAL_HOME_DIRECTORY,
+      output: "cd: about.txt: Not a directory",
+    });
+    expect(changeVirtualDirectory(fs, "/home/guest/projects", "")).toEqual({
+      ok: true,
+      path: VIRTUAL_HOME_DIRECTORY,
+      output: "",
+    });
+  });
+
+  it("reads virtual files and rejects directories or missing paths", () => {
+    const fs = buildVirtualFilesystem(virtualFsData);
+
+    expect(readVirtualFile(fs, VIRTUAL_HOME_DIRECTORY, "about.txt")).toEqual({
+      ok: true,
+      output: "Custom terminal bio.",
+    });
+    expect(
+      readVirtualFile(fs, VIRTUAL_HOME_DIRECTORY, "blog/terminal-portfolio.md")
+        .output,
+    ).toContain("Terminal Portfolio");
+    expect(readVirtualFile(fs, VIRTUAL_HOME_DIRECTORY, "projects")).toEqual({
+      ok: false,
+      output: "cat: projects: Is a directory",
+    });
+    expect(readVirtualFile(fs, VIRTUAL_HOME_DIRECTORY)).toEqual({
+      ok: false,
+      output: "cat: missing operand",
+    });
+  });
+
+  it("renders virtual tree output with depth limits and file targets", () => {
+    const fs = buildVirtualFilesystem(virtualFsData);
+    const tree = buildVirtualTreeOutput(fs, VIRTUAL_HOME_DIRECTORY, "", {
+      maxDepth: 1,
+    });
+
+    expect(tree.ok).toBe(true);
+    expect(tree.output).toContain("/home/guest");
+    expect(tree.output).toContain("|-- blog/");
+    expect(tree.output).toContain("...");
+    expect(
+      buildVirtualTreeOutput(fs, VIRTUAL_HOME_DIRECTORY, "about.txt"),
+    ).toEqual({ ok: true, output: "/home/guest/about.txt" });
+    expect(
+      buildVirtualTreeOutput(fs, VIRTUAL_HOME_DIRECTORY, "missing"),
+    ).toEqual({
+      ok: false,
+      output: "tree: missing: No such file or directory",
+    });
   });
 
   // ── Fortune ──────────────────────────────────────────────────
