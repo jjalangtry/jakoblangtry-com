@@ -32,6 +32,15 @@ import {
   getRepositorySlug,
   isSystemsRepository,
   resolveRepository,
+  buildVirtualFileSystem,
+  resolveVirtualPath,
+  getVirtualNode,
+  listVirtualDirectory,
+  changeVirtualDirectory,
+  readVirtualFile,
+  formatVirtualTree,
+  completeVirtualPath,
+  VIRTUAL_HOME,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -48,6 +57,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("weather");
     expect(COMMAND_LIST).toContain("sudo");
     expect(COMMAND_LIST).toContain("cd");
+    expect(COMMAND_LIST).toContain("cat");
     expect(COMMAND_LIST).toContain("grep");
     expect(COMMAND_LIST).toContain("history");
     expect(COMMAND_LIST).toContain("man");
@@ -72,6 +82,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("flip");
     expect(COMMAND_LIST).toContain("fortune");
     expect(COMMAND_LIST).toContain("matrix");
+    expect(COMMAND_LIST).toContain("tree");
   });
 
   it("builds repos output with project groups", () => {
@@ -324,6 +335,175 @@ describe("terminal helpers", () => {
       }),
     ).toBe("git clone https://github.com/jjalangtry/wordlehelper.git");
     expect(buildRepositoryCloneCommand(null)).toBe("");
+  });
+
+  it("builds a read-only portfolio virtual filesystem", () => {
+    const fileSystem = buildVirtualFileSystem({
+      version: "2.4.25",
+      projectGroups: {
+        featured: [
+          {
+            name: "Link Converter",
+            url: "https://convert.jakoblangtry.com",
+            repo: "https://github.com/jjalangtry/convert",
+            description: "Convert music links",
+            language: "TypeScript",
+          },
+        ],
+        contributions: [],
+        github: [
+          {
+            name: "Unix Tool",
+            url: "https://github.com/jjalangtry/unix-tool",
+            language: "C",
+          },
+        ],
+      },
+      skills: [{ name: "Languages", skills: [{ name: "C", level: 90 }] }],
+      experience: [
+        {
+          title: "Engineer",
+          org: "Acme",
+          period: "2025",
+          description: "Built things.",
+        },
+      ],
+      posts: [
+        {
+          slug: "hello-world",
+          title: "Hello World",
+          date: "2026-01-01",
+          summary: "Intro",
+          content: "Post body",
+        },
+      ],
+    });
+
+    expect(VIRTUAL_HOME).toBe("/home/guest");
+    expect(getVirtualNode(fileSystem, "/home/guest")?.type).toBe("dir");
+    expect(getVirtualNode(fileSystem, "/home/guest/about.txt")?.type).toBe(
+      "file",
+    );
+
+    const homeList = listVirtualDirectory(fileSystem, VIRTUAL_HOME);
+    expect(homeList.output).toContain("projects/");
+    expect(homeList.output).toContain("repos/");
+    expect(homeList.output).toContain("about.txt");
+
+    const projectFile = readVirtualFile(
+      fileSystem,
+      VIRTUAL_HOME,
+      "projects/link-converter.txt",
+    );
+    expect(projectFile.output).toContain("Convert music links");
+    expect(projectFile.output).toContain(
+      "https://github.com/jjalangtry/convert",
+    );
+
+    const repoFile = readVirtualFile(
+      fileSystem,
+      VIRTUAL_HOME,
+      "repos/unix-tool.txt",
+    );
+    expect(repoFile.output).toContain(
+      "Clone: git clone https://github.com/jjalangtry/unix-tool.git",
+    );
+
+    const blogFile = readVirtualFile(
+      fileSystem,
+      "/home/guest/blog",
+      "hello-world.md",
+    );
+    expect(blogFile.output).toContain("# Hello World");
+    expect(blogFile.output).toContain("Post body");
+  });
+
+  it("resolves virtual paths and directory changes like a shell", () => {
+    const fileSystem = buildVirtualFileSystem({
+      projectGroups: {
+        featured: [{ name: "Link Converter", url: "https://example.com" }],
+      },
+    });
+
+    expect(resolveVirtualPath(VIRTUAL_HOME, "projects/../repos")).toBe(
+      "/home/guest/repos",
+    );
+    expect(resolveVirtualPath("/home/guest/projects", "~/blog")).toBe(
+      "/home/guest/blog",
+    );
+    expect(resolveVirtualPath("/home/guest/projects", "/home")).toBe("/home");
+
+    const changed = changeVirtualDirectory(
+      fileSystem,
+      VIRTUAL_HOME,
+      "projects",
+    );
+    expect(changed).toEqual({ path: "/home/guest/projects" });
+
+    const home = changeVirtualDirectory(fileSystem, changed.path, "");
+    expect(home).toEqual({ path: VIRTUAL_HOME });
+
+    const fileTarget = changeVirtualDirectory(
+      fileSystem,
+      VIRTUAL_HOME,
+      "README.md",
+    );
+    expect(fileTarget.error).toContain("not a directory");
+
+    const missing = changeVirtualDirectory(fileSystem, VIRTUAL_HOME, "missing");
+    expect(missing).toMatchObject({ path: VIRTUAL_HOME });
+    expect(missing.error).toContain("no such file or directory");
+  });
+
+  it("handles virtual filesystem errors, tree output, and path completion", () => {
+    const fileSystem = buildVirtualFileSystem({
+      projectGroups: {
+        featured: [
+          { name: "Link Converter", url: "https://example.com" },
+          { name: "Link Converter", url: "https://example.org" },
+        ],
+      },
+      posts: [],
+    });
+
+    expect(
+      listVirtualDirectory(fileSystem, VIRTUAL_HOME, "missing").error,
+    ).toBe("ls: cannot access 'missing': No such file or directory");
+    expect(readVirtualFile(fileSystem, VIRTUAL_HOME, "").error).toBe(
+      "cat: missing file operand",
+    );
+    expect(readVirtualFile(fileSystem, VIRTUAL_HOME, "projects").error).toBe(
+      "cat: projects: Is a directory",
+    );
+    expect(readVirtualFile(fileSystem, VIRTUAL_HOME, "nope.txt").error).toBe(
+      "cat: nope.txt: No such file or directory",
+    );
+
+    const tree = formatVirtualTree(fileSystem, VIRTUAL_HOME, "projects");
+    expect(tree.output).toContain("/home/guest/projects");
+    expect(tree.output).toContain("link-converter.txt");
+    expect(tree.output).toContain("link-converter-2.txt");
+    expect(tree.output).toContain("director");
+
+    expect(formatVirtualTree(fileSystem, VIRTUAL_HOME, "missing").error).toBe(
+      "tree: missing: No such file or directory",
+    );
+
+    expect(completeVirtualPath(fileSystem, VIRTUAL_HOME, "pro")).toEqual([
+      "projects/",
+    ]);
+    expect(
+      completeVirtualPath(fileSystem, VIRTUAL_HOME, "", {
+        directoriesOnly: true,
+      }),
+    ).toEqual(["blog/", "projects/", "repos/"]);
+    expect(
+      completeVirtualPath(fileSystem, VIRTUAL_HOME, "projects/link"),
+    ).toEqual(["projects/link-converter.txt", "projects/link-converter-2.txt"]);
+    expect(completeVirtualPath(fileSystem, VIRTUAL_HOME, "missing/")).toEqual(
+      [],
+    );
+    expect(getVirtualNode(null, "/home")).toBeNull();
   });
 
   it("builds contribution chart ASCII from API data", () => {
