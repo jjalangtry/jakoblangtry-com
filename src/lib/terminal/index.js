@@ -756,6 +756,13 @@ function createVirtualFile(name, content) {
   return { type: "file", name, content: String(content || "") };
 }
 
+function compareVirtualEntries(a, b) {
+  if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+  if (b.name.startsWith(`${a.name.replace(/\.[^.]+$/, "")}-`)) return -1;
+  if (a.name.startsWith(`${b.name.replace(/\.[^.]+$/, "")}-`)) return 1;
+  return a.name.localeCompare(b.name, undefined, { numeric: true });
+}
+
 function slugifyFileName(value, fallback = "item") {
   const slug = String(value || fallback)
     .toLowerCase()
@@ -986,10 +993,7 @@ export function listVirtualDirectory(fileSystem, currentPath, target = "") {
   }
 
   const entries = Object.values(node.children)
-    .sort((a, b) => {
-      if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    })
+    .sort(compareVirtualEntries)
     .map((entry) => (entry.type === "dir" ? `${entry.name}/` : entry.name));
 
   return { output: entries.length ? entries.join("  ") : "" };
@@ -1055,10 +1059,9 @@ export function formatVirtualTree(fileSystem, currentPath, target = "") {
 
   function walk(currentNode, prefix = "") {
     if (currentNode.type !== "dir") return;
-    const entries = Object.values(currentNode.children).sort((a, b) => {
-      if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
+    const entries = Object.values(currentNode.children).sort(
+      compareVirtualEntries,
+    );
 
     entries.forEach((entry, index) => {
       const isLast = index === entries.length - 1;
@@ -1109,7 +1112,7 @@ export function completeVirtualPath(
     .filter((entry) =>
       entry.name.toLowerCase().startsWith(prefix.toLowerCase()),
     )
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort(compareVirtualEntries)
     .map((entry) => {
       const suffix = entry.type === "dir" ? "/" : "";
       return `${parentExpression}${entry.name}${suffix}`;
