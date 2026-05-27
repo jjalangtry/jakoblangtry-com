@@ -33,6 +33,7 @@ export const COMMAND_LIST = [
   "snake",
   "stats",
   "theme",
+  "unalias",
   "uptime",
   "weather",
   "which",
@@ -48,6 +49,161 @@ export const COMMAND_LIST = [
   "close",
   "exit",
 ];
+
+export const DEFAULT_ALIASES = Object.freeze({
+  cls: "clear",
+  exit: "close",
+  h: "history",
+  ll: "ls",
+});
+
+const ALIAS_NAME_PATTERN = /^[a-z][a-z0-9_-]*$/;
+
+export function isValidAliasName(name) {
+  return ALIAS_NAME_PATTERN.test(String(name || ""));
+}
+
+export function quoteAliasValue(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+export function formatAliasDefinition(name, value) {
+  return `alias ${name}=${quoteAliasValue(value)}`;
+}
+
+function stripAliasQuotes(value) {
+  const text = String(value || "").trim();
+  if (text.length >= 2) {
+    const first = text[0];
+    const last = text[text.length - 1];
+    if ((first === "'" && last === "'") || (first === '"' && last === '"')) {
+      return text.slice(1, -1);
+    }
+  }
+  return text;
+}
+
+export function parseAliasCommand(input) {
+  const text = String(input || "").trim();
+  const body = text.replace(/^alias(?:\s+|$)/i, "").trim();
+
+  if (!body || body === "-p") {
+    return { type: "list" };
+  }
+
+  const equalsIndex = body.indexOf("=");
+  if (equalsIndex === -1) {
+    const names = body.split(/\s+/).filter(Boolean);
+    const invalid = names.find((name) => !isValidAliasName(name));
+    if (invalid) {
+      return { type: "error", message: `alias: invalid name '${invalid}'` };
+    }
+    return { type: "show", names };
+  }
+
+  const name = body.slice(0, equalsIndex).trim();
+  const rawValue = body.slice(equalsIndex + 1).trim();
+
+  if (!isValidAliasName(name)) {
+    return {
+      type: "error",
+      message: `alias: invalid name '${name || "(empty)"}'`,
+    };
+  }
+
+  if (!rawValue) {
+    return { type: "error", message: `alias: missing value for '${name}'` };
+  }
+
+  return { type: "set", name, value: stripAliasQuotes(rawValue) };
+}
+
+export function parseUnaliasCommand(input) {
+  const text = String(input || "").trim();
+  const body = text.replace(/^unalias(?:\s+|$)/i, "").trim();
+
+  if (!body) {
+    return { type: "error", message: "Usage: unalias <name> [name...] | -a" };
+  }
+
+  if (body === "-a") {
+    return { type: "clear" };
+  }
+
+  const names = body.split(/\s+/).filter(Boolean);
+  const invalid = names.find((name) => !isValidAliasName(name));
+  if (invalid) {
+    return { type: "error", message: `unalias: invalid name '${invalid}'` };
+  }
+
+  return { type: "remove", names };
+}
+
+export function formatAliasList(aliases) {
+  const entries = Object.entries(aliases || {})
+    .filter(([name, value]) => isValidAliasName(name) && String(value).trim())
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  if (entries.length === 0) {
+    return "No aliases defined.";
+  }
+
+  return entries
+    .map(([name, value]) => formatAliasDefinition(name, value))
+    .join("\n");
+}
+
+export function expandAliasCommand(input, aliases, options = {}) {
+  let command = String(input || "").trim();
+  const aliasMap = aliases || {};
+  const maxDepth = options.maxDepth ?? 10;
+  const skipCommands = new Set(options.skipCommands || ["alias", "unalias"]);
+  const chain = [];
+
+  if (!command) {
+    return { command: "", expanded: false, chain };
+  }
+
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const match = command.match(/^(\S+)([\s\S]*)$/);
+    if (!match) {
+      return { command, expanded: chain.length > 0, chain };
+    }
+
+    const aliasName = match[1].toLowerCase();
+    const suffix = match[2] || "";
+
+    if (skipCommands.has(aliasName)) {
+      return { command, expanded: chain.length > 0, chain };
+    }
+
+    const aliasValue = aliasMap[aliasName];
+    if (!aliasValue) {
+      return { command, expanded: chain.length > 0, chain };
+    }
+
+    if (chain.includes(aliasName)) {
+      return {
+        command,
+        expanded: chain.length > 0,
+        chain,
+        error: `alias: expansion loop detected: ${[...chain, aliasName].join(
+          " -> ",
+        )}`,
+      };
+    }
+
+    chain.push(aliasName);
+    command = `${aliasValue}${suffix}`.trim();
+  }
+
+  return {
+    command,
+    expanded: chain.length > 0,
+    chain,
+    error: `alias: expansion exceeded ${maxDepth} levels`,
+  };
+}
 
 export function buildProjectsListOutput(projects) {
   if (!Array.isArray(projects) || projects.length === 0) {

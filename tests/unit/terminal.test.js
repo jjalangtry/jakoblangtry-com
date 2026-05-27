@@ -39,6 +39,14 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  DEFAULT_ALIASES,
+  expandAliasCommand,
+  formatAliasDefinition,
+  formatAliasList,
+  isValidAliasName,
+  parseAliasCommand,
+  parseUnaliasCommand,
+  quoteAliasValue,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -72,6 +80,121 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("flip");
     expect(COMMAND_LIST).toContain("fortune");
     expect(COMMAND_LIST).toContain("matrix");
+    expect(COMMAND_LIST).toContain("unalias");
+  });
+
+  it("parses alias commands for list, lookup, and assignment", () => {
+    expect(DEFAULT_ALIASES).toMatchObject({ ll: "ls", cls: "clear" });
+    expect(parseAliasCommand("alias")).toEqual({ type: "list" });
+    expect(parseAliasCommand("alias -p")).toEqual({ type: "list" });
+    expect(parseAliasCommand("alias ll")).toEqual({
+      type: "show",
+      names: ["ll"],
+    });
+    expect(parseAliasCommand("alias ll gh")).toEqual({
+      type: "show",
+      names: ["ll", "gh"],
+    });
+    expect(parseAliasCommand("alias ll='ls'")).toEqual({
+      type: "set",
+      name: "ll",
+      value: "ls",
+    });
+    expect(parseAliasCommand('alias gh="repo open site"')).toEqual({
+      type: "set",
+      name: "gh",
+      value: "repo open site",
+    });
+    expect(parseAliasCommand("alias bad-name='help'")).toEqual({
+      type: "set",
+      name: "bad-name",
+      value: "help",
+    });
+  });
+
+  it("rejects invalid alias and unalias forms", () => {
+    expect(isValidAliasName("ll")).toBe(true);
+    expect(isValidAliasName("2bad")).toBe(false);
+    expect(parseAliasCommand("alias 2bad='ls'")).toEqual({
+      type: "error",
+      message: "alias: invalid name '2bad'",
+    });
+    expect(parseAliasCommand("alias empty=")).toEqual({
+      type: "error",
+      message: "alias: missing value for 'empty'",
+    });
+    expect(parseAliasCommand("alias two words")).toEqual({
+      type: "show",
+      names: ["two", "words"],
+    });
+    expect(parseUnaliasCommand("unalias")).toEqual({
+      type: "error",
+      message: "Usage: unalias <name> [name...] | -a",
+    });
+    expect(parseUnaliasCommand("unalias -a")).toEqual({ type: "clear" });
+    expect(parseUnaliasCommand("unalias ll gh")).toEqual({
+      type: "remove",
+      names: ["ll", "gh"],
+    });
+    expect(parseUnaliasCommand("unalias bad$name")).toEqual({
+      type: "error",
+      message: "unalias: invalid name 'bad$name'",
+    });
+  });
+
+  it("formats alias definitions and lists with shell quoting", () => {
+    expect(quoteAliasValue("repo open jakob's site")).toBe(
+      "'repo open jakob'\\''s site'",
+    );
+    expect(formatAliasDefinition("gh", "repo open site")).toBe(
+      "alias gh='repo open site'",
+    );
+    expect(formatAliasList({ z: "weather London", a: "help" })).toBe(
+      "alias a='help'\nalias z='weather London'",
+    );
+    expect(formatAliasList({ bad: "", "2bad": "ls" })).toBe(
+      "No aliases defined.",
+    );
+  });
+
+  it("expands aliases with arguments, recursion, and pipeline suffixes", () => {
+    const aliases = {
+      g: "grep -n",
+      hp: "help",
+      ll: "ls",
+      recent: "history 5",
+    };
+
+    expect(expandAliasCommand("ll", aliases)).toMatchObject({
+      command: "ls",
+      expanded: true,
+      chain: ["ll"],
+    });
+    expect(expandAliasCommand("g weather", aliases).command).toBe(
+      "grep -n weather",
+    );
+    expect(expandAliasCommand("hp | g repo", aliases).command).toBe(
+      "help | grep -n repo",
+    );
+    expect(expandAliasCommand("alias ll='ls'", aliases)).toMatchObject({
+      command: "alias ll='ls'",
+      expanded: false,
+    });
+    expect(expandAliasCommand("recent", aliases).command).toBe("history 5");
+  });
+
+  it("detects alias expansion loops and depth limits", () => {
+    expect(expandAliasCommand("a", { a: "b", b: "a" })).toMatchObject({
+      error: "alias: expansion loop detected: a -> b -> a",
+      expanded: true,
+      chain: ["a", "b"],
+    });
+    expect(
+      expandAliasCommand("a", { a: "b", b: "c", c: "help" }, { maxDepth: 2 }),
+    ).toMatchObject({
+      command: "c",
+      error: "alias: expansion exceeded 2 levels",
+    });
   });
 
   it("builds repos output with project groups", () => {
