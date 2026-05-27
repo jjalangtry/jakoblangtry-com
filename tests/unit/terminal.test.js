@@ -174,8 +174,13 @@ describe("terminal helpers", () => {
       "grep -n weather",
     );
     expect(expandAliasCommand("hp | g repo", aliases).command).toBe(
-      "help | grep -n repo",
+      "help | g repo",
     );
+    expect(
+      parsePipeline("hp | g repo")
+        .map((segment) => expandAliasCommand(segment, aliases).command)
+        .join(" | "),
+    ).toBe("help | grep -n repo");
     expect(expandAliasCommand("alias ll='ls'", aliases)).toMatchObject({
       command: "alias ll='ls'",
       expanded: false,
