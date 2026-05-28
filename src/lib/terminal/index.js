@@ -33,6 +33,7 @@ export const COMMAND_LIST = [
   "snake",
   "stats",
   "theme",
+  "unalias",
   "uptime",
   "weather",
   "which",
@@ -183,6 +184,81 @@ export function expandGlob(pattern, items) {
   }
   const regex = globToRegex(pattern);
   return items.filter((item) => regex.test(item));
+}
+
+const ALIAS_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+function quoteAliasValue(value) {
+  return String(value).replace(/'/g, "'\\''");
+}
+
+export function isValidAliasName(name) {
+  return ALIAS_NAME_PATTERN.test(String(name || ""));
+}
+
+export function parseAliasAssignment(input) {
+  const text = String(input || "").trim();
+  const equalsIndex = text.indexOf("=");
+  if (equalsIndex === -1) return null;
+
+  const name = text.slice(0, equalsIndex).trim();
+  let value = text.slice(equalsIndex + 1).trim();
+
+  if (!isValidAliasName(name)) {
+    return {
+      error:
+        "Invalid alias name. Use letters, numbers, underscores, or dashes; start with a letter or underscore.",
+    };
+  }
+
+  if (
+    value.length >= 2 &&
+    ((value.startsWith("'") && value.endsWith("'")) ||
+      (value.startsWith('"') && value.endsWith('"')))
+  ) {
+    value = value.slice(1, -1);
+  }
+
+  if (!value.trim()) {
+    return { error: "Alias value cannot be empty." };
+  }
+
+  return { name, value };
+}
+
+export function formatAliasesOutput(aliases) {
+  const entries = Object.entries(aliases || {})
+    .filter(([name, value]) => isValidAliasName(name) && String(value).trim())
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  if (entries.length === 0) {
+    return "No aliases defined. Create one with: alias ll='ls'";
+  }
+
+  return entries
+    .map(([name, value]) => `alias ${name}='${quoteAliasValue(value)}'`)
+    .join("\n");
+}
+
+export function expandAliasCommand(command, aliases) {
+  const text = String(command || "");
+  const match = text.match(/^(\s*)(\S+)(.*)$/);
+  if (!match) {
+    return { command: text, expanded: false, name: "" };
+  }
+
+  const [, leadingWhitespace, commandName, rest] = match;
+  const aliasValue = aliases?.[commandName];
+  if (!aliasValue) {
+    return { command: text, expanded: false, name: commandName };
+  }
+
+  return {
+    command: `${leadingWhitespace}${aliasValue}${rest}`,
+    expanded: true,
+    name: commandName,
+    value: aliasValue,
+  };
 }
 
 export function parseGrepArgs(argsString) {
