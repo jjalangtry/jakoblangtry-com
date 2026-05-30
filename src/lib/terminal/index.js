@@ -135,6 +135,27 @@ export function handleHistoryNavigation(
   return null;
 }
 
+export function searchCommandHistory(history, query = "", startIndex) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return { index: -1, match: null };
+  }
+
+  const normalizedQuery = String(query || "").toLowerCase();
+  const length = history.length;
+  const rawStart = Number.isInteger(startIndex) ? startIndex : length;
+  const cursor = Math.max(0, Math.min(rawStart, length));
+
+  for (let offset = 0; offset < length; offset++) {
+    const index = (cursor - 1 - offset + length) % length;
+    const command = String(history[index] ?? "");
+    if (!normalizedQuery || command.toLowerCase().includes(normalizedQuery)) {
+      return { index, match: command };
+    }
+  }
+
+  return { index: -1, match: null };
+}
+
 export function shouldUseCompactWeatherLayout(isMobile, windowWidth) {
   return isMobile || windowWidth <= 900;
 }

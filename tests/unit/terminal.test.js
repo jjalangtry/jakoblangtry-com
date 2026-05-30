@@ -8,6 +8,7 @@ import {
   normalizeThemeCommand,
   autocompleteCommand,
   handleHistoryNavigation,
+  searchCommandHistory,
   shouldUseCompactWeatherLayout,
   formatUptime,
   formatHistoryOutput,
@@ -464,6 +465,52 @@ describe("terminal helpers", () => {
     // Invalid key
     res = handleHistoryNavigation("Enter", history, 2, buffer);
     expect(res).toBeNull();
+  });
+
+  it("reverse-searches command history from newest to oldest", () => {
+    const history = ["help", "repo --search astro", "skills", "repo open site"];
+
+    expect(searchCommandHistory(history, "repo")).toEqual({
+      index: 3,
+      match: "repo open site",
+    });
+    expect(searchCommandHistory(history, "repo", 3)).toEqual({
+      index: 1,
+      match: "repo --search astro",
+    });
+    expect(searchCommandHistory(history, "repo", 1)).toEqual({
+      index: 3,
+      match: "repo open site",
+    });
+  });
+
+  it("handles reverse history search edge cases", () => {
+    const history = ["HELP", "weather paris", "calc 2+2"];
+
+    expect(searchCommandHistory([], "help")).toEqual({
+      index: -1,
+      match: null,
+    });
+    expect(searchCommandHistory(null, "help")).toEqual({
+      index: -1,
+      match: null,
+    });
+    expect(searchCommandHistory(history, "help")).toEqual({
+      index: 0,
+      match: "HELP",
+    });
+    expect(searchCommandHistory(history, "")).toEqual({
+      index: 2,
+      match: "calc 2+2",
+    });
+    expect(searchCommandHistory(history, "missing")).toEqual({
+      index: -1,
+      match: null,
+    });
+    expect(searchCommandHistory(history, "weather", 99)).toEqual({
+      index: 1,
+      match: "weather paris",
+    });
   });
 
   it("determines compact weather layout based on mobile flag or width", () => {

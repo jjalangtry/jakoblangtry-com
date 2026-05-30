@@ -45,6 +45,18 @@ repo clone <name>     # print a git clone command
 The catalog is static and sourced from `public/data/projects.json`, which keeps
 the website usable without GitHub API credentials at runtime.
 
+## Terminal UX
+
+Command history is persisted in the browser and supports terminal-style
+navigation:
+
+```bash
+history       # show saved commands
+history 10    # show the 10 most recent commands
+history clear # reset history
+Ctrl+R        # reverse-search history; press again to cycle matches
+```
+
 ## Build
 
 ```bash
