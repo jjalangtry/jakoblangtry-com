@@ -11,6 +11,10 @@ import {
   shouldUseCompactWeatherLayout,
   formatUptime,
   formatHistoryOutput,
+  normalizeAliasMap,
+  parseAliasDefinition,
+  formatAliasList,
+  expandAliasCommand,
   grepFilter,
   parseGrepArgs,
   globToRegex,
@@ -62,6 +66,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("pwd");
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
+    expect(COMMAND_LIST).toContain("unalias");
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
@@ -514,6 +519,93 @@ describe("terminal helpers", () => {
     const output = formatHistoryOutput(items);
     expect(output).toContain("   1  cmd0");
     expect(output).toContain("  12  cmd11");
+  });
+
+  it("normalizes persisted aliases defensively", () => {
+    expect(normalizeAliasMap(null)).toEqual({});
+    expect(
+      normalizeAliasMap({
+        LL: " ls ",
+        "bad name": "help",
+        alias: "echo nope",
+        empty: "",
+      }),
+    ).toEqual({ ll: "ls" });
+  });
+
+  it("parses alias list, lookup, and assignment forms", () => {
+    expect(parseAliasDefinition("")).toEqual({ type: "list" });
+    expect(parseAliasDefinition("ll")).toEqual({ type: "show", name: "ll" });
+    expect(parseAliasDefinition("ll='ls -la'")).toEqual({
+      type: "set",
+      name: "ll",
+      value: "ls -la",
+    });
+    expect(parseAliasDefinition('systems="repo --systems"')).toEqual({
+      type: "set",
+      name: "systems",
+      value: "repo --systems",
+    });
+    expect(parseAliasDefinition("bad name")).toMatchObject({
+      type: "error",
+    });
+    expect(parseAliasDefinition("alias='help'")).toMatchObject({
+      type: "error",
+    });
+    expect(parseAliasDefinition("ll='unterminated")).toMatchObject({
+      type: "error",
+    });
+  });
+
+  it("formats aliases in stable shell style", () => {
+    expect(formatAliasList({})).toBe("No aliases defined.");
+    expect(formatAliasList({ systems: "repo --systems", ll: "ls" })).toBe(
+      "alias ll='ls'\nalias systems='repo --systems'",
+    );
+    expect(formatAliasList({ say: "echo it's ok" })).toBe(
+      "alias say='echo it'\\''s ok'",
+    );
+  });
+
+  it("expands aliases before command execution", () => {
+    const aliases = {
+      ll: "ls",
+      systems: "repo --systems",
+      g: "grep -n",
+      hp: "help | grep weather",
+    };
+
+    expect(expandAliasCommand("ll", aliases)).toEqual({
+      command: "ls",
+      expanded: true,
+    });
+    expect(expandAliasCommand("systems | g C", aliases)).toEqual({
+      command: "repo --systems | grep -n C",
+      expanded: true,
+    });
+    expect(expandAliasCommand("hp", aliases)).toEqual({
+      command: "help | grep weather",
+      expanded: true,
+    });
+    expect(expandAliasCommand("echo ll", aliases)).toEqual({
+      command: "echo ll",
+      expanded: false,
+    });
+  });
+
+  it("detects recursive alias expansion", () => {
+    expect(expandAliasCommand("a", { a: "b", b: "a" })).toMatchObject({
+      command: "a",
+      expanded: true,
+      error: "Alias expansion loop detected at 'a'.",
+    });
+    expect(
+      expandAliasCommand("a", { a: "b", b: "c", c: "help" }, { maxDepth: 2 }),
+    ).toMatchObject({
+      command: "a",
+      expanded: true,
+      error: "Alias expansion exceeded the maximum depth.",
+    });
   });
 
   it("grepFilter matches with simple substring (default)", () => {

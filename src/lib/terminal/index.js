@@ -34,6 +34,7 @@ export const COMMAND_LIST = [
   "stats",
   "theme",
   "uptime",
+  "unalias",
   "weather",
   "which",
   "whoami",
@@ -161,6 +162,192 @@ export function formatHistoryOutput(history) {
   return history
     .map((cmd, i) => `  ${String(i + 1).padStart(4)}  ${cmd}`)
     .join("\n");
+}
+
+const ALIAS_NAME_RE = /^[a-z][a-z0-9_-]*$/;
+const RESERVED_ALIAS_NAMES = new Set(["alias", "unalias"]);
+
+function quoteAliasValue(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function findUnquotedEquals(input) {
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+    } else if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+    } else if (ch === "=" && !inSingle && !inDouble) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+export function normalizeAliasMap(aliases) {
+  if (!aliases || typeof aliases !== "object" || Array.isArray(aliases)) {
+    return {};
+  }
+
+  return Object.entries(aliases).reduce((result, [rawName, rawValue]) => {
+    const name = String(rawName || "")
+      .trim()
+      .toLowerCase();
+    const value = String(rawValue || "").trim();
+    if (ALIAS_NAME_RE.test(name) && !RESERVED_ALIAS_NAMES.has(name) && value) {
+      result[name] = value;
+    }
+    return result;
+  }, {});
+}
+
+export function parseAliasDefinition(input) {
+  const text = String(input || "").trim();
+  if (!text) return { type: "list" };
+
+  const assignmentIndex = findUnquotedEquals(text);
+  if (assignmentIndex === -1) {
+    if (/\s/.test(text)) {
+      return {
+        type: "error",
+        error: "Usage: alias [name='command']",
+      };
+    }
+    const name = text.toLowerCase();
+    if (!ALIAS_NAME_RE.test(name)) {
+      return {
+        type: "error",
+        error:
+          "Alias names must start with a letter and contain only letters, numbers, '-' or '_'.",
+      };
+    }
+    return { type: "show", name };
+  }
+
+  const name = text.slice(0, assignmentIndex).trim().toLowerCase();
+  let value = text.slice(assignmentIndex + 1).trim();
+
+  if (!ALIAS_NAME_RE.test(name)) {
+    return {
+      type: "error",
+      error:
+        "Alias names must start with a letter and contain only letters, numbers, '-' or '_'.",
+    };
+  }
+
+  if (RESERVED_ALIAS_NAMES.has(name)) {
+    return {
+      type: "error",
+      error: `'${name}' is reserved for managing aliases.`,
+    };
+  }
+
+  if (!value) {
+    return {
+      type: "error",
+      error: "Alias value cannot be empty.",
+    };
+  }
+
+  const quote = value[0];
+  if (quote === "'" || quote === '"') {
+    if (value.length < 2 || value[value.length - 1] !== quote) {
+      return {
+        type: "error",
+        error: "Alias value has an unterminated quote.",
+      };
+    }
+    value = value.slice(1, -1);
+  }
+
+  value = value.trim();
+  if (!value) {
+    return {
+      type: "error",
+      error: "Alias value cannot be empty.",
+    };
+  }
+
+  return { type: "set", name, value };
+}
+
+export function formatAliasList(aliases) {
+  const normalized = normalizeAliasMap(aliases);
+  const names = Object.keys(normalized).sort();
+  if (names.length === 0) {
+    return "No aliases defined.";
+  }
+
+  return names
+    .map((name) => `alias ${name}=${quoteAliasValue(normalized[name])}`)
+    .join("\n");
+}
+
+function splitCommandSegment(segment) {
+  const text = String(segment || "").trim();
+  if (!text) return { command: "", rest: "" };
+  const match = text.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match) return { command: text, rest: "" };
+  return { command: match[1], rest: match[2] || "" };
+}
+
+function expandAliasSegment(segment, aliases, maxDepth) {
+  let current = String(segment || "").trim();
+  const seen = new Set();
+
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const { command, rest } = splitCommandSegment(current);
+    if (!command || !aliases[command]) {
+      return { segment: current, expanded: seen.size > 0 };
+    }
+
+    if (seen.has(command)) {
+      return {
+        segment: current,
+        expanded: true,
+        error: `Alias expansion loop detected at '${command}'.`,
+      };
+    }
+
+    seen.add(command);
+    current = `${aliases[command]}${rest ? ` ${rest}` : ""}`.trim();
+  }
+
+  return {
+    segment: current,
+    expanded: true,
+    error: "Alias expansion exceeded the maximum depth.",
+  };
+}
+
+export function expandAliasCommand(input, aliases, options = {}) {
+  const command = String(input || "").trim();
+  if (!command) return { command: "", expanded: false };
+
+  const normalizedAliases = normalizeAliasMap(aliases);
+  const segments = parsePipeline(command);
+  if (segments.length === 0) return { command, expanded: false };
+
+  const maxDepth = Number(options.maxDepth) > 0 ? Number(options.maxDepth) : 10;
+  const expandedSegments = [];
+  let expanded = false;
+
+  for (const segment of segments) {
+    const result = expandAliasSegment(segment, normalizedAliases, maxDepth);
+    if (result.error) {
+      return { command, expanded: true, error: result.error };
+    }
+    expanded = expanded || result.expanded;
+    expandedSegments.push(result.segment);
+  }
+
+  return {
+    command: expanded ? expandedSegments.join(" | ") : command,
+    expanded,
+  };
 }
 
 export function globToRegex(pattern) {
