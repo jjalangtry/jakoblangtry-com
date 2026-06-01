@@ -45,6 +45,23 @@ repo clone <name>     # print a git clone command
 The catalog is static and sourced from `public/data/projects.json`, which keeps
 the website usable without GitHub API credentials at runtime.
 
+## Terminal Filesystem
+
+The terminal also exposes a read-only virtual portfolio filesystem rooted at
+`/home/guest`:
+
+```bash
+pwd                         # show the current virtual directory
+ls                          # list files and folders
+ls --commands               # list shell commands
+cd projects/github          # move through portfolio data
+cat about.txt               # print a file
+tree                        # inspect the generated directory tree
+```
+
+Filesystem content is generated from the existing JSON data files for projects,
+skills, experience, posts, and site configuration.
+
 ## Build
 
 ```bash

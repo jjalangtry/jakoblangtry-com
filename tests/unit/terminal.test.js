@@ -33,7 +33,14 @@ import {
   isSystemsRepository,
   resolveRepository,
   buildContributionChartAscii,
+  buildVirtualFilesystem,
+  buildVirtualTreeOutput,
+  changeVirtualDirectory,
   estimateReadingTime,
+  listVirtualDirectory,
+  normalizeVirtualPath,
+  readVirtualFile,
+  VIRTUAL_HOME,
   getRandomFortune,
   FORTUNE_QUOTES,
   flipText,
@@ -68,10 +75,12 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("repo");
     expect(COMMAND_LIST).toContain("repos");
     expect(COMMAND_LIST).toContain("calc");
+    expect(COMMAND_LIST).toContain("cat");
     expect(COMMAND_LIST).toContain("countdown");
     expect(COMMAND_LIST).toContain("flip");
     expect(COMMAND_LIST).toContain("fortune");
     expect(COMMAND_LIST).toContain("matrix");
+    expect(COMMAND_LIST).toContain("tree");
   });
 
   it("builds repos output with project groups", () => {
@@ -306,6 +315,139 @@ describe("terminal helpers", () => {
         "--systems",
       ),
     ).toContain("No repositories match");
+  });
+
+  it("builds a read-only virtual portfolio filesystem from site data", () => {
+    const fs = buildVirtualFilesystem({
+      siteConfig: { resumeUrl: "https://resume.example.com" },
+      projectGroups: {
+        featured: [
+          {
+            name: "Link Converter",
+            url: "https://convert.example.com",
+            repo: "https://github.com/jjalangtry/converter",
+            language: "TypeScript",
+            description: "Convert music links",
+          },
+        ],
+        contributions: [],
+        github: [
+          {
+            name: "Unix Permissions Game",
+            url: "https://github.com/jjalangtry/unix-permissions-game",
+            language: "C",
+          },
+        ],
+      },
+      posts: [
+        {
+          slug: "terminal-portfolio",
+          title: "Terminal Portfolio",
+          date: "2026-01-01",
+          summary: "How the terminal works",
+          content: "A small shell for browsing portfolio content.",
+        },
+      ],
+      skills: [
+        {
+          name: "Languages",
+          skills: [{ name: "JavaScript", level: 95, note: "frontend" }],
+        },
+      ],
+      experience: [
+        {
+          title: "Software Engineer",
+          org: "Example Co",
+          period: "2025",
+          description: "Built useful tools.",
+          tags: ["TypeScript"],
+        },
+      ],
+    });
+
+    const homeList = listVirtualDirectory(fs, VIRTUAL_HOME);
+    expect(homeList.ok).toBe(true);
+    expect(homeList.output).toContain("projects/");
+    expect(homeList.output).toContain("about.txt");
+    expect(homeList.output).toContain("resume.url");
+
+    const projectList = listVirtualDirectory(
+      fs,
+      VIRTUAL_HOME,
+      "projects/github",
+    );
+    expect(projectList.output).toContain("unix-permissions-game.txt");
+
+    const projectFile = readVirtualFile(
+      fs,
+      VIRTUAL_HOME,
+      "projects/featured/link-converter.txt",
+    );
+    expect(projectFile.ok).toBe(true);
+    expect(projectFile.output).toContain("Language: TypeScript");
+    expect(projectFile.output).toContain(
+      "Source: https://github.com/jjalangtry/converter",
+    );
+
+    const blogFile = readVirtualFile(
+      fs,
+      VIRTUAL_HOME,
+      "blog/terminal-portfolio.md",
+    );
+    expect(blogFile.output).toContain("# Terminal Portfolio");
+    expect(blogFile.output).toContain("A small shell");
+  });
+
+  it("normalizes virtual paths and enforces directory/file command semantics", () => {
+    const fs = buildVirtualFilesystem({
+      projectGroups: { featured: [], contributions: [], github: [] },
+    });
+
+    expect(normalizeVirtualPath(VIRTUAL_HOME, "projects/../about.txt")).toBe(
+      "/home/guest/about.txt",
+    );
+    expect(normalizeVirtualPath("/home/guest/projects", "~/contact.txt")).toBe(
+      "/home/guest/contact.txt",
+    );
+    expect(normalizeVirtualPath("/home/guest", "../../../")).toBe("/");
+
+    expect(changeVirtualDirectory(fs, VIRTUAL_HOME, "projects")).toEqual({
+      ok: true,
+      path: "/home/guest/projects",
+    });
+    expect(changeVirtualDirectory(fs, VIRTUAL_HOME, "about.txt")).toEqual({
+      ok: false,
+      error: "cd: not a directory: about.txt",
+    });
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "projects")).toEqual({
+      ok: false,
+      error: "cat: projects: Is a directory",
+    });
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "missing.txt").error).toContain(
+      "No such file",
+    );
+  });
+
+  it("renders a tree view for the virtual filesystem", () => {
+    const fs = buildVirtualFilesystem({
+      projectGroups: {
+        featured: [{ name: "Link Converter", url: "https://example.com" }],
+        contributions: [],
+        github: [],
+      },
+    });
+
+    const tree = buildVirtualTreeOutput(fs, VIRTUAL_HOME, "projects");
+    expect(tree.ok).toBe(true);
+    expect(tree.output).toContain("projects");
+    expect(tree.output).toContain("featured/");
+    expect(tree.output).toContain("link-converter.txt");
+    expect(tree.output).toContain("directories");
+
+    expect(buildVirtualTreeOutput(fs, VIRTUAL_HOME, "nope")).toEqual({
+      ok: false,
+      error: "tree: nope: No such file or directory",
+    });
   });
 
   it("classifies systems repositories and formats clone commands", () => {
