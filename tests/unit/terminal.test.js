@@ -37,6 +37,7 @@ import {
   buildVirtualTreeOutput,
   changeVirtualDirectory,
   estimateReadingTime,
+  getVirtualNode,
   listVirtualDirectory,
   normalizeVirtualPath,
   readVirtualFile,
@@ -448,6 +449,92 @@ describe("terminal helpers", () => {
       ok: false,
       error: "tree: nope: No such file or directory",
     });
+  });
+
+  it("handles virtual filesystem edge cases", () => {
+    const fs = buildVirtualFilesystem({
+      siteConfig: {},
+      projectGroups: {
+        featured: [
+          { name: "Duplicate", url: "https://example.com/one", fork: true },
+          { name: "Duplicate", url: "https://example.com/two" },
+          null,
+          { name: "" },
+        ],
+        contributions: [],
+        github: [],
+      },
+      posts: [{ title: "Untitled Post" }, { title: "Untitled Post" }],
+      skills: [
+        null,
+        { name: "" },
+        { name: "Odd Levels", skills: [{ level: 150 }, { level: -10 }] },
+      ],
+    });
+
+    expect(normalizeVirtualPath("", "")).toBe(VIRTUAL_HOME);
+    expect(normalizeVirtualPath(VIRTUAL_HOME, "~")).toBe(VIRTUAL_HOME);
+    expect(normalizeVirtualPath(VIRTUAL_HOME, "/home")).toBe("/home");
+    expect(getVirtualNode(null, "/")).toBeNull();
+    expect(getVirtualNode(fs, "/home/guest/about.txt/more")).toBeNull();
+
+    const rootList = listVirtualDirectory(fs, "/");
+    expect(rootList.output).toBe("home/");
+    const fileList = listVirtualDirectory(fs, VIRTUAL_HOME, "about.txt");
+    expect(fileList).toEqual({
+      ok: true,
+      path: "/home/guest/about.txt",
+      output: "about.txt",
+    });
+    const emptyList = listVirtualDirectory(
+      fs,
+      VIRTUAL_HOME,
+      "projects/contributions",
+    );
+    expect(emptyList).toEqual({
+      ok: true,
+      path: "/home/guest/projects/contributions",
+      output: "",
+    });
+    expect(listVirtualDirectory(fs, VIRTUAL_HOME, "missing").error).toContain(
+      "cannot access",
+    );
+
+    expect(changeVirtualDirectory(fs, "/home/guest/projects", "")).toEqual({
+      ok: true,
+      path: VIRTUAL_HOME,
+    });
+    expect(changeVirtualDirectory(fs, VIRTUAL_HOME, "missing")).toEqual({
+      ok: false,
+      error: "cd: no such file or directory: missing",
+    });
+
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "")).toEqual({
+      ok: false,
+      error: "cat: missing operand",
+    });
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "resume.url").output).toBe(
+      "https://resume.jjalangtry.com",
+    );
+    expect(
+      readVirtualFile(fs, VIRTUAL_HOME, "projects/featured/duplicate.txt")
+        .output,
+    ).toContain("Fork: yes");
+    expect(
+      readVirtualFile(fs, VIRTUAL_HOME, "projects/featured/duplicate-2.txt")
+        .output,
+    ).toContain("https://example.com/two");
+    expect(
+      readVirtualFile(fs, VIRTUAL_HOME, "skills/odd-levels.txt").output,
+    ).toContain("- Unnamed: 100%");
+    expect(
+      readVirtualFile(fs, VIRTUAL_HOME, "blog/untitled-post-2.md").output,
+    ).toContain("# Untitled Post");
+
+    const fileTree = buildVirtualTreeOutput(fs, VIRTUAL_HOME, "about.txt");
+    expect(fileTree.output).toContain("1 files");
+    const shallowTree = buildVirtualTreeOutput(fs, VIRTUAL_HOME, "projects", 0);
+    expect(shallowTree.output).not.toContain("featured/");
   });
 
   it("classifies systems repositories and formats clone commands", () => {
