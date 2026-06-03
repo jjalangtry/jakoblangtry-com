@@ -34,6 +34,7 @@ export const COMMAND_LIST = [
   "stats",
   "theme",
   "uptime",
+  "unalias",
   "weather",
   "which",
   "whoami",
@@ -161,6 +162,155 @@ export function formatHistoryOutput(history) {
   return history
     .map((cmd, i) => `  ${String(i + 1).padStart(4)}  ${cmd}`)
     .join("\n");
+}
+
+const ALIAS_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+export function isValidAliasName(name) {
+  return ALIAS_NAME_PATTERN.test(String(name || ""));
+}
+
+function escapeAliasValue(value) {
+  return String(value).replace(/'/g, "'\\''");
+}
+
+export function normalizeAliases(aliases) {
+  if (!aliases || typeof aliases !== "object" || Array.isArray(aliases)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(aliases)
+      .filter(
+        ([name, value]) =>
+          isValidAliasName(name) &&
+          typeof value === "string" &&
+          value.trim().length > 0,
+      )
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+}
+
+export function parseAliasArgs(argsString) {
+  const args = String(argsString || "").trim();
+  if (!args) return { action: "list" };
+
+  const equalsIndex = args.indexOf("=");
+  if (equalsIndex === -1) {
+    if (!isValidAliasName(args)) {
+      return { action: "error", error: `alias: invalid alias name '${args}'` };
+    }
+    return { action: "show", name: args };
+  }
+
+  const name = args.slice(0, equalsIndex).trim();
+  let value = args.slice(equalsIndex + 1).trim();
+
+  if (!isValidAliasName(name)) {
+    return { action: "error", error: `alias: invalid alias name '${name}'` };
+  }
+  if (!value) {
+    return { action: "error", error: `alias: '${name}' requires a command` };
+  }
+
+  const quote = value[0];
+  if (quote === "'" || quote === '"') {
+    if (value[value.length - 1] !== quote || value.length === 1) {
+      return { action: "error", error: "alias: unmatched quote" };
+    }
+    value = value.slice(1, -1);
+  }
+
+  if (!value.trim()) {
+    return { action: "error", error: `alias: '${name}' requires a command` };
+  }
+
+  return { action: "set", name, value };
+}
+
+export function parseUnaliasArgs(argsString) {
+  const args = String(argsString || "").trim();
+  if (!args) {
+    return { action: "error", error: "Usage: unalias [-a|name]" };
+  }
+  if (args === "-a" || args === "--all") {
+    return { action: "clear" };
+  }
+  if (!isValidAliasName(args)) {
+    return { action: "error", error: `unalias: invalid alias name '${args}'` };
+  }
+  return { action: "unset", name: args };
+}
+
+export function formatAliases(aliases, name = "") {
+  const normalized = normalizeAliases(aliases);
+  const requestedName = String(name || "").trim();
+
+  if (requestedName) {
+    if (Object.prototype.hasOwnProperty.call(normalized, requestedName)) {
+      return `alias ${requestedName}='${escapeAliasValue(normalized[requestedName])}'`;
+    }
+    return `alias: ${requestedName}: not found`;
+  }
+
+  const entries = Object.entries(normalized);
+  if (entries.length === 0) {
+    return "No aliases defined. Create one with: alias ll='ls'";
+  }
+
+  return entries
+    .map(
+      ([aliasName, value]) => `alias ${aliasName}='${escapeAliasValue(value)}'`,
+    )
+    .join("\n");
+}
+
+function splitCommandHead(command) {
+  const trimmed = String(command || "").trim();
+  const match = trimmed.match(/^(\S+)(?:\s+([\s\S]*))?$/);
+  if (!match) return { head: "", rest: "" };
+  return { head: match[1], rest: match[2] || "" };
+}
+
+export function expandAliasCommand(command, aliases, maxDepth = 10) {
+  const normalizedAliases = normalizeAliases(aliases);
+  let expandedCommand = String(command || "").trim();
+  const originalCommand = expandedCommand;
+  const chain = [];
+
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const { head, rest } = splitCommandHead(expandedCommand);
+    if (
+      !head ||
+      !Object.prototype.hasOwnProperty.call(normalizedAliases, head)
+    ) {
+      return {
+        command: expandedCommand,
+        expanded: expandedCommand !== originalCommand,
+        chain,
+      };
+    }
+
+    if (chain.includes(head)) {
+      return {
+        command: expandedCommand,
+        expanded: true,
+        chain: [...chain, head],
+        error: `Alias loop detected: ${[...chain, head].join(" -> ")}`,
+      };
+    }
+
+    chain.push(head);
+    const replacement = normalizedAliases[head].trim();
+    expandedCommand = rest ? `${replacement} ${rest}` : replacement;
+  }
+
+  return {
+    command: expandedCommand,
+    expanded: true,
+    chain,
+    error: `Alias expansion exceeded ${maxDepth} levels`,
+  };
 }
 
 export function globToRegex(pattern) {
