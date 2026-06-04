@@ -11,6 +11,9 @@ import {
   shouldUseCompactWeatherLayout,
   formatUptime,
   formatHistoryOutput,
+  parseAliasCommand,
+  formatAliasList,
+  expandAliasCommand,
   grepFilter,
   parseGrepArgs,
   globToRegex,
@@ -62,6 +65,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("pwd");
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
+    expect(COMMAND_LIST).toContain("unalias");
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
@@ -514,6 +518,96 @@ describe("terminal helpers", () => {
     const output = formatHistoryOutput(items);
     expect(output).toContain("   1  cmd0");
     expect(output).toContain("  12  cmd11");
+  });
+
+  it("parses alias list, query, and assignment forms", () => {
+    expect(parseAliasCommand("")).toEqual({ type: "list" });
+    expect(parseAliasCommand("ll")).toEqual({ type: "query", name: "ll" });
+    expect(parseAliasCommand("ll='ls --commands'")).toEqual({
+      type: "set",
+      name: "ll",
+      value: "ls --commands",
+    });
+    expect(parseAliasCommand('gh="grep -i"')).toEqual({
+      type: "set",
+      name: "gh",
+      value: "grep -i",
+    });
+    expect(parseAliasCommand("h=history")).toEqual({
+      type: "set",
+      name: "h",
+      value: "history",
+    });
+  });
+
+  it("rejects invalid or reserved aliases", () => {
+    expect(parseAliasCommand("bad name")).toMatchObject({ type: "error" });
+    expect(parseAliasCommand("1bad=echo nope")).toMatchObject({
+      type: "error",
+    });
+    expect(parseAliasCommand("alias=echo nope")).toEqual({
+      type: "error",
+      error: "alias: 'alias' is reserved for alias management",
+    });
+    expect(parseAliasCommand("empty=''")).toEqual({
+      type: "error",
+      error: "alias: 'empty' requires a command",
+    });
+  });
+
+  it("formats aliases in stable shell syntax", () => {
+    expect(formatAliasList({ z: "repos", a: "history 5" })).toBe(
+      "alias a='history 5'\nalias z='repos'",
+    );
+    expect(formatAliasList({ quote: "echo it's ok" })).toBe(
+      "alias quote='echo it'\\''s ok'",
+    );
+    expect(formatAliasList({})).toContain("No aliases defined");
+  });
+
+  it("expands aliases while preserving arguments", () => {
+    const aliases = {
+      h: "history 10",
+      gh: "grep -i",
+      r: "repo --search terminal",
+    };
+    expect(expandAliasCommand("h", aliases)).toMatchObject({
+      command: "history 10",
+      expanded: true,
+      chain: ["h"],
+    });
+    expect(expandAliasCommand("gh weather", aliases).command).toBe(
+      "grep -i weather",
+    );
+    expect(expandAliasCommand("r --lang C", aliases).command).toBe(
+      "repo --search terminal --lang C",
+    );
+    expect(expandAliasCommand("unknown arg", aliases)).toEqual({
+      command: "unknown arg",
+      expanded: false,
+      chain: [],
+    });
+  });
+
+  it("supports nested aliases, skip rules, and loop detection", () => {
+    expect(
+      expandAliasCommand("ll", { ll: "l", l: "ls --commands" }).command,
+    ).toBe("ls --commands");
+    expect(
+      expandAliasCommand(
+        "alias ll='ls'",
+        { alias: "echo nope" },
+        { skipCommands: ["alias"] },
+      ),
+    ).toEqual({
+      command: "alias ll='ls'",
+      expanded: false,
+      chain: [],
+    });
+    expect(expandAliasCommand("a", { a: "b", b: "a" })).toMatchObject({
+      error: "alias: expansion loop detected for 'a'",
+      chain: ["a", "b"],
+    });
   });
 
   it("grepFilter matches with simple substring (default)", () => {
