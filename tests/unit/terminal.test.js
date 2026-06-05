@@ -318,6 +318,22 @@ describe("terminal helpers", () => {
         "--systems",
       ),
     ).toContain("No repositories match");
+    expect(
+      buildRepoExplorerOutput(
+        {
+          featured: [],
+          contributions: [],
+          github: [
+            {
+              name: "read-faster",
+              url: "https://github.com/jjalangtry/read-faster",
+              language: "Swift",
+            },
+          ],
+        },
+        "does-not-exist",
+      ),
+    ).toContain("No repositories match");
   });
 
   it("classifies systems repositories and formats clone commands", () => {
@@ -793,6 +809,10 @@ describe("terminal helpers", () => {
       ok: false,
       error: "ls: cannot access 'missing': No such file or directory",
     });
+
+    const longHome = getVirtualLsResult(fs, VIRTUAL_HOME_PATH, "-l --all");
+    expect(longHome.output).toContain("dr-xr-xr-x");
+    expect(longHome.output).toContain("projects/");
   });
 
   it("changes directories only when virtual targets are directories", () => {
@@ -848,6 +868,16 @@ describe("terminal helpers", () => {
     expect(tree.output).toContain("~/projects");
     expect(tree.output).toContain("├──");
     expect(tree.output).toContain("link-converter.txt");
+
+    const homeTree = getVirtualTreeResult(fs, VIRTUAL_HOME_PATH);
+    expect(homeTree.output).toContain("projects/");
+    expect(homeTree.output).toContain("│   ├── index.txt");
+
+    expect(getVirtualTreeResult(fs, VIRTUAL_HOME_PATH, "README.md")).toEqual({
+      ok: true,
+      output: "~/README.md",
+      path: "/home/guest/README.md",
+    });
 
     expect(getVirtualTreeResult(fs, VIRTUAL_HOME_PATH, "missing")).toEqual({
       ok: false,
@@ -1160,6 +1190,12 @@ describe("terminal helpers", () => {
   it("safeCalc returns error for invalid characters", () => {
     const result = safeCalc("require('fs')");
     expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc returns error for malformed expressions", () => {
+    expect(safeCalc("sqrt(")).toEqual({
+      error: "Could not evaluate expression.",
+    });
   });
 
   it("safeCalc handles division by zero as Infinity", () => {
