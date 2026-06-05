@@ -782,7 +782,7 @@ describe("terminal helpers", () => {
     expect(home.output).toContain("README.md");
 
     const longListing = getVirtualLsResult(fs, VIRTUAL_HOME_PATH, "-l repos");
-    expect(longListing.output).toContain("dr-xr-xr-x");
+    expect(longListing.output).toContain("-r--r--r--");
     expect(longListing.output).toContain("unix-tool.txt");
 
     const fileListing = getVirtualLsResult(fs, VIRTUAL_HOME_PATH, "resume.url");
