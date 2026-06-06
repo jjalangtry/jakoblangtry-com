@@ -33,6 +33,7 @@ export const COMMAND_LIST = [
   "snake",
   "stats",
   "theme",
+  "unalias",
   "uptime",
   "weather",
   "which",
@@ -289,6 +290,115 @@ export function parsePipeline(input) {
   }
   if (current.trim()) segments.push(current.trim());
   return segments.filter(Boolean);
+}
+
+export function quoteAliasValue(value) {
+  return `'${String(value || "").replace(/'/g, "'\\''")}'`;
+}
+
+export function formatAliasOutput(aliases, name = "") {
+  const source = aliases && typeof aliases === "object" ? aliases : {};
+  const target = String(name || "").trim();
+
+  if (target) {
+    if (!Object.prototype.hasOwnProperty.call(source, target)) {
+      return `alias: ${target}: not found`;
+    }
+    return `alias ${target}=${quoteAliasValue(source[target])}`;
+  }
+
+  const names = Object.keys(source).sort((a, b) => a.localeCompare(b));
+  if (names.length === 0) {
+    return "No aliases defined.";
+  }
+  return names
+    .map(
+      (aliasName) => `alias ${aliasName}=${quoteAliasValue(source[aliasName])}`,
+    )
+    .join("\n");
+}
+
+export function parseAliasDefinition(input) {
+  const raw = String(input || "").trim();
+  const match = raw.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*=\s*(.+)$/);
+  if (!match) {
+    return {
+      error: "Usage: alias name='command'",
+    };
+  }
+
+  const [, name, rawValue] = match;
+  let value = rawValue.trim();
+  const quote = value[0];
+  if (quote === "'" || quote === '"') {
+    if (value.length < 2 || value[value.length - 1] !== quote) {
+      return { error: "alias: unmatched quote in definition" };
+    }
+    value = value.slice(1, -1);
+  }
+
+  if (!value.trim()) {
+    return { error: "alias: value cannot be empty" };
+  }
+  if (value.includes("\n")) {
+    return { error: "alias: value must be a single command line" };
+  }
+
+  return { name, value };
+}
+
+function splitFirstWord(input) {
+  const match = String(input || "").match(/^(\S+)(\s+[\s\S]*)?$/);
+  if (!match) return { command: "", rest: "" };
+  return { command: match[1], rest: match[2] || "" };
+}
+
+export function expandAliasCommand(input, aliases, maxDepth = 10) {
+  const source = aliases && typeof aliases === "object" ? aliases : {};
+  let command = String(input || "").trim();
+  if (!command) return { command: "", expanded: false };
+
+  let expanded = false;
+  const seen = new Set();
+
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const { command: firstWord, rest } = splitFirstWord(command);
+    if (!Object.prototype.hasOwnProperty.call(source, firstWord)) {
+      return { command, expanded };
+    }
+    if (seen.has(firstWord)) {
+      return {
+        command,
+        expanded,
+        error: `alias: expansion loop detected at '${firstWord}'`,
+      };
+    }
+    seen.add(firstWord);
+    command = `${source[firstWord]}${rest}`.trim();
+    expanded = true;
+  }
+
+  return {
+    command,
+    expanded,
+    error: "alias: expansion exceeded maximum depth",
+  };
+}
+
+export function expandAliasPipeline(input, aliases) {
+  const segments = parsePipeline(input);
+  if (segments.length === 0) return { command: "", expanded: false };
+
+  const expandedSegments = [];
+  let expanded = false;
+  for (const segment of segments) {
+    const result = expandAliasCommand(segment, aliases);
+    if (result.error) return result;
+    expanded = expanded || result.expanded;
+    expandedSegments.push(result.command);
+  }
+
+  return { command: expandedSegments.join(" | "), expanded };
 }
 
 export function buildNeofetchOutput(version, theme, commandCount, uptimeStr) {
