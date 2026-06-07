@@ -197,6 +197,9 @@ describe("terminal helpers", () => {
     });
     expect(long.output).toContain("alpha-app.txt");
     expect(long.output).toContain("-r--r--r--");
+    expect(
+      formatVirtualDirectoryListing(fs, "/home/guest/contact.txt").output,
+    ).toBe("contact.txt");
 
     expect(formatVirtualDirectoryListing(fs, "/missing").error).toContain(
       "No such file or directory",
@@ -221,6 +224,11 @@ describe("terminal helpers", () => {
     expect(completeVirtualPath(fs, VIRTUAL_HOME_PATH, ".")).toContain(
       ".profile",
     );
+    const homeCompletions = completeVirtualPath(fs, VIRTUAL_HOME_PATH, "");
+    expect(homeCompletions.indexOf("projects/")).toBeLessThan(
+      homeCompletions.indexOf("README.md"),
+    );
+    expect(homeCompletions).toContain("about.txt");
     expect(completeVirtualPath(fs, "/home/guest", "projects/al")).toEqual([
       "projects/alpha-app.txt",
     ]);
