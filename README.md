@@ -2,6 +2,23 @@
 
 Terminal-style personal website with command-driven navigation.
 
+## Terminal Virtual Filesystem
+
+The terminal now exposes a read-only portfolio filesystem generated from the
+same JSON data that powers the site:
+
+```bash
+pwd                         # print the current virtual directory
+ls                          # list generated files and folders
+ls -la projects             # long listing, including hidden files with -a
+cd projects                 # update the prompt path
+cat link-converter.txt      # read generated project details
+ls --commands               # show the command catalog
+```
+
+The filesystem starts at `/home/guest` and includes generated `projects/`,
+`repos/`, `skills/`, `experience/`, and `blog/` directories.
+
 ## Tech Stack
 
 - Astro
