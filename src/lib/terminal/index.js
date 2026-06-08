@@ -33,6 +33,7 @@ export const COMMAND_LIST = [
   "snake",
   "stats",
   "theme",
+  "unalias",
   "uptime",
   "weather",
   "which",
@@ -48,6 +49,91 @@ export const COMMAND_LIST = [
   "close",
   "exit",
 ];
+
+export const DEFAULT_ALIASES = Object.freeze({
+  exit: "close",
+});
+
+export function isValidAliasName(name) {
+  return /^[a-z][a-z0-9_-]*$/i.test(String(name || ""));
+}
+
+export function parseAliasDefinition(input) {
+  const source = String(input || "").trim();
+  const match = source.match(/^([a-z][a-z0-9_-]*)=(.+)$/i);
+  if (!match) {
+    return {
+      error: "Usage: alias name='command'",
+    };
+  }
+
+  const name = match[1].toLowerCase();
+  let command = match[2].trim();
+  const quote = command[0];
+  if ((quote === "'" || quote === '"') && command.endsWith(quote)) {
+    command = command.slice(1, -1).trim();
+  }
+
+  if (!command) {
+    return {
+      error: "Alias command cannot be empty.",
+    };
+  }
+
+  return { name, command };
+}
+
+export function formatAliasOutput(aliases) {
+  const entries = Object.entries(aliases || {}).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+
+  if (entries.length === 0) {
+    return "No aliases configured.\nCreate one with: alias h='history 10'";
+  }
+
+  return entries
+    .map(([name, command]) => {
+      const escaped = String(command).replace(/'/g, "'\\''");
+      return `alias ${name}='${escaped}'`;
+    })
+    .join("\n");
+}
+
+export function expandAliasCommand(input, aliases, maxDepth = 8) {
+  let command = String(input || "").trim();
+  const seen = [];
+
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const match = command.match(/^(\S+)(.*)$/);
+    if (!match) {
+      return { command, expanded: seen.length > 0 };
+    }
+
+    const name = match[1].toLowerCase();
+    const target = aliases?.[name];
+    if (!target) {
+      return { command, expanded: seen.length > 0 };
+    }
+
+    if (seen.includes(name)) {
+      return {
+        command,
+        expanded: seen.length > 0,
+        error: `Alias loop detected: ${[...seen, name].join(" -> ")}`,
+      };
+    }
+
+    seen.push(name);
+    command = `${target}${match[2] || ""}`.trim();
+  }
+
+  return {
+    command,
+    expanded: seen.length > 0,
+    error: "Alias expansion exceeded maximum depth.",
+  };
+}
 
 export function buildProjectsListOutput(projects) {
   if (!Array.isArray(projects) || projects.length === 0) {
