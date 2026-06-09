@@ -33,6 +33,7 @@ export const COMMAND_LIST = [
   "snake",
   "stats",
   "theme",
+  "unalias",
   "uptime",
   "weather",
   "which",
@@ -161,6 +162,119 @@ export function formatHistoryOutput(history) {
   return history
     .map((cmd, i) => `  ${String(i + 1).padStart(4)}  ${cmd}`)
     .join("\n");
+}
+
+const ALIAS_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+function stripAliasQuotes(value) {
+  if (value.length < 2) return value;
+  const quote = value[0];
+  if ((quote !== "'" && quote !== '"') || value[value.length - 1] !== quote) {
+    return value;
+  }
+  return value.slice(1, -1);
+}
+
+function quoteAliasValue(value) {
+  return String(value).replace(/'/g, "'\\''");
+}
+
+export function parseAliasDefinition(input) {
+  const text = String(input || "").trim();
+  if (!text) return { type: "list" };
+
+  const equalsIndex = text.indexOf("=");
+  if (equalsIndex === -1) {
+    if (/\s/.test(text)) {
+      return {
+        type: "error",
+        message: "Usage: alias [name[='command']]",
+      };
+    }
+    return { type: "lookup", name: text };
+  }
+
+  const name = text.slice(0, equalsIndex).trim();
+  const rawValue = text.slice(equalsIndex + 1).trim();
+  if (!ALIAS_NAME_PATTERN.test(name)) {
+    return {
+      type: "error",
+      message: `alias: invalid name '${name}'`,
+    };
+  }
+  if (!rawValue) {
+    return {
+      type: "error",
+      message: `alias: '${name}' needs a command value`,
+    };
+  }
+
+  const startsQuoted = rawValue[0] === "'" || rawValue[0] === '"';
+  const endsQuoted = rawValue[rawValue.length - 1] === rawValue[0];
+  if (startsQuoted && !endsQuoted) {
+    return {
+      type: "error",
+      message: "alias: unmatched quote in command value",
+    };
+  }
+
+  return {
+    type: "set",
+    name,
+    value: stripAliasQuotes(rawValue),
+  };
+}
+
+export function formatAliasOutput(aliases, name = "") {
+  const entries = aliases && typeof aliases === "object" ? aliases : {};
+  const names = Object.keys(entries).sort((a, b) => a.localeCompare(b));
+  if (name) {
+    if (!Object.prototype.hasOwnProperty.call(entries, name)) {
+      return `alias: ${name}: not found`;
+    }
+    return `alias ${name}='${quoteAliasValue(entries[name])}'`;
+  }
+  if (names.length === 0) {
+    return "No aliases defined. Create one with: alias ll='ls'";
+  }
+  return names
+    .map(
+      (aliasName) =>
+        `alias ${aliasName}='${quoteAliasValue(entries[aliasName])}'`,
+    )
+    .join("\n");
+}
+
+export function expandAliasCommand(command, aliases, seen = []) {
+  const original = String(command || "");
+  const trimmed = original.trim();
+  if (!trimmed || !aliases || typeof aliases !== "object") {
+    return { command: original, expanded: false };
+  }
+
+  const match = trimmed.match(/^(\S+)([\s\S]*)$/);
+  if (!match) return { command: original, expanded: false };
+
+  const [, name, rest] = match;
+  if (!Object.prototype.hasOwnProperty.call(aliases, name)) {
+    return { command: original, expanded: false };
+  }
+
+  if (seen.includes(name)) {
+    return {
+      command: original,
+      expanded: false,
+      error: `alias: expansion loop detected (${[...seen, name].join(" -> ")})`,
+    };
+  }
+
+  const expanded = `${aliases[name]}${rest || ""}`.trim();
+  const nested = expandAliasCommand(expanded, aliases, [...seen, name]);
+  if (nested.error) return nested;
+  return {
+    command: nested.command,
+    expanded: true,
+  };
 }
 
 export function globToRegex(pattern) {
