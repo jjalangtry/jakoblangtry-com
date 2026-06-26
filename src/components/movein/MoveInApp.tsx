@@ -312,7 +312,7 @@ function Summary({ items }: { items: Item[] }) {
   const pct = total ? Math.round((acquired / total) * 100) : 0;
   const stillToBuy = need.reduce((s, i) => s + i.cost, 0);
   return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-xl border bg-card px-5 py-4 shadow-sm">
+    <div className="grid grid-cols-3 gap-3 rounded-xl border bg-card p-4 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:gap-x-8 sm:gap-y-4 sm:px-5">
       <Stat
         label="To buy"
         value={String(need.length)}
@@ -322,7 +322,7 @@ function Summary({ items }: { items: Item[] }) {
       <Stat label="Purchased" value={String(bought.length)} />
       <Divider />
       <Stat label="Already owned" value={String(owned.length)} />
-      <div className="ml-auto w-full max-w-[220px]">
+      <div className="col-span-3 mt-1 sm:col-auto sm:ml-auto sm:mt-0 sm:w-full sm:max-w-[220px]">
         <div className="mb-1.5 flex items-baseline justify-between">
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Move-in ready
@@ -355,9 +355,13 @@ function Stat({
         {label}
       </div>
       <div className="mt-0.5 flex items-baseline gap-1.5">
-        <span className="text-2xl font-semibold tabular-nums">{value}</span>
+        <span className="text-xl font-semibold tabular-nums sm:text-2xl">
+          {value}
+        </span>
         {sub ? (
-          <span className="text-sm text-muted-foreground">{sub}</span>
+          <span className="hidden text-sm text-muted-foreground sm:inline">
+            {sub}
+          </span>
         ) : null}
       </div>
     </div>
@@ -384,12 +388,163 @@ function bySection<T extends { original: Item }>(rows: T[]) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Inline editable controls — shared by the desktop table + mobile     */
+/* cards so behaviour stays identical across layouts.                  */
+/* ------------------------------------------------------------------ */
+function StatusControl({ item }: { item: Item }) {
+  const setStatus = useMutation(api.setStatus);
+  return (
+    <Select
+      value={item.status}
+      onValueChange={(v) =>
+        setStatus({ id: item._id, status: v }).catch(() =>
+          toast.error("Sync error."),
+        )
+      }
+    >
+      <SelectTrigger
+        className={cn(
+          "h-7 w-[150px] border px-2 text-xs font-medium",
+          STATUS_META[item.status]?.style,
+        )}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {STATUSES.map((s) => (
+          <SelectItem key={s} value={s}>
+            {STATUS_META[s].label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function WhoControl({ item }: { item: Item }) {
+  const update = useMutation(api.update);
+  const owned = isOwned(item.status);
+  return (
+    <Select
+      value={item.whoBuys}
+      onValueChange={(v) =>
+        update({ id: item._id, whoBuys: v }).catch(() =>
+          toast.error("Sync error."),
+        )
+      }
+    >
+      <SelectTrigger
+        className={cn(
+          "h-7 w-[104px] border px-2 text-xs font-medium",
+          owned
+            ? "border-dashed text-muted-foreground opacity-50"
+            : WHO_STYLES[item.whoBuys],
+        )}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {WHO.map((w) => (
+          <SelectItem key={w} value={w}>
+            {w}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function PrioControl({ item }: { item: Item }) {
+  const update = useMutation(api.update);
+  return (
+    <Select
+      value={item.priority}
+      onValueChange={(v) =>
+        update({ id: item._id, priority: v }).catch(() =>
+          toast.error("Sync error."),
+        )
+      }
+    >
+      <SelectTrigger
+        className={cn(
+          "h-7 w-[108px] border px-2 text-xs font-medium",
+          PRIO_STYLES[item.priority],
+        )}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {PRIORITIES.map((p) => (
+          <SelectItem key={p} value={p}>
+            {p}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/* A single item as a card — used on mobile instead of a wide table row. */
+function MobileCard({
+  item,
+  onEdit,
+}: {
+  item: Item;
+  onEdit: (i: Item) => void;
+}) {
+  const st = item.status;
+  return (
+    <div className={cn("px-3 py-3", st === "bought" && "opacity-60")}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div
+            className={cn(
+              "font-medium leading-snug",
+              st === "bought" && "text-muted-foreground line-through",
+              isOwned(st) && "text-muted-foreground",
+            )}
+          >
+            {item.name}
+          </div>
+          {item.notes ? (
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {item.notes}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <span
+            className={cn(
+              "text-sm tabular-nums text-muted-foreground",
+              isOwned(st) && "line-through opacity-50",
+            )}
+          >
+            {money(item.cost)}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground"
+            onClick={() => onEdit(item)}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <StatusControl item={item} />
+        <WhoControl item={item} />
+        <PrioControl item={item} />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Board (the data table)                                              */
 /* ------------------------------------------------------------------ */
 function Board() {
   const items = useQuery(api.list) as Item[] | undefined;
-  const setStatus = useMutation(api.setStatus);
-  const update = useMutation(api.update);
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -401,6 +556,10 @@ function Board() {
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Item | null>(null);
+  const onEdit = React.useCallback((it: Item) => {
+    setEditing(it);
+    setDialogOpen(true);
+  }, []);
 
   const data = React.useMemo(
     () => (items ? [...items].sort((a, b) => a.order - b.order) : []),
@@ -433,35 +592,7 @@ function Board() {
           value === "owned"
             ? isOwned(row.original.status)
             : row.original.status === value,
-        cell: ({ row }) => {
-          const st = row.original.status;
-          return (
-            <Select
-              value={st}
-              onValueChange={(v) =>
-                setStatus({ id: row.original._id, status: v }).catch(() =>
-                  toast.error("Sync error."),
-                )
-              }
-            >
-              <SelectTrigger
-                className={cn(
-                  "h-7 w-[150px] border px-2 text-xs font-medium",
-                  STATUS_META[st]?.style,
-                )}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {STATUS_META[s].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          );
-        },
+        cell: ({ row }) => <StatusControl item={row.original} />,
       },
       {
         accessorKey: "name",
@@ -492,37 +623,7 @@ function Board() {
         accessorKey: "whoBuys",
         header: ({ column }) => <SortBtn column={column} label="Who buys" />,
         filterFn: "equalsString",
-        cell: ({ row }) => {
-          const owned = isOwned(row.original.status);
-          return (
-            <Select
-              value={row.original.whoBuys}
-              onValueChange={(v) =>
-                update({ id: row.original._id, whoBuys: v }).catch(() =>
-                  toast.error("Sync error."),
-                )
-              }
-            >
-              <SelectTrigger
-                className={cn(
-                  "h-7 w-[104px] border px-2 text-xs font-medium",
-                  owned
-                    ? "border-dashed text-muted-foreground opacity-50"
-                    : WHO_STYLES[row.original.whoBuys],
-                )}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {WHO.map((w) => (
-                  <SelectItem key={w} value={w}>
-                    {w}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          );
-        },
+        cell: ({ row }) => <WhoControl item={row.original} />,
       },
       {
         accessorKey: "priority",
@@ -531,32 +632,7 @@ function Board() {
         sortingFn: (a, b) =>
           (PRIO_RANK[a.original.priority] ?? 9) -
           (PRIO_RANK[b.original.priority] ?? 9),
-        cell: ({ row }) => (
-          <Select
-            value={row.original.priority}
-            onValueChange={(v) =>
-              update({ id: row.original._id, priority: v }).catch(() =>
-                toast.error("Sync error."),
-              )
-            }
-          >
-            <SelectTrigger
-              className={cn(
-                "h-7 w-[108px] border px-2 text-xs font-medium",
-                PRIO_STYLES[row.original.priority],
-              )}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PRIORITIES.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ),
+        cell: ({ row }) => <PrioControl item={row.original} />,
       },
       {
         accessorKey: "cost",
@@ -583,17 +659,14 @@ function Board() {
             variant="ghost"
             size="icon"
             className="size-7 text-muted-foreground"
-            onClick={() => {
-              setEditing(row.original);
-              setDialogOpen(true);
-            }}
+            onClick={() => onEdit(row.original)}
           >
             <Pencil className="size-3.5" />
           </Button>
         ),
       },
     ],
-    [setStatus, update],
+    [onEdit],
   );
 
   const table = useReactTable({
@@ -690,23 +763,42 @@ function Board() {
     <div className="space-y-4">
       <Summary items={items} />
 
-      {/* room tabs */}
-      <Tabs value={activeRoom} onValueChange={setActiveRoom}>
-        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1">
-          <TabsTrigger value="all" className="text-xs">
-            All rooms{" "}
-            <span className="ml-1 text-muted-foreground">({data.length})</span>
-          </TabsTrigger>
-          {rooms.map((r) => (
-            <TabsTrigger key={r} value={r} className="text-xs">
-              {r}{" "}
+      {/* room nav — tabs on desktop, dropdown on mobile */}
+      <div className="hidden sm:block">
+        <Tabs value={activeRoom} onValueChange={setActiveRoom}>
+          <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1">
+            <TabsTrigger value="all" className="text-xs">
+              All rooms{" "}
               <span className="ml-1 text-muted-foreground">
-                ({roomCounts[r]})
+                ({data.length})
               </span>
             </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+            {rooms.map((r) => (
+              <TabsTrigger key={r} value={r} className="text-xs">
+                {r}{" "}
+                <span className="ml-1 text-muted-foreground">
+                  ({roomCounts[r]})
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </div>
+      <div className="sm:hidden">
+        <Select value={activeRoom} onValueChange={setActiveRoom}>
+          <SelectTrigger className="h-10 w-full font-medium">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All rooms ({data.length})</SelectItem>
+            {rooms.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r} ({roomCounts[r]})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* controls */}
       <div className="flex flex-wrap items-center gap-2">
@@ -765,8 +857,8 @@ function Board() {
         </Button>
       </div>
 
-      {/* table */}
-      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      {/* table (desktop) */}
+      <div className="hidden overflow-hidden rounded-xl border bg-card shadow-sm md:block">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
@@ -832,6 +924,86 @@ function Board() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* cards (mobile) */}
+      <div className="space-y-3 md:hidden">
+        {rows.length === 0 ? (
+          <div className="rounded-xl border bg-card py-12 text-center text-sm text-muted-foreground">
+            No items match your filters.
+          </div>
+        ) : grouped ? (
+          roomGroups.map((g) => {
+            const isOpen = !collapsed.has(g.room);
+            const left = g.rows
+              .filter((r) => r.original.status === "need")
+              .reduce((s, r) => s + r.original.cost, 0);
+            const doneN = g.rows.filter((r) =>
+              isHandled(r.original.status),
+            ).length;
+            return (
+              <div
+                key={g.room}
+                className="overflow-hidden rounded-xl border bg-card shadow-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleRoom(g.room)}
+                  className="flex w-full items-center gap-2 bg-secondary/50 px-3 py-2.5 text-left text-sm font-semibold"
+                >
+                  {isOpen ? (
+                    <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="truncate">{g.room}</span>
+                  <span className="ml-auto shrink-0 pl-2 text-xs font-normal text-muted-foreground">
+                    {doneN}/{g.rows.length} · ${left.toLocaleString()}
+                  </span>
+                </button>
+                {isOpen ? (
+                  <div className="divide-y">
+                    {bySection(g.rows).map((sec) => (
+                      <div key={sec.section || "_"}>
+                        {sec.section ? (
+                          <div className="bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            {sec.section}
+                          </div>
+                        ) : null}
+                        <div className="divide-y">
+                          {sec.rows.map((r) => (
+                            <MobileCard
+                              key={r.id}
+                              item={r.original}
+                              onEdit={onEdit}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        ) : (
+          <div className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
+            {bySection(rows).map((sec) => (
+              <div key={sec.section || "_"}>
+                {sec.section ? (
+                  <div className="bg-muted/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {sec.section}
+                  </div>
+                ) : null}
+                <div className="divide-y">
+                  {sec.rows.map((r) => (
+                    <MobileCard key={r.id} item={r.original} onEdit={onEdit} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <ItemDialog
