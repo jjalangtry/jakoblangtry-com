@@ -52,6 +52,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -294,6 +295,101 @@ function ItemDialog({
             </Button>
             <Button onClick={save}>{editing ? "Save" : "Add"}</Button>
           </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Add via natural language — describe items, AI sorts them in.        */
+/* ------------------------------------------------------------------ */
+function AddDialog({
+  open,
+  onOpenChange,
+  rooms,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  rooms: string[];
+}) {
+  const add = useMutation(api.add);
+  const [text, setText] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (open) setText("");
+  }, [open]);
+
+  async function submit() {
+    const t = text.trim();
+    if (!t || loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/movein/parse", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: t, rooms }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Couldn't parse that.");
+      const items: Array<Record<string, unknown>> = data.items ?? [];
+      if (!items.length) throw new Error("Nothing to add — try rephrasing.");
+      for (const it of items) {
+        await add({
+          name: String(it.name ?? "").trim() || "Untitled",
+          room: String(it.room ?? "").trim() || "Misc",
+          section: String(it.section ?? "").trim(),
+          whoBuys: String(it.whoBuys ?? "Shared"),
+          cost: Math.max(0, Math.round(Number(it.cost) || 0)),
+          priority: String(it.priority ?? "Week 1"),
+          notes: String(it.notes ?? "").trim(),
+          status: String(it.status ?? "need"),
+        });
+      }
+      toast.success(
+        `Added ${items.length} item${items.length === 1 ? "" : "s"}: ${items
+          .map((i) => i.name)
+          .join(", ")}`,
+      );
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't add that.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Add items</DialogTitle>
+          <DialogDescription>
+            Describe what you need in plain English — it gets sorted into the
+            right room, priority, and cost automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit();
+          }}
+          rows={4}
+          autoFocus
+          placeholder="e.g. a queen comforter and two pillows for Jakob's room, plus a bath mat — need the comforter day one"
+        />
+        <p className="text-xs text-muted-foreground">
+          Adds one or more items. You can fine-tune anything afterward.
+        </p>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={loading || !text.trim()}>
+            {loading ? "Adding…" : "Add"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -555,6 +651,7 @@ function Board() {
   const [hideDone, setHideDone] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [addOpen, setAddOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Item | null>(null);
   const onEdit = React.useCallback((it: Item) => {
     setEditing(it);
@@ -763,8 +860,8 @@ function Board() {
     <div className="space-y-4">
       <Summary items={items} />
 
-      {/* room nav — tabs on desktop, dropdown on mobile */}
-      <div className="hidden sm:block">
+      {/* room nav — tabs on wide desktop, dropdown on phones/tablets */}
+      <div className="hidden lg:block">
         <Tabs value={activeRoom} onValueChange={setActiveRoom}>
           <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1">
             <TabsTrigger value="all" className="text-xs">
@@ -784,7 +881,7 @@ function Board() {
           </TabsList>
         </Tabs>
       </div>
-      <div className="sm:hidden">
+      <div className="lg:hidden">
         <Select value={activeRoom} onValueChange={setActiveRoom}>
           <SelectTrigger className="h-10 w-full font-medium">
             <SelectValue />
@@ -848,10 +945,7 @@ function Board() {
         <Button
           size="sm"
           className="ml-auto h-9"
-          onClick={() => {
-            setEditing(null);
-            setDialogOpen(true);
-          }}
+          onClick={() => setAddOpen(true)}
         >
           <Plus className="size-4" /> Add item
         </Button>
@@ -1006,6 +1100,7 @@ function Board() {
         )}
       </div>
 
+      <AddDialog open={addOpen} onOpenChange={setAddOpen} rooms={rooms} />
       <ItemDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
