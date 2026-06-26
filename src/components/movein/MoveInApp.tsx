@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -56,24 +55,19 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import {
-  PRIO_DOT,
   PRIO_RANK,
   PRIO_STYLES,
   PRIORITIES,
   STATUS_META,
   STATUSES,
-  TEAL_STYLE,
   WHO,
   WHO_STYLES,
   api,
   isHandled,
   isOwned,
   money,
-  ownerOf,
   type Item,
 } from "@/components/movein/types";
-
-const OWNERS = ["Tristen", "Jakob", "Both"] as const;
 
 /* ------------------------------------------------------------------ */
 /* Edit / Add dialog                                                   */
@@ -196,7 +190,7 @@ function ItemDialog({
               <SelectContent>
                 {STATUSES.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {STATUS_META[s].dot} {STATUS_META[s].label}
+                    {STATUS_META[s].label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -259,7 +253,7 @@ function ItemDialog({
                 <SelectContent>
                   {PRIORITIES.map((p) => (
                     <SelectItem key={p} value={p}>
-                      {PRIO_DOT[p]} {p}
+                      {p}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -317,109 +311,61 @@ function Summary({ items }: { items: Item[] }) {
   const acquired = bought.length + owned.length;
   const pct = total ? Math.round((acquired / total) * 100) : 0;
   const stillToBuy = need.reduce((s, i) => s + i.cost, 0);
-  const spent = bought.reduce((s, i) => s + i.cost, 0);
-
-  const buySplit: Record<string, number> = {};
-  need.forEach(
-    (i) => (buySplit[i.whoBuys] = (buySplit[i.whoBuys] || 0) + i.cost),
-  );
-  const ownSplit: Record<string, number> = {};
-  owned.forEach((i) => {
-    const o = ownerOf(i.status)!;
-    ownSplit[o] = (ownSplit[o] || 0) + 1;
-  });
-
-  const OWN_BADGE: Record<string, string> = {
-    Tristen: WHO_STYLES.Tristen,
-    Jakob: WHO_STYLES.Jakob,
-    Both: TEAL_STYLE,
-  };
-
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {/* To buy */}
-      <div className="rounded-xl border bg-card p-4 shadow-sm">
-        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          🛒 Still to buy
-        </div>
-        <div className="mt-1 text-2xl font-bold">
-          {need.length}
-          <span className="ml-1 text-base font-medium text-muted-foreground">
-            items · ${stillToBuy.toLocaleString()}
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-4 rounded-xl border bg-card px-5 py-4 shadow-sm">
+      <Stat
+        label="To buy"
+        value={String(need.length)}
+        sub={`$${stillToBuy.toLocaleString()} est.`}
+      />
+      <Divider />
+      <Stat label="Purchased" value={String(bought.length)} />
+      <Divider />
+      <Stat label="Already owned" value={String(owned.length)} />
+      <div className="ml-auto w-full max-w-[220px]">
+        <div className="mb-1.5 flex items-baseline justify-between">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Move-in ready
           </span>
+          <span className="text-sm font-semibold tabular-nums">{pct}%</span>
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {WHO.filter((w) => buySplit[w]).map((w) => (
-            <Badge
-              key={w}
-              variant="outline"
-              className={cn("font-medium", WHO_STYLES[w])}
-            >
-              {w}: ${buySplit[w].toLocaleString()}
-            </Badge>
-          ))}
-        </div>
-      </div>
-
-      {/* Purchased */}
-      <div className="rounded-xl border border-emerald-500/30 bg-card p-4 shadow-sm">
-        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          ✅ Purchased
-        </div>
-        <div className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-300">
-          {bought.length}
-          <span className="ml-1 text-base font-medium text-muted-foreground">
-            items
-          </span>
-        </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          ${spent.toLocaleString()} spent · bought after move-in
-        </div>
-      </div>
-
-      {/* Already own */}
-      <div className="rounded-xl border border-sky-500/30 bg-card p-4 shadow-sm">
-        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          📦 Already own
-        </div>
-        <div className="mt-1 text-2xl font-bold text-sky-600 dark:text-sky-300">
-          {owned.length}
-          <span className="ml-1 text-base font-medium text-muted-foreground">
-            items
-          </span>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {OWNERS.filter((o) => ownSplit[o]).map((o) => (
-            <Badge
-              key={o}
-              variant="outline"
-              className={cn("font-medium", OWN_BADGE[o])}
-            >
-              {o}: {ownSplit[o]}
-            </Badge>
-          ))}
-        </div>
-      </div>
-
-      {/* Move-in ready */}
-      <div className="rounded-xl border bg-card p-4 shadow-sm">
-        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Move-in ready
-        </div>
-        <div className="mt-1 text-2xl font-bold">{pct}%</div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary">
+        <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
           <div
-            className="h-full bg-primary transition-all"
+            className="h-full rounded-full bg-primary transition-all"
             style={{ width: `${pct}%` }}
           />
-        </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          {acquired} of {total} sorted ({bought.length} bought + {owned.length}{" "}
-          owned)
         </div>
       </div>
     </div>
   );
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div>
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-0.5 flex items-baseline gap-1.5">
+        <span className="text-2xl font-semibold tabular-nums">{value}</span>
+        {sub ? (
+          <span className="text-sm text-muted-foreground">{sub}</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="hidden h-9 w-px bg-border sm:block" />;
 }
 
 /* group an array of table rows by section, preserving first-appearance order */
@@ -509,7 +455,7 @@ function Board() {
               <SelectContent>
                 {STATUSES.map((s) => (
                   <SelectItem key={s} value={s}>
-                    {STATUS_META[s].dot} {STATUS_META[s].label}
+                    {STATUS_META[s].label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -605,7 +551,7 @@ function Board() {
             <SelectContent>
               {PRIORITIES.map((p) => (
                 <SelectItem key={p} value={p}>
-                  {PRIO_DOT[p]} {p}
+                  {p}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -779,12 +725,12 @@ function Board() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Any status</SelectItem>
-            <SelectItem value="need">🛒 Need to buy</SelectItem>
-            <SelectItem value="bought">✅ Bought</SelectItem>
-            <SelectItem value="owned">📦 Already owned</SelectItem>
-            <SelectItem value="own-tristen">📦 Tristen owns</SelectItem>
-            <SelectItem value="own-jakob">📦 Jakob owns</SelectItem>
-            <SelectItem value="own-both">📦 Both own</SelectItem>
+            <SelectItem value="need">Need to buy</SelectItem>
+            <SelectItem value="bought">Bought</SelectItem>
+            <SelectItem value="owned">Already owned</SelectItem>
+            <SelectItem value="own-tristen">Tristen owns</SelectItem>
+            <SelectItem value="own-jakob">Jakob owns</SelectItem>
+            <SelectItem value="own-both">Both own</SelectItem>
           </SelectContent>
         </Select>
         <FilterSelect

@@ -37,38 +37,33 @@ export type Status = (typeof STATUSES)[number];
 
 export const STATUS_META: Record<
   string,
-  { label: string; short: string; dot: string; style: string }
+  { label: string; short: string; style: string }
 > = {
   need: {
     label: "Need to buy",
     short: "Need",
-    dot: "🛒",
     style: "bg-secondary text-muted-foreground border-border",
   },
   bought: {
-    label: "Bought ✓",
+    label: "Bought",
     short: "Bought",
-    dot: "✅",
     style:
       "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
   },
   "own-tristen": {
     label: "Tristen owns",
     short: "Tristen owns",
-    dot: "📦",
     style: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40",
   },
   "own-jakob": {
     label: "Jakob owns",
     short: "Jakob owns",
-    dot: "📦",
     style:
       "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/40",
   },
   "own-both": {
     label: "Both own",
     short: "Both own",
-    dot: "📦",
     style: "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/40",
   },
 };
@@ -111,12 +106,6 @@ export const PRIO_STYLES: Record<string, string> = {
     "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/40",
   "Month 1":
     "bg-yellow-500/20 text-yellow-700 dark:text-yellow-200 border-yellow-500/40",
-};
-
-export const PRIO_DOT: Record<string, string> = {
-  "Day 1": "🔴",
-  "Week 1": "🟠",
-  "Month 1": "🟡",
 };
 
 export const money = (n: number) =>

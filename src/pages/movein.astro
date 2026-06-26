@@ -39,8 +39,8 @@ const CONVEX_URL = "https://elated-squirrel-345.convex.cloud";
     <div class="mx-auto w-full max-w-[1760px] px-4 pb-24 pt-6 lg:px-8">
       <header class="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
         <div>
-          <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">
-            📦 Move-In Checklist
+          <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Move-In Checklist
           </h1>
           <p class="text-sm text-muted-foreground">
             533 University Ave Apt 3, Rochester NY ·
@@ -48,28 +48,19 @@ const CONVEX_URL = "https://elated-squirrel-345.convex.cloud";
               class="underline decoration-dotted underline-offset-2 hover:text-foreground"
               href="https://www.zillow.com/homedetails/533-University-Ave-APT-3-Rochester-NY-14607/2057284262_zpid/"
               target="_blank"
-              rel="noopener">listing ↗</a
+              rel="noopener">listing</a
             > · Jakob &amp; Tristen
           </p>
         </div>
-        <div class="ml-auto flex items-center gap-2">
-          <button
-            id="theme-toggle"
-            type="button"
-            aria-label="Toggle color theme"
-            class="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <span id="theme-label">🖥️ System</span>
-          </button>
-          <span
-            class="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1.5 text-xs text-muted-foreground"
-          >
-            <span
-              class="size-2 rounded-full bg-primary shadow-[0_0_8px] shadow-primary"
-            ></span>
-            live sync
-          </span>
-        </div>
+        <button
+          id="theme-toggle"
+          type="button"
+          aria-label="Toggle color theme"
+          class="ml-auto inline-flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <span id="theme-icon" class="inline-flex size-4 items-center"></span>
+          <span id="theme-label">System</span>
+        </button>
       </header>
 
       <MoveInApp client:only="react" convexUrl={CONVEX_URL} />
@@ -82,6 +73,19 @@ const CONVEX_URL = "https://elated-squirrel-345.convex.cloud";
         var mq = window.matchMedia("(prefers-color-scheme: dark)");
         var btn = document.getElementById("theme-toggle");
         var lbl = document.getElementById("theme-label");
+        var ico = document.getElementById("theme-icon");
+        var svg =
+          '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+        var ICON = {
+          system:
+            svg +
+            '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+          light:
+            svg +
+            '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>',
+          dark: svg + '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>',
+        };
+        var WORD = { system: "System", light: "Light", dark: "Dark" };
         function get() {
           try {
             return localStorage.getItem(KEY) || "system";
@@ -92,13 +96,8 @@ const CONVEX_URL = "https://elated-squirrel-345.convex.cloud";
         function apply(t) {
           var dark = t === "dark" || (t === "system" && mq.matches);
           document.documentElement.classList.toggle("dark", dark);
-          if (lbl)
-            lbl.textContent =
-              t === "system"
-                ? "🖥️ System"
-                : t === "dark"
-                  ? "🌙 Dark"
-                  : "☀️ Light";
+          if (ico) ico.innerHTML = ICON[t];
+          if (lbl) lbl.textContent = WORD[t];
         }
         apply(get());
         mq.addEventListener("change", function () {
