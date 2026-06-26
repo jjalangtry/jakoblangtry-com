@@ -52,6 +52,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -61,6 +62,7 @@ import {
   PRIORITIES,
   STATUS_META,
   STATUSES,
+  TEAL_STYLE,
   WHO,
   WHO_STYLES,
   api,
@@ -93,11 +95,13 @@ function ItemDialog({
   onOpenChange,
   editing,
   rooms,
+  defaultRoom,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   editing: Item | null;
   rooms: string[];
+  defaultRoom: string;
 }) {
   const add = useMutation(api.add);
   const update = useMutation(api.update);
@@ -118,10 +122,10 @@ function ItemDialog({
               notes: editing.notes,
               status: editing.status,
             }
-          : emptyDraft,
+          : { ...emptyDraft, room: defaultRoom },
       );
     }
-  }, [open, editing]);
+  }, [open, editing, defaultRoom]);
 
   const set = <K extends keyof Draft>(k: K, val: Draft[K]) =>
     setDraft((d) => ({ ...d, [k]: val }));
@@ -284,7 +288,7 @@ function ItemDialog({
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
           {editing ? (
-            <Button variant="ghost" className="text-red-400" onClick={del}>
+            <Button variant="ghost" className="text-destructive" onClick={del}>
               <Trash2 className="size-4" /> Delete
             </Button>
           ) : (
@@ -328,14 +332,14 @@ function Summary({ items }: { items: Item[] }) {
   const OWN_BADGE: Record<string, string> = {
     Tristen: WHO_STYLES.Tristen,
     Jakob: WHO_STYLES.Jakob,
-    Both: "bg-teal-500/15 text-teal-300 border-teal-500/40",
+    Both: TEAL_STYLE,
   };
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {/* To buy */}
-      <div className="rounded-xl border bg-card p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           🛒 Still to buy
         </div>
         <div className="mt-1 text-2xl font-bold">
@@ -357,12 +361,12 @@ function Summary({ items }: { items: Item[] }) {
         </div>
       </div>
 
-      {/* Purchased — distinct from owned */}
-      <div className="rounded-xl border border-emerald-500/30 bg-card p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+      {/* Purchased */}
+      <div className="rounded-xl border border-emerald-500/30 bg-card p-4 shadow-sm">
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           ✅ Purchased
         </div>
-        <div className="mt-1 text-2xl font-bold text-emerald-300">
+        <div className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-300">
           {bought.length}
           <span className="ml-1 text-base font-medium text-muted-foreground">
             items
@@ -373,12 +377,12 @@ function Summary({ items }: { items: Item[] }) {
         </div>
       </div>
 
-      {/* Already own — distinct from purchased */}
-      <div className="rounded-xl border border-sky-500/30 bg-card p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+      {/* Already own */}
+      <div className="rounded-xl border border-sky-500/30 bg-card p-4 shadow-sm">
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           📦 Already own
         </div>
-        <div className="mt-1 text-2xl font-bold text-sky-300">
+        <div className="mt-1 text-2xl font-bold text-sky-600 dark:text-sky-300">
           {owned.length}
           <span className="ml-1 text-base font-medium text-muted-foreground">
             items
@@ -397,9 +401,9 @@ function Summary({ items }: { items: Item[] }) {
         </div>
       </div>
 
-      {/* Move-in readiness */}
-      <div className="rounded-xl border bg-card p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+      {/* Move-in ready */}
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Move-in ready
         </div>
         <div className="mt-1 text-2xl font-bold">{pct}%</div>
@@ -418,6 +422,21 @@ function Summary({ items }: { items: Item[] }) {
   );
 }
 
+/* group an array of table rows by section, preserving first-appearance order */
+function bySection<T extends { original: Item }>(rows: T[]) {
+  const order: string[] = [];
+  const map = new Map<string, T[]>();
+  for (const r of rows) {
+    const s = r.original.section || "";
+    if (!map.has(s)) {
+      map.set(s, []);
+      order.push(s);
+    }
+    map.get(s)!.push(r);
+  }
+  return order.map((section) => ({ section, rows: map.get(section)! }));
+}
+
 /* ------------------------------------------------------------------ */
 /* Board (the data table)                                              */
 /* ------------------------------------------------------------------ */
@@ -431,7 +450,7 @@ function Board() {
     [],
   );
   const [globalFilter, setGlobalFilter] = React.useState("");
-  const [groupByRoom, setGroupByRoom] = React.useState(true);
+  const [activeRoom, setActiveRoom] = React.useState("all");
   const [hideDone, setHideDone] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -441,14 +460,22 @@ function Board() {
     () => (items ? [...items].sort((a, b) => a.order - b.order) : []),
     [items],
   );
-  const tableData = React.useMemo(
-    () => (hideDone ? data.filter((i) => !isHandled(i.status)) : data),
-    [data, hideDone],
-  );
   const rooms = React.useMemo(
     () => [...new Set(data.map((i) => i.room))],
     [data],
   );
+  const roomCounts = React.useMemo(() => {
+    const m: Record<string, number> = {};
+    data.forEach((i) => (m[i.room] = (m[i.room] || 0) + 1));
+    return m;
+  }, [data]);
+
+  const tableData = React.useMemo(() => {
+    let d =
+      activeRoom === "all" ? data : data.filter((i) => i.room === activeRoom);
+    if (hideDone) d = d.filter((i) => !isHandled(i.status));
+    return d;
+  }, [data, activeRoom, hideDone]);
 
   const columns = React.useMemo<ColumnDef<Item>[]>(
     () => [
@@ -496,7 +523,7 @@ function Board() {
         cell: ({ row }) => {
           const st = row.original.status;
           return (
-            <div className="min-w-[160px]">
+            <div className="min-w-[180px]">
               <div
                 className={cn(
                   "font-medium",
@@ -651,17 +678,19 @@ function Board() {
 
   const rows = table.getRowModel().rows;
   const colCount = columns.length;
+  const grouped = activeRoom === "all";
 
-  const groups: { room: string; rows: typeof rows }[] = [];
-  if (groupByRoom) {
+  // group rows by room (only used in the "All" tab)
+  const roomGroups: { room: string; rows: typeof rows }[] = [];
+  if (grouped) {
     const idx = new Map<string, number>();
     for (const r of rows) {
       const room = r.original.room;
       if (!idx.has(room)) {
-        idx.set(room, groups.length);
-        groups.push({ room, rows: [] as unknown as typeof rows });
+        idx.set(room, roomGroups.length);
+        roomGroups.push({ room, rows: [] as unknown as typeof rows });
       }
-      groups[idx.get(room)!].rows.push(r);
+      roomGroups[idx.get(room)!].rows.push(r);
     }
   }
 
@@ -681,9 +710,57 @@ function Board() {
     );
   }
 
+  const renderItemRow = (r: (typeof rows)[number]) => (
+    <TableRow
+      key={r.id}
+      className={cn(r.original.status === "bought" && "opacity-60")}
+    >
+      {r.getVisibleCells().map((c) => (
+        <TableCell key={c.id} className="py-2 align-top">
+          {flexRender(c.column.columnDef.cell, c.getContext())}
+        </TableCell>
+      ))}
+    </TableRow>
+  );
+
+  const renderSections = (sectionRows: typeof rows) =>
+    bySection(sectionRows).map((sec) => (
+      <React.Fragment key={sec.section || "_"}>
+        {sec.section ? (
+          <TableRow className="hover:bg-transparent">
+            <TableCell
+              colSpan={colCount}
+              className="bg-muted/40 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              {sec.section}
+            </TableCell>
+          </TableRow>
+        ) : null}
+        {sec.rows.map(renderItemRow)}
+      </React.Fragment>
+    ));
+
   return (
     <div className="space-y-4">
       <Summary items={items} />
+
+      {/* room tabs */}
+      <Tabs value={activeRoom} onValueChange={setActiveRoom}>
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/60 p-1">
+          <TabsTrigger value="all" className="text-xs">
+            All rooms{" "}
+            <span className="ml-1 text-muted-foreground">({data.length})</span>
+          </TabsTrigger>
+          {rooms.map((r) => (
+            <TabsTrigger key={r} value={r} className="text-xs">
+              {r}{" "}
+              <span className="ml-1 text-muted-foreground">
+                ({roomCounts[r]})
+              </span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* controls */}
       <div className="flex flex-wrap items-center gap-2">
@@ -731,14 +808,6 @@ function Board() {
           Hide sorted
         </Button>
         <Button
-          variant={groupByRoom ? "default" : "outline"}
-          size="sm"
-          className="h-9"
-          onClick={() => setGroupByRoom((v) => !v)}
-        >
-          Group by room
-        </Button>
-        <Button
           size="sm"
           className="ml-auto h-9"
           onClick={() => {
@@ -751,7 +820,7 @@ function Board() {
       </div>
 
       {/* table */}
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
@@ -776,8 +845,8 @@ function Board() {
                   No items match your filters.
                 </TableCell>
               </TableRow>
-            ) : groupByRoom ? (
-              groups.map((g) => {
+            ) : grouped ? (
+              roomGroups.map((g) => {
                 const isOpen = !collapsed.has(g.room);
                 const left = g.rows
                   .filter((r) => r.original.status === "need")
@@ -788,7 +857,7 @@ function Board() {
                 return (
                   <React.Fragment key={g.room}>
                     <TableRow
-                      className="cursor-pointer border-t bg-secondary/40 hover:bg-secondary/60"
+                      className="cursor-pointer border-t bg-secondary/50 hover:bg-secondary"
                       onClick={() => toggleRoom(g.room)}
                     >
                       <TableCell colSpan={colCount} className="py-2">
@@ -808,40 +877,12 @@ function Board() {
                         </div>
                       </TableCell>
                     </TableRow>
-                    {isOpen &&
-                      g.rows.map((r) => (
-                        <TableRow
-                          key={r.id}
-                          className={cn(
-                            r.original.status === "bought" && "opacity-60",
-                          )}
-                        >
-                          {r.getVisibleCells().map((c) => (
-                            <TableCell key={c.id} className="py-2 align-top">
-                              {flexRender(
-                                c.column.columnDef.cell,
-                                c.getContext(),
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
+                    {isOpen && renderSections(g.rows)}
                   </React.Fragment>
                 );
               })
             ) : (
-              rows.map((r) => (
-                <TableRow
-                  key={r.id}
-                  className={cn(r.original.status === "bought" && "opacity-60")}
-                >
-                  {r.getVisibleCells().map((c) => (
-                    <TableCell key={c.id} className="py-2 align-top">
-                      {flexRender(c.column.columnDef.cell, c.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              renderSections(rows)
             )}
           </TableBody>
         </Table>
@@ -852,6 +893,7 @@ function Board() {
         onOpenChange={setDialogOpen}
         editing={editing}
         rooms={rooms}
+        defaultRoom={activeRoom === "all" ? "" : activeRoom}
       />
       <Toaster position="bottom-center" />
     </div>

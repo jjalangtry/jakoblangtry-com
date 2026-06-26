@@ -49,25 +49,27 @@ export const STATUS_META: Record<
     label: "Bought ✓",
     short: "Bought",
     dot: "✅",
-    style: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
+    style:
+      "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
   },
   "own-tristen": {
     label: "Tristen owns",
     short: "Tristen owns",
     dot: "📦",
-    style: "bg-sky-500/15 text-sky-300 border-sky-500/40",
+    style: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40",
   },
   "own-jakob": {
     label: "Jakob owns",
     short: "Jakob owns",
     dot: "📦",
-    style: "bg-violet-500/15 text-violet-300 border-violet-500/40",
+    style:
+      "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/40",
   },
   "own-both": {
     label: "Both own",
     short: "Both own",
     dot: "📦",
-    style: "bg-teal-500/15 text-teal-300 border-teal-500/40",
+    style: "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/40",
   },
 };
 
@@ -90,17 +92,25 @@ export const PRIO_RANK: Record<string, number> = {
   "Month 1": 2,
 };
 
+export const TEAL_STYLE =
+  "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/40";
+
 export const WHO_STYLES: Record<string, string> = {
-  Shared: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
-  Tristen: "bg-sky-500/15 text-sky-300 border-sky-500/40",
-  Jakob: "bg-violet-500/15 text-violet-300 border-violet-500/40",
-  Either: "bg-amber-500/15 text-amber-300 border-amber-500/40",
+  Shared:
+    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/40",
+  Tristen: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/40",
+  Jakob:
+    "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/40",
+  Either:
+    "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40",
 };
 
 export const PRIO_STYLES: Record<string, string> = {
-  "Day 1": "bg-red-500/15 text-red-300 border-red-500/40",
-  "Week 1": "bg-orange-500/15 text-orange-300 border-orange-500/40",
-  "Month 1": "bg-yellow-500/15 text-yellow-200 border-yellow-500/40",
+  "Day 1": "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/40",
+  "Week 1":
+    "bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/40",
+  "Month 1":
+    "bg-yellow-500/20 text-yellow-700 dark:text-yellow-200 border-yellow-500/40",
 };
 
 export const PRIO_DOT: Record<string, string> = {

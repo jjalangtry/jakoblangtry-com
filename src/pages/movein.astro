@@ -10,7 +10,7 @@ const CONVEX_URL = "https://elated-squirrel-345.convex.cloud";
 ---
 
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -21,10 +21,23 @@ const CONVEX_URL = "https://elated-squirrel-345.convex.cloud";
     <meta name="robots" content="noindex" />
     <title>Move-In Checklist · 533 University Ave Apt 3</title>
     <link rel="icon" href="/favicon.svg" />
+    <!-- Apply theme before first paint (no flash) -->
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem("movein-theme") || "system";
+          var dark =
+            t === "dark" ||
+            (t === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="min-h-screen bg-background text-foreground antialiased">
-    <div class="mx-auto max-w-6xl px-4 pb-24 pt-8">
-      <header class="mb-5 flex flex-wrap items-end gap-x-4 gap-y-1">
+    <div class="mx-auto w-full max-w-[1760px] px-4 pb-24 pt-6 lg:px-8">
+      <header class="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
         <div>
           <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">
             📦 Move-In Checklist
@@ -39,17 +52,68 @@ const CONVEX_URL = "https://elated-squirrel-345.convex.cloud";
             > · Jakob &amp; Tristen
           </p>
         </div>
-        <span
-          class="ml-auto inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs text-muted-foreground"
-        >
+        <div class="ml-auto flex items-center gap-2">
+          <button
+            id="theme-toggle"
+            type="button"
+            aria-label="Toggle color theme"
+            class="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <span id="theme-label">🖥️ System</span>
+          </button>
           <span
-            class="size-2 rounded-full bg-primary shadow-[0_0_8px] shadow-primary"
-          ></span>
-          live sync
-        </span>
+            class="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1.5 text-xs text-muted-foreground"
+          >
+            <span
+              class="size-2 rounded-full bg-primary shadow-[0_0_8px] shadow-primary"
+            ></span>
+            live sync
+          </span>
+        </div>
       </header>
 
       <MoveInApp client:only="react" convexUrl={CONVEX_URL} />
     </div>
+
+    <!-- Theme toggle wiring (system → light → dark) -->
+    <script is:inline>
+      (function () {
+        var KEY = "movein-theme";
+        var mq = window.matchMedia("(prefers-color-scheme: dark)");
+        var btn = document.getElementById("theme-toggle");
+        var lbl = document.getElementById("theme-label");
+        function get() {
+          try {
+            return localStorage.getItem(KEY) || "system";
+          } catch (e) {
+            return "system";
+          }
+        }
+        function apply(t) {
+          var dark = t === "dark" || (t === "system" && mq.matches);
+          document.documentElement.classList.toggle("dark", dark);
+          if (lbl)
+            lbl.textContent =
+              t === "system"
+                ? "🖥️ System"
+                : t === "dark"
+                  ? "🌙 Dark"
+                  : "☀️ Light";
+        }
+        apply(get());
+        mq.addEventListener("change", function () {
+          if (get() === "system") apply("system");
+        });
+        if (btn)
+          btn.addEventListener("click", function () {
+            var order = ["system", "light", "dark"];
+            var next = order[(order.indexOf(get()) + 1) % order.length];
+            try {
+              localStorage.setItem(KEY, next);
+            } catch (e) {}
+            apply(next);
+          });
+      })();
+    </script>
   </body>
 </html>
