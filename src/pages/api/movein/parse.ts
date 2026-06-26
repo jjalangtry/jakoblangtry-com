@@ -85,7 +85,26 @@ export const POST: APIRoute = async ({ request }) => {
       prompt: text,
     });
 
-    return json({ items: object.items });
+    // Snap each item's room to an existing room when it's clearly the same,
+    // so the AI never spawns a near-duplicate (e.g. "Pets" vs "Pets (3 Cats)").
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const snapRoom = (room: string) => {
+      const r = norm(room);
+      if (!r) return room;
+      const exact = rooms.find((k) => norm(k) === r);
+      if (exact) return exact;
+      const partial = rooms.find((k) => {
+        const n = norm(k);
+        return n.includes(r) || r.includes(n);
+      });
+      return partial ?? room;
+    };
+    const items = object.items.map((it) => ({
+      ...it,
+      room: snapRoom(it.room),
+    }));
+
+    return json({ items });
   } catch (err) {
     console.error("movein parse error", err);
     return json({ error: "Couldn't parse that — try rephrasing." }, 502);
