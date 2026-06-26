@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Tailwind + shadcn are scoped to the /movein page only: this stylesheet is
+   imported exclusively by src/pages/movein.astro, so the rest of the site
+   (the terminal homepage etc.) is never touched by Tailwind's preflight. */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.65rem;
+  --background: oklch(0.16 0.012 155);
+  --foreground: oklch(0.97 0.01 150);
+  --card: oklch(0.2 0.014 155);
+  --card-foreground: oklch(0.97 0.01 150);
+  --popover: oklch(0.2 0.014 155);
+  --popover-foreground: oklch(0.97 0.01 150);
+  --primary: oklch(0.72 0.15 158);
+  --primary-foreground: oklch(0.16 0.02 155);
+  --secondary: oklch(0.27 0.015 155);
+  --secondary-foreground: oklch(0.97 0.01 150);
+  --muted: oklch(0.27 0.015 155);
+  --muted-foreground: oklch(0.7 0.02 150);
+  --accent: oklch(0.3 0.02 158);
+  --accent-foreground: oklch(0.97 0.01 150);
+  --destructive: oklch(0.62 0.2 25);
+  --border: oklch(0.3 0.015 155);
+  --input: oklch(0.3 0.015 155);
+  --ring: oklch(0.72 0.15 158);
+  --chart-1: oklch(0.72 0.15 158);
+  --chart-2: oklch(0.65 0.13 240);
+  --chart-3: oklch(0.68 0.16 300);
+  --chart-4: oklch(0.78 0.15 80);
+  --chart-5: oklch(0.7 0.18 25);
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+}
