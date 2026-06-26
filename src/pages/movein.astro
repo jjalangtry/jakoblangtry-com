@@ -1,0 +1,1068 @@
+---
+// /movein — shared, live-syncing move-in essentials checklist for Jakob & Tristen.
+// Data + realtime sync: Convex (project "movein"), public prod deployment.
+// Anyone with the link can view and edit; state syncs live between devices.
+const CONVEX_URL = "https://elated-squirrel-345.convex.cloud";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0f1f17" />
+    <meta name="robots" content="noindex" />
+    <title>Move-In Checklist · 533 University Ave Apt 3</title>
+    <link rel="icon" href="/favicon.svg" />
+    <style>
+      :root {
+        --bg: #0e1512;
+        --panel: #15201b;
+        --panel-2: #1b2922;
+        --line: #27392f;
+        --text: #e8f0ea;
+        --muted: #93a99c;
+        --green: #2f9e6f;
+        --green-dim: #234d3b;
+        --blue: #4a8fe7;
+        --blue-dim: #1f3a5c;
+        --purple: #a071e8;
+        --purple-dim: #3a2a5c;
+        --amber: #e0a93a;
+        --amber-dim: #5c4620;
+        --red: #e2614e;
+        --orange: #e0913a;
+        --yellow: #d8c64a;
+        --radius: 12px;
+        --shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background:
+          radial-gradient(
+            1200px 600px at 80% -10%,
+            #1c2c23 0%,
+            transparent 60%
+          ),
+          var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        line-height: 1.45;
+        min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+        padding-bottom: 96px;
+      }
+      a {
+        color: var(--green);
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 16px;
+      }
+
+      /* ---------- Header ---------- */
+      header.top {
+        padding: 28px 16px 8px;
+      }
+      header.top .wrap {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px 14px;
+      }
+      h1 {
+        font-size: clamp(22px, 4vw, 30px);
+        letter-spacing: -0.02em;
+      }
+      h1 .emoji {
+        margin-right: 6px;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .subtitle a {
+        text-decoration: none;
+        border-bottom: 1px dotted var(--green-dim);
+      }
+      .sync {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: var(--muted);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        padding: 5px 10px;
+        border-radius: 999px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition: background 0.3s;
+      }
+      .sync.live .dot {
+        background: var(--green);
+        box-shadow: 0 0 8px var(--green);
+      }
+      .sync.error .dot {
+        background: var(--red);
+      }
+
+      /* ---------- Budget summary ---------- */
+      .summary {
+        margin-top: 16px;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 14px 16px;
+      }
+      .card .label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+      .card .value {
+        font-size: 24px;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+      .card .value small {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--muted);
+      }
+      .progressbar {
+        height: 8px;
+        border-radius: 999px;
+        background: var(--panel-2);
+        overflow: hidden;
+        margin-top: 10px;
+        border: 1px solid var(--line);
+      }
+      .progressbar > span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--green), #46c98c);
+        width: 0%;
+        transition: width 0.4s ease;
+      }
+      .who-split {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .who-split .chip {
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+      }
+
+      /* ---------- Controls ---------- */
+      .controls {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        margin-top: 18px;
+        padding: 12px 0;
+        background: linear-gradient(var(--bg) 70%, transparent);
+      }
+      .controls .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .search {
+        flex: 1 1 200px;
+        min-width: 160px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 9px 14px;
+        font-size: 14px;
+        outline: none;
+      }
+      .search:focus {
+        border-color: var(--green);
+      }
+      select.ctl,
+      button.ctl {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 9px 13px;
+        font-size: 13px;
+        cursor: pointer;
+        outline: none;
+      }
+      button.ctl:hover,
+      select.ctl:hover {
+        border-color: var(--green);
+      }
+      button.ctl.active {
+        background: var(--green-dim);
+        border-color: var(--green);
+        color: #fff;
+      }
+      .filterchips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .filterchips button {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+        padding: 5px 11px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .filterchips button.active {
+        color: #fff;
+        border-color: var(--green);
+        background: var(--green-dim);
+      }
+
+      /* ---------- Rooms / rows ---------- */
+      main {
+        margin-top: 6px;
+      }
+      .room {
+        margin-top: 22px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .room > .room-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 13px 16px;
+        background: linear-gradient(90deg, var(--green-dim), transparent);
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+      }
+      .room-head h2 {
+        font-size: 16px;
+        letter-spacing: -0.01em;
+      }
+      .room-head .meta {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .room-head .caret {
+        transition: transform 0.2s;
+        color: var(--muted);
+      }
+      .room.collapsed .caret {
+        transform: rotate(-90deg);
+      }
+      .room.collapsed .room-body {
+        display: none;
+      }
+      .section-head {
+        padding: 9px 16px 5px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        background: var(--panel-2);
+      }
+      .item {
+        display: grid;
+        grid-template-columns: 26px 1fr auto;
+        gap: 10px;
+        align-items: start;
+        padding: 11px 16px;
+        border-top: 1px solid var(--line);
+      }
+      .item:first-of-type {
+        border-top: none;
+      }
+      .item.got {
+        opacity: 0.55;
+      }
+      .item.got .name {
+        text-decoration: line-through;
+        text-decoration-color: var(--muted);
+      }
+      .checkbox {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        border: 2px solid var(--line);
+        background: var(--panel-2);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        margin-top: 1px;
+        flex: none;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+      .checkbox:hover {
+        border-color: var(--green);
+      }
+      .checkbox.on {
+        background: var(--green);
+        border-color: var(--green);
+      }
+      .checkbox svg {
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      .checkbox.on svg {
+        opacity: 1;
+      }
+      .body-col {
+        min-width: 0;
+      }
+      .name {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .notes {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 7px;
+        align-items: center;
+      }
+      .pill {
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .who {
+        cursor: pointer;
+        user-select: none;
+      }
+      .who::after {
+        content: " ⇄";
+        opacity: 0.5;
+        font-size: 10px;
+      }
+      .who-Shared {
+        background: var(--green-dim);
+        color: #7ce0ad;
+        border-color: var(--green);
+      }
+      .who-Tristen {
+        background: var(--blue-dim);
+        color: #9cc4f5;
+        border-color: var(--blue);
+      }
+      .who-Jakob {
+        background: var(--purple-dim);
+        color: #cbb0f5;
+        border-color: var(--purple);
+      }
+      .who-Either {
+        background: var(--amber-dim);
+        color: #f0d28a;
+        border-color: var(--amber);
+      }
+      .prio {
+        background: var(--panel-2);
+      }
+      .prio-Day1 {
+        color: #ff9b8c;
+        border-color: var(--red);
+      }
+      .prio-Week1 {
+        color: #ffc183;
+        border-color: var(--orange);
+      }
+      .prio-Month1 {
+        color: #ece08a;
+        border-color: var(--yellow);
+      }
+      .cost {
+        font-variant-numeric: tabular-nums;
+        color: var(--muted);
+        background: var(--panel-2);
+        border-color: var(--line);
+      }
+      .right-col {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 8px;
+      }
+      .rowbtns {
+        display: flex;
+        gap: 4px;
+      }
+      .iconbtn {
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--muted);
+        cursor: pointer;
+        border-radius: 8px;
+        padding: 4px 6px;
+        font-size: 13px;
+        line-height: 1;
+      }
+      .iconbtn:hover {
+        background: var(--panel-2);
+        color: var(--text);
+        border-color: var(--line);
+      }
+      .empty {
+        text-align: center;
+        color: var(--muted);
+        padding: 60px 20px;
+      }
+
+      /* ---------- Floating add button ---------- */
+      .fab {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 30;
+        background: var(--green);
+        color: #06140d;
+        border: none;
+        border-radius: 999px;
+        padding: 14px 20px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+      }
+      .fab:hover {
+        filter: brightness(1.08);
+      }
+
+      /* ---------- Modal ---------- */
+      .modal-bg {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(3px);
+        z-index: 40;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+      .modal-bg.open {
+        display: flex;
+      }
+      .modal {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        width: 100%;
+        max-width: 440px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+        max-height: 90vh;
+        overflow: auto;
+      }
+      .modal h3 {
+        font-size: 18px;
+        margin-bottom: 14px;
+      }
+      .field {
+        margin-bottom: 12px;
+      }
+      .field label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 5px;
+      }
+      .field input,
+      .field textarea,
+      .field select {
+        width: 100%;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 9px;
+        padding: 9px 11px;
+        font-size: 14px;
+        outline: none;
+        font-family: inherit;
+      }
+      .field input:focus,
+      .field textarea:focus,
+      .field select:focus {
+        border-color: var(--green);
+      }
+      .field textarea {
+        resize: vertical;
+        min-height: 56px;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .btn {
+        flex: 1;
+        border-radius: 10px;
+        padding: 11px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--line);
+        background: var(--panel-2);
+        color: var(--text);
+      }
+      .btn.primary {
+        background: var(--green);
+        border-color: var(--green);
+        color: #06140d;
+      }
+      .btn.danger {
+        color: #ff9b8c;
+        border-color: var(--red);
+        background: transparent;
+        flex: 0 0 auto;
+      }
+      .loading {
+        text-align: center;
+        color: var(--muted);
+        padding: 80px 20px;
+        font-size: 15px;
+      }
+      @media (max-width: 560px) {
+        .item {
+          grid-template-columns: 24px 1fr;
+        }
+        .right-col {
+          grid-column: 2;
+          align-items: flex-start;
+          flex-direction: row;
+          justify-content: space-between;
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body data-convex={CONVEX_URL}>
+    <header class="top">
+      <div class="wrap">
+        <div>
+          <h1><span class="emoji">📦</span>Move-In Checklist</h1>
+          <div class="subtitle">
+            533 University Ave Apt 3, Rochester NY ·
+            <a
+              href="https://www.zillow.com/homedetails/533-University-Ave-APT-3-Rochester-NY-14607/2057284262_zpid/"
+              target="_blank"
+              rel="noopener">listing ↗</a
+            > · Jakob &amp; Tristen
+          </div>
+        </div>
+        <div class="sync" id="sync">
+          <span class="dot"></span><span id="sync-text">connecting…</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="wrap summary">
+      <div class="cards">
+        <div class="card">
+          <div class="label">Progress</div>
+          <div class="value"><span id="pct">0</span>%</div>
+          <div class="progressbar"><span id="bar"></span></div>
+          <div class="label" style="margin-top:8px">
+            <span id="gotcount">0</span> of <span id="total">0</span> items
+          </div>
+        </div>
+        <div class="card">
+          <div class="label">Still to buy</div>
+          <div class="value">$<span id="remaining">0</span></div>
+          <div class="label" style="margin-top:8px">
+            of $<span id="grand">0</span> total est.
+          </div>
+        </div>
+        <div class="card">
+          <div class="label">Already got</div>
+          <div class="value">$<span id="spent">0</span></div>
+          <div class="label" style="margin-top:8px">checked off</div>
+        </div>
+        <div class="card">
+          <div class="label">Cost split (remaining)</div>
+          <div class="who-split" id="whosplit"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="wrap">
+        <div class="row">
+          <input
+            class="search"
+            id="search"
+            type="search"
+            placeholder="Search items…"
+            autocomplete="off"
+          />
+          <select class="ctl" id="sort">
+            <option value="room">Sort: by room</option>
+            <option value="priority">Sort: priority first</option>
+            <option value="cost-desc">Sort: cost high→low</option>
+            <option value="cost-asc">Sort: cost low→high</option>
+          </select>
+          <button class="ctl" id="hidegot">Hide got</button>
+        </div>
+        <div class="filterchips" id="whofilter">
+          <button data-who="all" class="active">Everyone</button>
+          <button data-who="Shared">Shared</button>
+          <button data-who="Tristen">Tristen</button>
+          <button data-who="Jakob">Jakob</button>
+          <button data-who="Either">Either</button>
+        </div>
+        <div class="filterchips" id="priofilter">
+          <button data-prio="all" class="active">All priorities</button>
+          <button data-prio="Day 1">🔴 Day 1</button>
+          <button data-prio="Week 1">🟠 Week 1</button>
+          <button data-prio="Month 1">🟡 Month 1</button>
+        </div>
+      </div>
+    </div>
+
+    <main class="wrap" id="list">
+      <div class="loading">Loading your checklist…</div>
+    </main>
+
+    <button class="fab" id="addbtn">＋ Add item</button>
+
+    <!-- Add / edit modal -->
+    <div class="modal-bg" id="modal">
+      <div class="modal">
+        <h3 id="modal-title">Add item</h3>
+        <input type="hidden" id="f-id" />
+        <div class="field">
+          <label for="f-name">Item</label>
+          <input id="f-name" type="text" placeholder="e.g. Shower curtain" />
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="f-room">Room</label>
+            <input id="f-room" list="roomlist" placeholder="Room" />
+            <datalist id="roomlist"></datalist>
+          </div>
+          <div class="field">
+            <label for="f-section">Section</label>
+            <input id="f-section" placeholder="e.g. Furniture" />
+          </div>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="f-who">Who buys</label>
+            <select id="f-who">
+              <option>Shared</option>
+              <option>Tristen</option>
+              <option>Jakob</option>
+              <option>Either</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-prio">Priority</label>
+            <select id="f-prio">
+              <option>Day 1</option>
+              <option>Week 1</option>
+              <option>Month 1</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-cost">Estimated cost ($)</label>
+          <input id="f-cost" type="number" min="0" step="1" placeholder="0" />
+        </div>
+        <div class="field">
+          <label for="f-notes">Notes</label>
+          <textarea id="f-notes" placeholder="Optional notes…"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn danger" id="m-delete" style="display:none">
+            Delete
+          </button>
+          <button class="btn" id="m-cancel">Cancel</button>
+          <button class="btn primary" id="m-save">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script is:inline type="module" define:vars={{ CONVEX_URL }}>
+      import { ConvexClient } from "https://esm.sh/convex@1.42.0/browser";
+      import { makeFunctionReference } from "https://esm.sh/convex@1.42.0/server";
+
+      const fn = {
+        list: makeFunctionReference("items:list"),
+        toggle: makeFunctionReference("items:toggleGot"),
+        update: makeFunctionReference("items:update"),
+        add: makeFunctionReference("items:add"),
+        remove: makeFunctionReference("items:remove"),
+      };
+      const WHO_CYCLE = ["Shared", "Tristen", "Jakob", "Either"];
+      const WHO_COLOR = {
+        Shared: "var(--green)",
+        Tristen: "var(--blue)",
+        Jakob: "var(--purple)",
+        Either: "var(--amber)",
+      };
+      const PRIO_RANK = { "Day 1": 0, "Week 1": 1, "Month 1": 2 };
+
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) =>
+        String(s).replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+      const prioClass = (p) => "prio-" + p.replace(/\s+/g, "");
+
+      let items = [];
+      const state = {
+        search: "",
+        who: "all",
+        prio: "all",
+        sort: "room",
+        hideGot: false,
+        collapsed: new Set(),
+      };
+
+      const client = new ConvexClient(CONVEX_URL);
+      const sync = $("sync");
+      const syncText = $("sync-text");
+
+      client.onUpdate(
+        fn.list,
+        {},
+        (rows) => {
+          items = rows;
+          sync.classList.remove("error");
+          sync.classList.add("live");
+          syncText.textContent = "live · synced";
+          render();
+        },
+        (err) => {
+          console.error(err);
+          sync.classList.remove("live");
+          sync.classList.add("error");
+          syncText.textContent = "connection issue";
+        },
+      );
+
+      // ---- mutations (Convex reactivity re-renders automatically) ----
+      const call = (ref, args) =>
+        client.mutation(ref, args).catch((e) => {
+          console.error(e);
+          alert(
+            "Sync error — change may not have saved. Check your connection.",
+          );
+        });
+
+      // ---- filtering / sorting ----
+      function visible() {
+        let v = items.slice();
+        if (state.who !== "all") v = v.filter((i) => i.whoBuys === state.who);
+        if (state.prio !== "all")
+          v = v.filter((i) => i.priority === state.prio);
+        if (state.hideGot) v = v.filter((i) => !i.got);
+        if (state.search) {
+          const q = state.search.toLowerCase();
+          v = v.filter(
+            (i) =>
+              i.name.toLowerCase().includes(q) ||
+              i.notes.toLowerCase().includes(q) ||
+              i.room.toLowerCase().includes(q),
+          );
+        }
+        return v;
+      }
+
+      function sortItems(arr) {
+        const s = state.sort;
+        const byOrder = (a, b) => a.order - b.order;
+        if (s === "priority")
+          return arr.sort(
+            (a, b) =>
+              (PRIO_RANK[a.priority] ?? 9) - (PRIO_RANK[b.priority] ?? 9) ||
+              byOrder(a, b),
+          );
+        if (s === "cost-desc") return arr.sort((a, b) => b.cost - a.cost);
+        if (s === "cost-asc") return arr.sort((a, b) => a.cost - b.cost);
+        return arr.sort(byOrder);
+      }
+
+      // ---- summary ----
+      function updateSummary() {
+        const total = items.length;
+        const got = items.filter((i) => i.got).length;
+        const pct = total ? Math.round((got / total) * 100) : 0;
+        $("pct").textContent = pct;
+        $("bar").style.width = pct + "%";
+        $("gotcount").textContent = got;
+        $("total").textContent = total;
+        const grand = items.reduce((s, i) => s + i.cost, 0);
+        const spent = items
+          .filter((i) => i.got)
+          .reduce((s, i) => s + i.cost, 0);
+        $("grand").textContent = grand.toLocaleString();
+        $("spent").textContent = spent.toLocaleString();
+        $("remaining").textContent = (grand - spent).toLocaleString();
+        // remaining cost per person
+        const split = {};
+        items
+          .filter((i) => !i.got)
+          .forEach((i) => {
+            split[i.whoBuys] = (split[i.whoBuys] || 0) + i.cost;
+          });
+        $("whosplit").innerHTML = WHO_CYCLE.filter((w) => split[w])
+          .map(
+            (w) =>
+              `<span class="chip" style="border-color:${WHO_COLOR[w]};color:${WHO_COLOR[w]}">${w}: $${split[w].toLocaleString()}</span>`,
+          )
+          .join("");
+      }
+
+      // ---- render list ----
+      function render() {
+        updateSummary();
+        const list = $("list");
+        const v = sortItems(visible());
+
+        // populate room datalist for the modal
+        const allRooms = [...new Set(items.map((i) => i.room))];
+        $("roomlist").innerHTML = allRooms
+          .map((r) => `<option value="${esc(r)}">`)
+          .join("");
+
+        if (!v.length) {
+          list.innerHTML = `<div class="empty">No items match your filters.</div>`;
+          return;
+        }
+
+        const grouped = state.sort === "room";
+        let html = "";
+
+        if (grouped) {
+          // group by room → section, preserving room order from data
+          const roomOrder = [...new Set(items.map((i) => i.room))];
+          for (const room of roomOrder) {
+            const ri = v.filter((i) => i.room === room);
+            if (!ri.length) continue;
+            const roomGot = ri.filter((i) => i.got).length;
+            const roomCost = ri
+              .filter((i) => !i.got)
+              .reduce((s, i) => s + i.cost, 0);
+            const collapsed = state.collapsed.has(room) ? " collapsed" : "";
+            html += `<section class="room${collapsed}" data-room="${esc(room)}">
+              <div class="room-head" data-toggle="${esc(room)}">
+                <span class="caret">▾</span>
+                <h2>${esc(room)}</h2>
+                <span class="meta"><span>${roomGot}/${ri.length} ✓</span><span>$${roomCost.toLocaleString()} left</span></span>
+              </div>
+              <div class="room-body">`;
+            const sections = [...new Set(ri.map((i) => i.section))];
+            for (const sec of sections) {
+              if (sec) html += `<div class="section-head">${esc(sec)}</div>`;
+              for (const it of ri.filter((i) => i.section === sec))
+                html += rowHTML(it);
+            }
+            html += `</div></section>`;
+          }
+        } else {
+          html += `<section class="room"><div class="room-body">`;
+          for (const it of v) html += rowHTML(it);
+          html += `</div></section>`;
+        }
+        list.innerHTML = html;
+      }
+
+      function rowHTML(it) {
+        const costTxt = it.cost > 0 ? "$" + it.cost.toLocaleString() : "incl.";
+        return `<div class="item ${it.got ? "got" : ""}" data-id="${it._id}">
+          <div class="checkbox ${it.got ? "on" : ""}" data-act="toggle" title="Mark as got">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06140d" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="body-col">
+            <div class="name">${esc(it.name)}</div>
+            ${it.notes ? `<div class="notes">${esc(it.notes)}</div>` : ""}
+            <div class="badges">
+              <span class="pill who who-${it.whoBuys}" data-act="who" title="Tap to reassign">${esc(it.whoBuys)}</span>
+              <span class="pill prio ${prioClass(it.priority)}">${esc(it.priority)}</span>
+              <span class="pill cost">${costTxt}</span>
+            </div>
+          </div>
+          <div class="right-col">
+            <div class="rowbtns">
+              <button class="iconbtn" data-act="edit" title="Edit">✎</button>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      // ---- event delegation on the list ----
+      $("list").addEventListener("click", (e) => {
+        const toggleEl = e.target.closest("[data-toggle]");
+        if (toggleEl) {
+          const room = toggleEl.getAttribute("data-toggle");
+          if (state.collapsed.has(room)) state.collapsed.delete(room);
+          else state.collapsed.add(room);
+          render();
+          return;
+        }
+        const row = e.target.closest(".item");
+        if (!row) return;
+        const id = row.getAttribute("data-id");
+        const it = items.find((i) => i._id === id);
+        if (!it) return;
+        const act = e.target.closest("[data-act]")?.getAttribute("data-act");
+        if (act === "toggle") {
+          // optimistic visual
+          row.classList.toggle("got");
+          call(fn.toggle, { id });
+        } else if (act === "who") {
+          const next =
+            WHO_CYCLE[(WHO_CYCLE.indexOf(it.whoBuys) + 1) % WHO_CYCLE.length];
+          call(fn.update, { id, whoBuys: next });
+        } else if (act === "edit") {
+          openModal(it);
+        }
+      });
+
+      // ---- controls ----
+      $("search").addEventListener("input", (e) => {
+        state.search = e.target.value.trim();
+        render();
+      });
+      $("sort").addEventListener("change", (e) => {
+        state.sort = e.target.value;
+        render();
+      });
+      $("hidegot").addEventListener("click", (e) => {
+        state.hideGot = !state.hideGot;
+        e.target.classList.toggle("active", state.hideGot);
+        render();
+      });
+      $("whofilter").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        state.who = b.getAttribute("data-who");
+        [...$("whofilter").children].forEach((c) =>
+          c.classList.toggle("active", c === b),
+        );
+        render();
+      });
+      $("priofilter").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        state.prio = b.getAttribute("data-prio");
+        [...$("priofilter").children].forEach((c) =>
+          c.classList.toggle("active", c === b),
+        );
+        render();
+      });
+
+      // ---- modal (add + edit) ----
+      const modal = $("modal");
+      function openModal(it) {
+        $("modal-title").textContent = it ? "Edit item" : "Add item";
+        $("f-id").value = it ? it._id : "";
+        $("f-name").value = it ? it.name : "";
+        $("f-room").value = it ? it.room : "";
+        $("f-section").value = it ? it.section : "";
+        $("f-who").value = it ? it.whoBuys : "Shared";
+        $("f-prio").value = it ? it.priority : "Week 1";
+        $("f-cost").value = it ? it.cost : "";
+        $("f-notes").value = it ? it.notes : "";
+        $("m-delete").style.display = it ? "block" : "none";
+        modal.classList.add("open");
+        $("f-name").focus();
+      }
+      function closeModal() {
+        modal.classList.remove("open");
+      }
+      $("addbtn").addEventListener("click", () => openModal(null));
+      $("m-cancel").addEventListener("click", closeModal);
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+      $("m-save").addEventListener("click", () => {
+        const id = $("f-id").value;
+        const payload = {
+          name: $("f-name").value.trim(),
+          room: $("f-room").value.trim() || "Misc",
+          section: $("f-section").value.trim(),
+          whoBuys: $("f-who").value,
+          priority: $("f-prio").value,
+          cost: Math.max(0, Number($("f-cost").value) || 0),
+          notes: $("f-notes").value.trim(),
+        };
+        if (!payload.name) {
+          $("f-name").focus();
+          return;
+        }
+        if (id) call(fn.update, { id, ...payload });
+        else call(fn.add, payload);
+        closeModal();
+      });
+      $("m-delete").addEventListener("click", () => {
+        const id = $("f-id").value;
+        if (id && confirm("Delete this item?")) {
+          call(fn.remove, { id });
+          closeModal();
+        }
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+      });
+    </script>
+  </body>
+</html>
