@@ -10,7 +10,8 @@ export type Item = {
   cost: number;
   priority: string;
   notes: string;
-  got: boolean;
+  status: string; // see STATUSES
+  got?: boolean; // deprecated, derived from status server-side
   order: number;
 };
 
@@ -18,10 +19,68 @@ export type Item = {
 export const api = {
   list: anyApi.items.list,
   toggleGot: anyApi.items.toggleGot,
+  setStatus: anyApi.items.setStatus,
   update: anyApi.items.update,
   add: anyApi.items.add,
   remove: anyApi.items.remove,
 };
+
+// Acquisition / ownership state.
+export const STATUSES = [
+  "need",
+  "bought",
+  "own-tristen",
+  "own-jakob",
+  "own-both",
+] as const;
+export type Status = (typeof STATUSES)[number];
+
+export const STATUS_META: Record<
+  string,
+  { label: string; short: string; dot: string; style: string }
+> = {
+  need: {
+    label: "Need to buy",
+    short: "Need",
+    dot: "🛒",
+    style: "bg-secondary text-muted-foreground border-border",
+  },
+  bought: {
+    label: "Bought ✓",
+    short: "Bought",
+    dot: "✅",
+    style: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
+  },
+  "own-tristen": {
+    label: "Tristen owns",
+    short: "Tristen owns",
+    dot: "📦",
+    style: "bg-sky-500/15 text-sky-300 border-sky-500/40",
+  },
+  "own-jakob": {
+    label: "Jakob owns",
+    short: "Jakob owns",
+    dot: "📦",
+    style: "bg-violet-500/15 text-violet-300 border-violet-500/40",
+  },
+  "own-both": {
+    label: "Both own",
+    short: "Both own",
+    dot: "📦",
+    style: "bg-teal-500/15 text-teal-300 border-teal-500/40",
+  },
+};
+
+export const isOwned = (s: string) => s.startsWith("own-");
+export const isHandled = (s: string) => s === "bought" || isOwned(s);
+export const ownerOf = (s: string): "Tristen" | "Jakob" | "Both" | null =>
+  s === "own-tristen"
+    ? "Tristen"
+    : s === "own-jakob"
+      ? "Jakob"
+      : s === "own-both"
+        ? "Both"
+        : null;
 
 export const WHO = ["Shared", "Tristen", "Jakob", "Either"] as const;
 export const PRIORITIES = ["Day 1", "Week 1", "Month 1"] as const;

@@ -27,7 +27,6 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -60,12 +59,19 @@ import {
   PRIO_RANK,
   PRIO_STYLES,
   PRIORITIES,
+  STATUS_META,
+  STATUSES,
   WHO,
   WHO_STYLES,
   api,
+  isHandled,
+  isOwned,
   money,
+  ownerOf,
   type Item,
 } from "@/components/movein/types";
+
+const OWNERS = ["Tristen", "Jakob", "Both"] as const;
 
 /* ------------------------------------------------------------------ */
 /* Edit / Add dialog                                                   */
@@ -79,6 +85,7 @@ const emptyDraft: Draft = {
   cost: 0,
   priority: "Week 1",
   notes: "",
+  status: "need",
 };
 
 function ItemDialog({
@@ -109,14 +116,15 @@ function ItemDialog({
               cost: editing.cost,
               priority: editing.priority,
               notes: editing.notes,
+              status: editing.status,
             }
           : emptyDraft,
       );
     }
   }, [open, editing]);
 
-  const set = <K extends keyof Draft>(k: K, v: Draft[K]) =>
-    setDraft((d) => ({ ...d, [k]: v }));
+  const set = <K extends keyof Draft>(k: K, val: Draft[K]) =>
+    setDraft((d) => ({ ...d, [k]: val }));
 
   async function save() {
     if (!draft.name.trim()) {
@@ -136,7 +144,7 @@ function ItemDialog({
       else await add(payload);
       onOpenChange(false);
       toast.success(editing ? "Saved" : "Added");
-    } catch (e) {
+    } catch {
       toast.error("Could not save — check your connection.");
     }
   }
@@ -171,6 +179,24 @@ function ItemDialog({
               placeholder="e.g. Shower curtain"
               autoFocus
             />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Status</Label>
+            <Select
+              value={draft.status}
+              onValueChange={(v) => set("status", v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {STATUS_META[s].dot} {STATUS_META[s].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
@@ -281,15 +307,30 @@ function ItemDialog({
 /* ------------------------------------------------------------------ */
 function Summary({ items }: { items: Item[] }) {
   const total = items.length;
-  const got = items.filter((i) => i.got).length;
-  const pct = total ? Math.round((got / total) * 100) : 0;
-  const grand = items.reduce((s, i) => s + i.cost, 0);
-  const spent = items.filter((i) => i.got).reduce((s, i) => s + i.cost, 0);
-  const remaining = grand - spent;
-  const split: Record<string, number> = {};
-  items
-    .filter((i) => !i.got)
-    .forEach((i) => (split[i.whoBuys] = (split[i.whoBuys] || 0) + i.cost));
+  const handled = items.filter((i) => isHandled(i.status)).length;
+  const need = items.filter((i) => i.status === "need");
+  const bought = items.filter((i) => i.status === "bought");
+  const owned = items.filter((i) => isOwned(i.status));
+  const pct = total ? Math.round((handled / total) * 100) : 0;
+  const stillToBuy = need.reduce((s, i) => s + i.cost, 0);
+  const spent = bought.reduce((s, i) => s + i.cost, 0);
+  const grand = stillToBuy + spent;
+
+  const buySplit: Record<string, number> = {};
+  need.forEach(
+    (i) => (buySplit[i.whoBuys] = (buySplit[i.whoBuys] || 0) + i.cost),
+  );
+  const ownSplit: Record<string, number> = {};
+  owned.forEach((i) => {
+    const o = ownerOf(i.status)!;
+    ownSplit[o] = (ownSplit[o] || 0) + 1;
+  });
+
+  const OWN_BADGE: Record<string, string> = {
+    Tristen: WHO_STYLES.Tristen,
+    Jakob: WHO_STYLES.Jakob,
+    Both: "bg-teal-500/15 text-teal-300 border-teal-500/40",
+  };
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -305,7 +346,7 @@ function Summary({ items }: { items: Item[] }) {
           />
         </div>
         <div className="mt-2 text-xs text-muted-foreground">
-          {got} of {total} items
+          {handled} of {total} sorted · {need.length} to buy
         </div>
       </div>
       <div className="rounded-xl border bg-card p-4">
@@ -313,31 +354,42 @@ function Summary({ items }: { items: Item[] }) {
           Still to buy
         </div>
         <div className="mt-1 text-2xl font-bold">
-          ${remaining.toLocaleString()}
+          ${stillToBuy.toLocaleString()}
         </div>
         <div className="mt-2 text-xs text-muted-foreground">
-          of ${grand.toLocaleString()} total est.
+          of ${grand.toLocaleString()} to acquire · ${spent.toLocaleString()}{" "}
+          bought
         </div>
       </div>
       <div className="rounded-xl border bg-card p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          Already got
+          Already own
         </div>
-        <div className="mt-1 text-2xl font-bold">${spent.toLocaleString()}</div>
-        <div className="mt-2 text-xs text-muted-foreground">checked off</div>
+        <div className="mt-1 text-2xl font-bold">{owned.length}</div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {OWNERS.filter((o) => ownSplit[o]).map((o) => (
+            <Badge
+              key={o}
+              variant="outline"
+              className={cn("font-medium", OWN_BADGE[o])}
+            >
+              {o}: {ownSplit[o]}
+            </Badge>
+          ))}
+        </div>
       </div>
       <div className="rounded-xl border bg-card p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          Cost split (remaining)
+          Cost split (to buy)
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {WHO.filter((w) => split[w]).map((w) => (
+          {WHO.filter((w) => buySplit[w]).map((w) => (
             <Badge
               key={w}
               variant="outline"
               className={cn("font-medium", WHO_STYLES[w])}
             >
-              {w}: ${split[w].toLocaleString()}
+              {w}: ${buySplit[w].toLocaleString()}
             </Badge>
           ))}
         </div>
@@ -351,7 +403,7 @@ function Summary({ items }: { items: Item[] }) {
 /* ------------------------------------------------------------------ */
 function Board() {
   const items = useQuery(api.list) as Item[] | undefined;
-  const toggleGot = useMutation(api.toggleGot);
+  const setStatus = useMutation(api.setStatus);
   const update = useMutation(api.update);
 
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -360,7 +412,7 @@ function Board() {
   );
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [groupByRoom, setGroupByRoom] = React.useState(true);
-  const [hideGot, setHideGot] = React.useState(false);
+  const [hideDone, setHideDone] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Item | null>(null);
@@ -369,83 +421,115 @@ function Board() {
     () => (items ? [...items].sort((a, b) => a.order - b.order) : []),
     [items],
   );
+  const tableData = React.useMemo(
+    () => (hideDone ? data.filter((i) => !isHandled(i.status)) : data),
+    [data, hideDone],
+  );
   const rooms = React.useMemo(
     () => [...new Set(data.map((i) => i.room))],
     [data],
   );
 
-  const safe = (fn: () => Promise<unknown>) => () =>
-    fn().catch(() => toast.error("Sync error — change may not have saved."));
-
   const columns = React.useMemo<ColumnDef<Item>[]>(
     () => [
       {
-        id: "got",
-        accessorKey: "got",
-        header: "✓",
-        size: 36,
-        enableSorting: true,
+        accessorKey: "status",
+        header: ({ column }) => <SortBtn column={column} label="Status" />,
+        size: 150,
         filterFn: (row, _id, value) =>
-          value === "hide" ? !row.original.got : true,
-        cell: ({ row }) => (
-          <Checkbox
-            checked={row.original.got}
-            onCheckedChange={safe(() => toggleGot({ id: row.original._id }))}
-            aria-label="Got it"
-          />
-        ),
+          value === "owned"
+            ? isOwned(row.original.status)
+            : row.original.status === value,
+        cell: ({ row }) => {
+          const st = row.original.status;
+          return (
+            <Select
+              value={st}
+              onValueChange={(v) =>
+                setStatus({ id: row.original._id, status: v }).catch(() =>
+                  toast.error("Sync error."),
+                )
+              }
+            >
+              <SelectTrigger
+                className={cn(
+                  "h-7 w-[150px] border px-2 text-xs font-medium",
+                  STATUS_META[st]?.style,
+                )}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {STATUS_META[s].dot} {STATUS_META[s].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        },
       },
       {
         accessorKey: "name",
         header: ({ column }) => <SortBtn column={column} label="Item" />,
-        cell: ({ row }) => (
-          <div className="min-w-[160px]">
-            <div
-              className={cn(
-                "font-medium",
-                row.original.got && "text-muted-foreground line-through",
-              )}
-            >
-              {row.original.name}
-            </div>
-            {row.original.notes ? (
-              <div className="text-xs text-muted-foreground">
-                {row.original.notes}
+        cell: ({ row }) => {
+          const st = row.original.status;
+          return (
+            <div className="min-w-[160px]">
+              <div
+                className={cn(
+                  "font-medium",
+                  st === "bought" && "text-muted-foreground line-through",
+                  isOwned(st) && "text-muted-foreground",
+                )}
+              >
+                {row.original.name}
               </div>
-            ) : null}
-          </div>
-        ),
+              {row.original.notes ? (
+                <div className="text-xs text-muted-foreground">
+                  {row.original.notes}
+                </div>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "whoBuys",
-        header: ({ column }) => <SortBtn column={column} label="Who" />,
+        header: ({ column }) => <SortBtn column={column} label="Who buys" />,
         filterFn: "equalsString",
-        cell: ({ row }) => (
-          <Select
-            value={row.original.whoBuys}
-            onValueChange={(v) =>
-              update({ id: row.original._id, whoBuys: v }).catch(() =>
-                toast.error("Sync error."),
-              )
-            }
-          >
-            <SelectTrigger
-              className={cn(
-                "h-7 w-[104px] border px-2 text-xs font-medium",
-                WHO_STYLES[row.original.whoBuys],
-              )}
+        cell: ({ row }) => {
+          const owned = isOwned(row.original.status);
+          return (
+            <Select
+              value={row.original.whoBuys}
+              onValueChange={(v) =>
+                update({ id: row.original._id, whoBuys: v }).catch(() =>
+                  toast.error("Sync error."),
+                )
+              }
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {WHO.map((w) => (
-                <SelectItem key={w} value={w}>
-                  {w}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ),
+              <SelectTrigger
+                className={cn(
+                  "h-7 w-[104px] border px-2 text-xs font-medium",
+                  owned
+                    ? "border-dashed text-muted-foreground opacity-50"
+                    : WHO_STYLES[row.original.whoBuys],
+                )}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {WHO.map((w) => (
+                  <SelectItem key={w} value={w}>
+                    {w}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        },
       },
       {
         accessorKey: "priority",
@@ -487,7 +571,12 @@ function Board() {
           <SortBtn column={column} label="Cost" className="justify-end" />
         ),
         cell: ({ row }) => (
-          <div className="text-right tabular-nums text-muted-foreground">
+          <div
+            className={cn(
+              "text-right tabular-nums text-muted-foreground",
+              isOwned(row.original.status) && "line-through opacity-50",
+            )}
+          >
             {money(row.original.cost)}
           </div>
         ),
@@ -511,19 +600,11 @@ function Board() {
         ),
       },
     ],
-    [toggleGot, update],
+    [setStatus, update],
   );
 
-  // keep the hideGot toggle wired into the got column filter
-  React.useEffect(() => {
-    setColumnFilters((prev) => {
-      const without = prev.filter((f) => f.id !== "got");
-      return hideGot ? [...without, { id: "got", value: "hide" }] : without;
-    });
-  }, [hideGot]);
-
   const table = useReactTable({
-    data,
+    data: tableData,
     columns,
     state: { sorting, columnFilters, globalFilter },
     onSortingChange: setSorting,
@@ -551,7 +632,6 @@ function Board() {
   const rows = table.getRowModel().rows;
   const colCount = columns.length;
 
-  // group rows by room (preserving first-appearance order)
   const groups: { room: string; rows: typeof rows }[] = [];
   if (groupByRoom) {
     const idx = new Map<string, number>();
@@ -568,7 +648,8 @@ function Board() {
   const toggleRoom = (room: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
-      next.has(room) ? next.delete(room) : next.add(room);
+      if (next.has(room)) next.delete(room);
+      else next.add(room);
       return next;
     });
 
@@ -592,6 +673,23 @@ function Board() {
           onChange={(e) => setGlobalFilter(e.target.value)}
           className="h-9 w-full max-w-xs"
         />
+        <Select
+          value={currentFilter("status")}
+          onValueChange={(v) => setColFilter("status", v)}
+        >
+          <SelectTrigger size="sm" className="h-9 w-[150px]">
+            <SelectValue placeholder="Any status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any status</SelectItem>
+            <SelectItem value="need">🛒 Need to buy</SelectItem>
+            <SelectItem value="bought">✅ Bought</SelectItem>
+            <SelectItem value="owned">📦 Already owned</SelectItem>
+            <SelectItem value="own-tristen">📦 Tristen owns</SelectItem>
+            <SelectItem value="own-jakob">📦 Jakob owns</SelectItem>
+            <SelectItem value="own-both">📦 Both own</SelectItem>
+          </SelectContent>
+        </Select>
         <FilterSelect
           label="Everyone"
           value={currentFilter("whoBuys")}
@@ -605,12 +703,12 @@ function Board() {
           options={PRIORITIES as unknown as string[]}
         />
         <Button
-          variant={hideGot ? "default" : "outline"}
+          variant={hideDone ? "default" : "outline"}
           size="sm"
           className="h-9"
-          onClick={() => setHideGot((v) => !v)}
+          onClick={() => setHideDone((v) => !v)}
         >
-          Hide got
+          Hide sorted
         </Button>
         <Button
           variant={groupByRoom ? "default" : "outline"}
@@ -662,9 +760,11 @@ function Board() {
               groups.map((g) => {
                 const isOpen = !collapsed.has(g.room);
                 const left = g.rows
-                  .filter((r) => !r.original.got)
+                  .filter((r) => r.original.status === "need")
                   .reduce((s, r) => s + r.original.cost, 0);
-                const gotN = g.rows.filter((r) => r.original.got).length;
+                const doneN = g.rows.filter((r) =>
+                  isHandled(r.original.status),
+                ).length;
                 return (
                   <React.Fragment key={g.room}>
                     <TableRow
@@ -681,9 +781,9 @@ function Board() {
                           {g.room}
                           <span className="ml-auto flex gap-3 text-xs font-normal text-muted-foreground">
                             <span>
-                              {gotN}/{g.rows.length} ✓
+                              {doneN}/{g.rows.length} sorted
                             </span>
-                            <span>${left.toLocaleString()} left</span>
+                            <span>${left.toLocaleString()} to buy</span>
                           </span>
                         </div>
                       </TableCell>
@@ -692,7 +792,9 @@ function Board() {
                       g.rows.map((r) => (
                         <TableRow
                           key={r.id}
-                          className={cn(r.original.got && "opacity-55")}
+                          className={cn(
+                            r.original.status === "bought" && "opacity-60",
+                          )}
                         >
                           {r.getVisibleCells().map((c) => (
                             <TableCell key={c.id} className="py-2 align-top">
@@ -711,7 +813,7 @@ function Board() {
               rows.map((r) => (
                 <TableRow
                   key={r.id}
-                  className={cn(r.original.got && "opacity-55")}
+                  className={cn(r.original.status === "bought" && "opacity-60")}
                 >
                   {r.getVisibleCells().map((c) => (
                     <TableCell key={c.id} className="py-2 align-top">
