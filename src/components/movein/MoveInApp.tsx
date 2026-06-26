@@ -307,14 +307,13 @@ function ItemDialog({
 /* ------------------------------------------------------------------ */
 function Summary({ items }: { items: Item[] }) {
   const total = items.length;
-  const handled = items.filter((i) => isHandled(i.status)).length;
   const need = items.filter((i) => i.status === "need");
-  const bought = items.filter((i) => i.status === "bought");
-  const owned = items.filter((i) => isOwned(i.status));
-  const pct = total ? Math.round((handled / total) * 100) : 0;
+  const bought = items.filter((i) => i.status === "bought"); // purchased
+  const owned = items.filter((i) => isOwned(i.status)); // already owned
+  const acquired = bought.length + owned.length;
+  const pct = total ? Math.round((acquired / total) * 100) : 0;
   const stillToBuy = need.reduce((s, i) => s + i.cost, 0);
   const spent = bought.reduce((s, i) => s + i.cost, 0);
-  const grand = stillToBuy + spent;
 
   const buySplit: Record<string, number> = {};
   need.forEach(
@@ -334,38 +333,57 @@ function Summary({ items }: { items: Item[] }) {
 
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* To buy */}
       <div className="rounded-xl border bg-card p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          Progress
-        </div>
-        <div className="mt-1 text-2xl font-bold">{pct}%</div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary">
-          <div
-            className="h-full bg-primary transition-all"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          {handled} of {total} sorted · {need.length} to buy
-        </div>
-      </div>
-      <div className="rounded-xl border bg-card p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          Still to buy
+          🛒 Still to buy
         </div>
         <div className="mt-1 text-2xl font-bold">
-          ${stillToBuy.toLocaleString()}
+          {need.length}
+          <span className="ml-1 text-base font-medium text-muted-foreground">
+            items · ${stillToBuy.toLocaleString()}
+          </span>
         </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          of ${grand.toLocaleString()} to acquire · ${spent.toLocaleString()}{" "}
-          bought
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {WHO.filter((w) => buySplit[w]).map((w) => (
+            <Badge
+              key={w}
+              variant="outline"
+              className={cn("font-medium", WHO_STYLES[w])}
+            >
+              {w}: ${buySplit[w].toLocaleString()}
+            </Badge>
+          ))}
         </div>
       </div>
-      <div className="rounded-xl border bg-card p-4">
+
+      {/* Purchased — distinct from owned */}
+      <div className="rounded-xl border border-emerald-500/30 bg-card p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          Already own
+          ✅ Purchased
         </div>
-        <div className="mt-1 text-2xl font-bold">{owned.length}</div>
+        <div className="mt-1 text-2xl font-bold text-emerald-300">
+          {bought.length}
+          <span className="ml-1 text-base font-medium text-muted-foreground">
+            items
+          </span>
+        </div>
+        <div className="mt-2 text-xs text-muted-foreground">
+          ${spent.toLocaleString()} spent · bought after move-in
+        </div>
+      </div>
+
+      {/* Already own — distinct from purchased */}
+      <div className="rounded-xl border border-sky-500/30 bg-card p-4">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          📦 Already own
+        </div>
+        <div className="mt-1 text-2xl font-bold text-sky-300">
+          {owned.length}
+          <span className="ml-1 text-base font-medium text-muted-foreground">
+            items
+          </span>
+        </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {OWNERS.filter((o) => ownSplit[o]).map((o) => (
             <Badge
@@ -378,20 +396,22 @@ function Summary({ items }: { items: Item[] }) {
           ))}
         </div>
       </div>
+
+      {/* Move-in readiness */}
       <div className="rounded-xl border bg-card p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">
-          Cost split (to buy)
+          Move-in ready
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {WHO.filter((w) => buySplit[w]).map((w) => (
-            <Badge
-              key={w}
-              variant="outline"
-              className={cn("font-medium", WHO_STYLES[w])}
-            >
-              {w}: ${buySplit[w].toLocaleString()}
-            </Badge>
-          ))}
+        <div className="mt-1 text-2xl font-bold">{pct}%</div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary">
+          <div
+            className="h-full bg-primary transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="mt-2 text-xs text-muted-foreground">
+          {acquired} of {total} sorted ({bought.length} bought + {owned.length}{" "}
+          owned)
         </div>
       </div>
     </div>
