@@ -28,9 +28,16 @@ import {
   buildRepoExplorerOutput,
   buildRepositoryCatalog,
   buildRepositoryCloneCommand,
+  buildVirtualFileSystem,
+  formatVirtualCat,
+  formatVirtualLs,
+  formatVirtualPathForPrompt,
+  formatVirtualTree,
+  getVirtualPathNode,
   getProjectSourceUrl,
   getRepositorySlug,
   isSystemsRepository,
+  resolveVirtualPath,
   resolveRepository,
   buildContributionChartAscii,
   estimateReadingTime,
@@ -39,6 +46,7 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  VIRTUAL_HOME,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -48,6 +56,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("weather");
     expect(COMMAND_LIST).toContain("sudo");
     expect(COMMAND_LIST).toContain("cd");
+    expect(COMMAND_LIST).toContain("cat");
     expect(COMMAND_LIST).toContain("grep");
     expect(COMMAND_LIST).toContain("history");
     expect(COMMAND_LIST).toContain("man");
@@ -72,6 +81,124 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("flip");
     expect(COMMAND_LIST).toContain("fortune");
     expect(COMMAND_LIST).toContain("matrix");
+    expect(COMMAND_LIST).toContain("tree");
+  });
+
+  it("builds a read-only virtual portfolio filesystem from site data", () => {
+    const fs = buildVirtualFileSystem({
+      siteConfig: { resumeUrl: "https://resume.example.com" },
+      projectGroups: {
+        featured: [
+          {
+            name: "Link Converter",
+            url: "https://convert.example.com",
+            repo: "https://github.com/jjalangtry/link-converter",
+            description: "Convert music links",
+            language: "TypeScript",
+          },
+        ],
+        contributions: [],
+        github: [
+          {
+            name: "NES Pong",
+            url: "https://github.com/jjalangtry/NES-Pong",
+            description: "6502 assembly game",
+            language: "Assembly",
+            fork: true,
+          },
+        ],
+      },
+      skills: [
+        {
+          name: "Languages",
+          skills: [{ name: "JavaScript", level: 90, note: "Astro site" }],
+        },
+      ],
+      experience: [
+        {
+          title: "Software Engineer",
+          org: "Example Co",
+          period: "2025",
+          description: "Built terminal interfaces",
+        },
+      ],
+      posts: [
+        {
+          slug: "terminal-portfolio",
+          title: "Terminal Portfolio",
+          date: "2026-05-26",
+          summary: "Shell UX",
+          content: "A post about terminal emulation.",
+        },
+      ],
+    });
+
+    expect(formatVirtualLs(fs, VIRTUAL_HOME)).toContain("projects/");
+    expect(formatVirtualLs(fs, `${VIRTUAL_HOME}/projects`)).toContain(
+      "featured/",
+    );
+    expect(
+      formatVirtualCat(
+        fs,
+        `${VIRTUAL_HOME}/projects/featured/link-converter.txt`,
+      ),
+    ).toContain("Language: TypeScript");
+    expect(
+      formatVirtualCat(fs, `${VIRTUAL_HOME}/projects/github/nes-pong.txt`),
+    ).toContain("Fork: yes");
+    expect(formatVirtualCat(fs, `${VIRTUAL_HOME}/resume.url`)).toBe(
+      "https://resume.example.com",
+    );
+    expect(
+      formatVirtualCat(fs, `${VIRTUAL_HOME}/skills/languages.txt`),
+    ).toContain("JavaScript: 90% - Astro site");
+    expect(
+      formatVirtualCat(fs, `${VIRTUAL_HOME}/experience/timeline.txt`),
+    ).toContain("Built terminal interfaces");
+    expect(
+      formatVirtualCat(fs, `${VIRTUAL_HOME}/blog/terminal-portfolio.md`),
+    ).toContain("A post about terminal emulation.");
+  });
+
+  it("resolves virtual paths and formats shell-style output", () => {
+    const fs = buildVirtualFileSystem({});
+
+    expect(resolveVirtualPath(VIRTUAL_HOME, "projects/../blog")).toBe(
+      `${VIRTUAL_HOME}/blog`,
+    );
+    expect(resolveVirtualPath(`${VIRTUAL_HOME}/projects`, "~/blog")).toBe(
+      `${VIRTUAL_HOME}/blog`,
+    );
+    expect(resolveVirtualPath(`${VIRTUAL_HOME}/projects`, "/home")).toBe(
+      "/home",
+    );
+    expect(formatVirtualPathForPrompt(VIRTUAL_HOME)).toBe("~");
+    expect(formatVirtualPathForPrompt(`${VIRTUAL_HOME}/projects/github`)).toBe(
+      "~/projects/github",
+    );
+    expect(formatVirtualPathForPrompt("/home")).toBe("/home");
+
+    expect(getVirtualPathNode(fs, `${VIRTUAL_HOME}/projects`)?.type).toBe(
+      "directory",
+    );
+    expect(formatVirtualLs(fs, `${VIRTUAL_HOME}/missing`)).toContain(
+      "No such file or directory",
+    );
+    expect(formatVirtualLs(fs, `${VIRTUAL_HOME}/README.md`)).toBe("README.md");
+    expect(formatVirtualCat(fs, "")).toBe("Usage: cat [file]");
+    expect(formatVirtualCat(fs, `${VIRTUAL_HOME}/projects`)).toContain(
+      "Is a directory",
+    );
+    expect(formatVirtualCat(fs, `${VIRTUAL_HOME}/missing.txt`)).toContain(
+      "No such file or directory",
+    );
+    expect(formatVirtualTree(fs, `${VIRTUAL_HOME}/README.md`)).toBe(
+      "README.md",
+    );
+    expect(formatVirtualTree(fs, `${VIRTUAL_HOME}/missing`)).toContain(
+      "No such file or directory",
+    );
+    expect(formatVirtualTree(fs, VIRTUAL_HOME)).toContain("README.md");
   });
 
   it("builds repos output with project groups", () => {

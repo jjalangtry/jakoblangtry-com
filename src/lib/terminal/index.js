@@ -3,6 +3,7 @@ export const COMMAND_LIST = [
   "banner",
   "blog",
   "calc",
+  "cat",
   "clear",
   "contact",
   "converter",
@@ -33,6 +34,7 @@ export const COMMAND_LIST = [
   "snake",
   "stats",
   "theme",
+  "tree",
   "uptime",
   "weather",
   "which",
@@ -832,6 +834,256 @@ export function formatManPage(command, helpEntry) {
 
   page += "SEE ALSO\n       help(1), man(1)";
   return page;
+}
+
+// ── Virtual portfolio filesystem ──────────────────────────────
+
+export const VIRTUAL_HOME = "/home/guest";
+
+function slugifyPathSegment(value, fallback = "item") {
+  const slug = String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || fallback;
+}
+
+function makeDirectory(children = {}) {
+  return { type: "directory", children };
+}
+
+function makeFile(content = "") {
+  return { type: "file", content: String(content) };
+}
+
+function formatProjectFile(project, label) {
+  const lines = [
+    `Name: ${project.name || "Untitled"}`,
+    `Section: ${label}`,
+    `URL: ${project.url || "n/a"}`,
+  ];
+  if (project.repo && project.repo !== project.url)
+    lines.push(`Source: ${project.repo}`);
+  if (project.language) lines.push(`Language: ${project.language}`);
+  if (project.description) lines.push(`About: ${project.description}`);
+  if (project.fork) lines.push("Fork: yes");
+  return lines.join("\n");
+}
+
+function addProjectDirectory(children, dirname, projects, label) {
+  const files = {};
+  (projects || []).forEach((project, index) => {
+    if (!project || !project.name) return;
+    const filename = `${slugifyPathSegment(project.name, `project-${index + 1}`)}.txt`;
+    files[filename] = makeFile(formatProjectFile(project, label));
+  });
+  children[dirname] = makeDirectory(files);
+}
+
+export function buildVirtualFileSystem(data = {}) {
+  const siteConfig = data.siteConfig || {};
+  const groups = data.projectGroups || {};
+  const skills = Array.isArray(data.skills) ? data.skills : [];
+  const experience = Array.isArray(data.experience) ? data.experience : [];
+  const posts = Array.isArray(data.posts) ? data.posts : [];
+  const homeChildren = {
+    "README.md": makeFile(
+      [
+        "# Jakob Langtry Terminal",
+        "",
+        "This is a read-only portfolio filesystem.",
+        "Try: ls, cd projects, cat about.txt, tree blog",
+      ].join("\n"),
+    ),
+    "about.txt": makeFile(
+      [
+        "Jakob Langtry",
+        "Software Engineering student at Rochester Institute of Technology.",
+        "Interested in web development, backend systems, and useful terminal-style interfaces.",
+      ].join("\n"),
+    ),
+    "contact.txt": makeFile(
+      [
+        "Email: jjalangtry@gmail.com",
+        "GitHub: https://github.com/JJALANGTRY",
+        "LinkedIn: https://linkedin.com/in/jjalangtry",
+        "Website: https://jakoblangtry.com",
+      ].join("\n"),
+    ),
+    "resume.url": makeFile(
+      siteConfig.resumeUrl || "https://resume.jjalangtry.com",
+    ),
+    projects: makeDirectory({}),
+    skills: makeDirectory({}),
+    experience: makeDirectory({}),
+    blog: makeDirectory({}),
+  };
+
+  addProjectDirectory(
+    homeChildren.projects.children,
+    "featured",
+    groups.featured,
+    "featured",
+  );
+  addProjectDirectory(
+    homeChildren.projects.children,
+    "contributions",
+    groups.contributions,
+    "contribution",
+  );
+  addProjectDirectory(
+    homeChildren.projects.children,
+    "github",
+    groups.github,
+    "github",
+  );
+
+  skills.forEach((category, index) => {
+    if (!category || !category.name) return;
+    const lines = [`# ${category.name}`, ""];
+    (category.skills || []).forEach((skill) => {
+      lines.push(
+        `- ${skill.name || "Unnamed"}: ${Number(skill.level) || 0}%${skill.note ? ` - ${skill.note}` : ""}`,
+      );
+    });
+    homeChildren.skills.children[
+      `${slugifyPathSegment(category.name, `skill-${index + 1}`)}.txt`
+    ] = makeFile(lines.join("\n").trimEnd());
+  });
+
+  homeChildren.experience.children["timeline.txt"] = makeFile(
+    experience
+      .map((entry) =>
+        [
+          entry.title || "Untitled",
+          entry.org ? `  ${entry.org}` : "",
+          entry.period ? `  ${entry.period}` : "",
+          entry.description ? `  ${entry.description}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      )
+      .join("\n\n") || "No experience data available.",
+  );
+
+  posts.forEach((post, index) => {
+    const slug = slugifyPathSegment(
+      post?.slug || post?.title,
+      `post-${index + 1}`,
+    );
+    homeChildren.blog.children[`${slug}.md`] = makeFile(
+      [
+        `# ${post?.title || "Untitled"}`,
+        post?.date ? `Date: ${post.date}` : "",
+        post?.summary ? `Summary: ${post.summary}` : "",
+        "",
+        post?.content || "",
+      ]
+        .filter((line, lineIndex) => lineIndex === 3 || line)
+        .join("\n"),
+    );
+  });
+
+  return makeDirectory({
+    home: makeDirectory({
+      guest: makeDirectory(homeChildren),
+    }),
+  });
+}
+
+export function resolveVirtualPath(
+  currentPath = VIRTUAL_HOME,
+  targetPath = "",
+) {
+  const rawTarget = String(targetPath || "").trim();
+  let combined;
+  if (!rawTarget) combined = currentPath || VIRTUAL_HOME;
+  else if (rawTarget === "~") combined = VIRTUAL_HOME;
+  else if (rawTarget.startsWith("~/"))
+    combined = `${VIRTUAL_HOME}/${rawTarget.slice(2)}`;
+  else if (rawTarget.startsWith("/")) combined = rawTarget;
+  else combined = `${currentPath || VIRTUAL_HOME}/${rawTarget}`;
+
+  const parts = [];
+  combined.split("/").forEach((part) => {
+    if (!part || part === ".") return;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  });
+  return `/${parts.join("/")}`;
+}
+
+export function getVirtualPathNode(fs, path = VIRTUAL_HOME) {
+  const parts = resolveVirtualPath("/", path).split("/").filter(Boolean);
+  let node = fs;
+  for (const part of parts) {
+    if (!node || node.type !== "directory" || !node.children[part]) return null;
+    node = node.children[part];
+  }
+  return node || null;
+}
+
+export function formatVirtualPathForPrompt(path = VIRTUAL_HOME) {
+  const normalized = resolveVirtualPath("/", path);
+  if (normalized === VIRTUAL_HOME) return "~";
+  if (normalized.startsWith(`${VIRTUAL_HOME}/`)) {
+    return `~/${normalized.slice(VIRTUAL_HOME.length + 1)}`;
+  }
+  return normalized;
+}
+
+function basename(path) {
+  const parts = resolveVirtualPath("/", path).split("/").filter(Boolean);
+  return parts[parts.length - 1] || "/";
+}
+
+export function formatVirtualLs(fs, path = VIRTUAL_HOME) {
+  const node = getVirtualPathNode(fs, path);
+  if (!node) return `ls: cannot access '${path}': No such file or directory`;
+  if (node.type === "file") return basename(path);
+
+  const entries = Object.entries(node.children)
+    .sort(([aName, aNode], [bName, bNode]) => {
+      if (aNode.type !== bNode.type) return aNode.type === "directory" ? -1 : 1;
+      return aName.localeCompare(bName);
+    })
+    .map(([name, child]) => `${name}${child.type === "directory" ? "/" : ""}`);
+
+  return entries.length > 0 ? entries.join("\n") : "(empty directory)";
+}
+
+export function formatVirtualCat(fs, path) {
+  const node = getVirtualPathNode(fs, path);
+  if (!path) return "Usage: cat [file]";
+  if (!node) return `cat: ${path}: No such file or directory`;
+  if (node.type === "directory") return `cat: ${path}: Is a directory`;
+  return node.content;
+}
+
+function appendTreeLines(lines, node, prefix) {
+  const entries = Object.entries(node.children).sort(([aName], [bName]) =>
+    aName.localeCompare(bName),
+  );
+  entries.forEach(([name, child], index) => {
+    const isLast = index === entries.length - 1;
+    const connector = isLast ? "└── " : "├── ";
+    lines.push(
+      `${prefix}${connector}${name}${child.type === "directory" ? "/" : ""}`,
+    );
+    if (child.type === "directory") {
+      appendTreeLines(lines, child, `${prefix}${isLast ? "    " : "│   "}`);
+    }
+  });
+}
+
+export function formatVirtualTree(fs, path = VIRTUAL_HOME) {
+  const node = getVirtualPathNode(fs, path);
+  if (!node) return `tree: ${path}: No such file or directory`;
+  if (node.type === "file") return basename(path);
+
+  const lines = [formatVirtualPathForPrompt(path)];
+  appendTreeLines(lines, node, "");
+  return lines.join("\n");
 }
 
 // ── Fortune quotes ────────────────────────────────────────────
