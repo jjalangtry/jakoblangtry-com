@@ -2,6 +2,23 @@
 
 Terminal-style personal website with command-driven navigation.
 
+## Terminal Filesystem
+
+The terminal exposes a read-only portfolio filesystem generated from the site's
+JSON content:
+
+```bash
+pwd                  # print the current virtual directory
+ls                   # list files in /home/guest
+tree                 # show the portfolio file tree
+cat about.txt        # read a generated profile file
+cd projects          # move through generated directories
+ls --commands        # list built-in terminal commands
+```
+
+Useful paths include `README.md`, `about.txt`, `contact.txt`, `skills.txt`,
+`experience.txt`, `projects/`, `repos/`, and `blog/`.
+
 ## Tech Stack
 
 - Astro
