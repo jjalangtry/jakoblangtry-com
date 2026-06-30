@@ -16,6 +16,11 @@ import {
   globToRegex,
   expandGlob,
   parsePipeline,
+  parseAliasDefinition,
+  formatAliasOutput,
+  quoteAliasValue,
+  expandAliasCommand,
+  expandAliasPipeline,
   buildNeofetchOutput,
   formatManPage,
   buildSkillsOutput,
@@ -62,6 +67,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("pwd");
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
+    expect(COMMAND_LIST).toContain("unalias");
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
@@ -667,6 +673,98 @@ describe("terminal helpers", () => {
     expect(parsePipeline("a || b")).toEqual(["a", "b"]);
     // whitespace-only input
     expect(parsePipeline("   ")).toEqual([]);
+  });
+
+  it("parses shell alias definitions with quoted and unquoted values", () => {
+    expect(parseAliasDefinition("p='projects'")).toEqual({
+      name: "p",
+      value: "projects",
+    });
+    expect(parseAliasDefinition('sys="repo --systems"')).toEqual({
+      name: "sys",
+      value: "repo --systems",
+    });
+    expect(parseAliasDefinition("g=grep")).toEqual({
+      name: "g",
+      value: "grep",
+    });
+    expect(parseAliasDefinition("bad alias='help'")).toEqual({
+      error: "Usage: alias name='command'",
+    });
+    expect(parseAliasDefinition("x='unterminated")).toEqual({
+      error: "alias: unmatched quote in definition",
+    });
+    expect(parseAliasDefinition("x=''")).toEqual({
+      error: "alias: value cannot be empty",
+    });
+  });
+
+  it("formats alias listings and escapes display values", () => {
+    const aliases = {
+      sys: "repo --systems",
+      quote: "echo it's ok",
+    };
+    expect(formatAliasOutput({})).toBe("No aliases defined.");
+    expect(formatAliasOutput(aliases)).toContain(
+      "alias quote='echo it'\\''s ok'",
+    );
+    expect(formatAliasOutput(aliases)).toContain("alias sys='repo --systems'");
+    expect(formatAliasOutput(aliases, "sys")).toBe(
+      "alias sys='repo --systems'",
+    );
+    expect(formatAliasOutput(aliases, "missing")).toBe(
+      "alias: missing: not found",
+    );
+    expect(quoteAliasValue("single ' quote")).toBe("'single '\\'' quote'");
+  });
+
+  it("expands aliases while preserving arguments and detecting loops", () => {
+    const aliases = {
+      p: "projects",
+      sys: "repo --systems",
+      g: "grep",
+      one: "two",
+      two: "one",
+    };
+
+    expect(expandAliasCommand("p", aliases)).toEqual({
+      command: "projects",
+      expanded: true,
+    });
+    expect(expandAliasCommand("sys --lang C", aliases)).toEqual({
+      command: "repo --systems --lang C",
+      expanded: true,
+    });
+    expect(expandAliasCommand("help", aliases)).toEqual({
+      command: "help",
+      expanded: false,
+    });
+    expect(expandAliasCommand("one", aliases)).toEqual({
+      command: "one",
+      expanded: true,
+      error: "alias: expansion loop detected at 'one'",
+    });
+  });
+
+  it("expands aliases across pipeline segments", () => {
+    const aliases = {
+      h: "help",
+      g: "grep",
+      hw: "help | grep weather",
+    };
+
+    expect(expandAliasPipeline("h | g weather", aliases)).toEqual({
+      command: "help | grep weather",
+      expanded: true,
+    });
+    expect(expandAliasPipeline("hw", aliases)).toEqual({
+      command: "help | grep weather",
+      expanded: true,
+    });
+    expect(expandAliasPipeline("   ", aliases)).toEqual({
+      command: "",
+      expanded: false,
+    });
   });
 
   it("builds neofetch output with site info", () => {
