@@ -11,6 +11,12 @@ import {
   shouldUseCompactWeatherLayout,
   formatUptime,
   formatHistoryOutput,
+  isValidAliasName,
+  normalizeAliases,
+  parseAliasArgs,
+  parseUnaliasArgs,
+  formatAliases,
+  expandAliasCommand,
   grepFilter,
   parseGrepArgs,
   globToRegex,
@@ -62,6 +68,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("pwd");
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
+    expect(COMMAND_LIST).toContain("unalias");
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
@@ -514,6 +521,99 @@ describe("terminal helpers", () => {
     const output = formatHistoryOutput(items);
     expect(output).toContain("   1  cmd0");
     expect(output).toContain("  12  cmd11");
+  });
+
+  it("validates and normalizes alias maps", () => {
+    expect(isValidAliasName("ll")).toBe(true);
+    expect(isValidAliasName("_grep")).toBe(true);
+    expect(isValidAliasName("bad name")).toBe(false);
+    expect(isValidAliasName("1bad")).toBe(false);
+
+    expect(
+      normalizeAliases({
+        z: "repo --systems",
+        bad: "",
+        "bad name": "help",
+        a: "ls",
+        nested: { command: "help" },
+      }),
+    ).toEqual({ a: "ls", z: "repo --systems" });
+  });
+
+  it("parses alias list, show, and set commands", () => {
+    expect(parseAliasArgs("")).toEqual({ action: "list" });
+    expect(parseAliasArgs("ll")).toEqual({ action: "show", name: "ll" });
+    expect(parseAliasArgs("ll='ls'")).toEqual({
+      action: "set",
+      name: "ll",
+      value: "ls",
+    });
+    expect(parseAliasArgs('systems="repo --systems"')).toEqual({
+      action: "set",
+      name: "systems",
+      value: "repo --systems",
+    });
+    expect(parseAliasArgs("bad name=help")).toMatchObject({
+      action: "error",
+    });
+    expect(parseAliasArgs("oops='unterminated")).toMatchObject({
+      action: "error",
+      error: "alias: unmatched quote",
+    });
+  });
+
+  it("parses unalias commands", () => {
+    expect(parseUnaliasArgs("ll")).toEqual({ action: "unset", name: "ll" });
+    expect(parseUnaliasArgs("-a")).toEqual({ action: "clear" });
+    expect(parseUnaliasArgs("--all")).toEqual({ action: "clear" });
+    expect(parseUnaliasArgs("bad name")).toMatchObject({ action: "error" });
+    expect(parseUnaliasArgs("")).toEqual({
+      action: "error",
+      error: "Usage: unalias [-a|name]",
+    });
+  });
+
+  it("formats aliases for list and lookup output", () => {
+    expect(formatAliases({})).toContain("No aliases defined");
+    expect(formatAliases({ greet: "echo hello", ll: "ls" })).toBe(
+      "alias greet='echo hello'\nalias ll='ls'",
+    );
+    expect(formatAliases({ quote: "echo it's ok" }, "quote")).toBe(
+      "alias quote='echo it'\\''s ok'",
+    );
+    expect(formatAliases({ ll: "ls" }, "missing")).toBe(
+      "alias: missing: not found",
+    );
+  });
+
+  it("expands aliases while preserving arguments and detecting loops", () => {
+    expect(expandAliasCommand("ll", { ll: "ls" })).toMatchObject({
+      command: "ls",
+      expanded: true,
+      chain: ["ll"],
+    });
+    expect(
+      expandAliasCommand("systems --lang C", { systems: "repo --systems" }),
+    ).toMatchObject({
+      command: "repo --systems --lang C",
+      expanded: true,
+    });
+    expect(expandAliasCommand("a", { a: "b --flag", b: "repo" })).toMatchObject(
+      {
+        command: "repo --flag",
+        expanded: true,
+        chain: ["a", "b"],
+      },
+    );
+    expect(expandAliasCommand("help", { ll: "ls" })).toEqual({
+      command: "help",
+      expanded: false,
+      chain: [],
+    });
+    expect(expandAliasCommand("a", { a: "b", b: "a" })).toMatchObject({
+      expanded: true,
+      error: "Alias loop detected: a -> b -> a",
+    });
   });
 
   it("grepFilter matches with simple substring (default)", () => {
