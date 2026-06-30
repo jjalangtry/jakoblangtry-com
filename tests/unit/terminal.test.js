@@ -33,9 +33,18 @@ import {
   isSystemsRepository,
   resolveRepository,
   buildContributionChartAscii,
+  buildPortfolioFileSystem,
   estimateReadingTime,
+  formatVirtualLsOutput,
+  formatVirtualPromptPath,
+  getVirtualDirectoryEntries,
+  getVirtualNode,
   getRandomFortune,
   FORTUNE_QUOTES,
+  normalizeVirtualPath,
+  readVirtualFile,
+  renderVirtualTree,
+  resolveVirtualPath,
   flipText,
   safeCalc,
   renderBigTime,
@@ -72,6 +81,163 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("flip");
     expect(COMMAND_LIST).toContain("fortune");
     expect(COMMAND_LIST).toContain("matrix");
+    expect(COMMAND_LIST).toContain("cat");
+    expect(COMMAND_LIST).toContain("tree");
+  });
+
+  it("builds a read-only portfolio filesystem from terminal data", () => {
+    const fs = buildPortfolioFileSystem({
+      siteConfig: { resumeUrl: "https://resume.example.com" },
+      projectGroups: {
+        featured: [
+          {
+            name: "Live App",
+            url: "https://live.example.com",
+            repo: "https://github.com/jjalangtry/live-app",
+            language: "TypeScript",
+            description: "A deployed project",
+          },
+        ],
+        contributions: [],
+        github: [
+          {
+            name: "Unix Tool",
+            url: "https://github.com/jjalangtry/unix-tool",
+            language: "C",
+            fork: true,
+          },
+          null,
+        ],
+      },
+      posts: [
+        {
+          slug: "hello-terminal",
+          title: "Hello Terminal",
+          date: "2026-01-01",
+          summary: "Intro",
+          content: "Post body.",
+        },
+        {
+          content: "Nameless post body.",
+        },
+      ],
+      skills: [{ name: "Languages", skills: [{ name: "C", level: 90 }] }],
+      experience: [
+        {
+          title: "Engineer",
+          org: "Acme",
+          period: "2025",
+          description: "Built tools.",
+        },
+      ],
+    });
+
+    expect(getVirtualNode(fs, "/home/guest")?.type).toBe("directory");
+    expect(readVirtualFile(fs, "/home/guest", "resume.url").output).toBe(
+      "https://resume.example.com",
+    );
+    expect(
+      readVirtualFile(fs, "/home/guest", "projects/index.txt").output,
+    ).toContain("Live App");
+    expect(
+      readVirtualFile(fs, "/home/guest", "blog/hello-terminal.md").output,
+    ).toContain("Post body.");
+    expect(readVirtualFile(fs, "/home/guest", "blog/post.md").output).toContain(
+      "Untitled",
+    );
+    expect(
+      readVirtualFile(fs, "/home/guest", "projects/02-unix-tool.txt").output,
+    ).toContain("Fork: yes");
+  });
+
+  it("normalizes and resolves virtual filesystem paths", () => {
+    expect(normalizeVirtualPath("/home/guest/../guest/projects/./")).toBe(
+      "/home/guest/projects",
+    );
+    expect(resolveVirtualPath("/home/guest/projects", "..")).toBe(
+      "/home/guest",
+    );
+    expect(resolveVirtualPath("/home/guest/projects", "~/blog")).toBe(
+      "/home/guest/blog",
+    );
+    expect(resolveVirtualPath("/home/guest", "/home/guest/repos")).toBe(
+      "/home/guest/repos",
+    );
+    expect(resolveVirtualPath("/home/guest/projects", "-")).toBe("/home/guest");
+    expect(resolveVirtualPath("/home/guest/projects", "")).toBe(
+      "/home/guest/projects",
+    );
+    expect(formatVirtualPromptPath("/home/guest")).toBe("~");
+    expect(formatVirtualPromptPath("/home/guest/projects")).toBe("~/projects");
+    expect(formatVirtualPromptPath("/")).toBe("/");
+  });
+
+  it("lists virtual directories and reports missing paths", () => {
+    const fs = buildPortfolioFileSystem({
+      projectGroups: { featured: [], contributions: [], github: [] },
+      posts: [],
+    });
+
+    const homeList = formatVirtualLsOutput(fs, "/home/guest");
+    expect(homeList.output).toContain("about.txt");
+    expect(homeList.output).toContain("projects/");
+
+    const fileList = formatVirtualLsOutput(fs, "/home/guest", "about.txt");
+    expect(fileList.output).toBe("about.txt");
+
+    const missing = formatVirtualLsOutput(fs, "/home/guest", "missing");
+    expect(missing.error).toContain("No such file or directory");
+    expect(getVirtualNode(fs, "/home/guest/about.txt/child")).toBeNull();
+  });
+
+  it("reads virtual files and rejects directories", () => {
+    const fs = buildPortfolioFileSystem({
+      projectGroups: { featured: [], contributions: [], github: [] },
+    });
+
+    expect(readVirtualFile(fs, "/home/guest", "").error).toContain(
+      "missing file operand",
+    );
+    expect(readVirtualFile(fs, "/home/guest", "about.txt").output).toContain(
+      "Jakob Langtry",
+    );
+    expect(readVirtualFile(fs, "/home/guest", "projects").error).toContain(
+      "Is a directory",
+    );
+    expect(readVirtualFile(fs, "/home/guest", "nope.txt").error).toContain(
+      "No such file",
+    );
+  });
+
+  it("renders virtual trees and directory entries", () => {
+    const fs = buildPortfolioFileSystem({
+      projectGroups: {
+        featured: [{ name: "Live App", url: "https://example.com" }],
+        contributions: [],
+        github: [],
+      },
+    });
+
+    const entries = getVirtualDirectoryEntries(fs, "/home/guest", "projects");
+    expect(entries.some((entry) => entry.name === "index.txt")).toBe(true);
+    expect(getVirtualDirectoryEntries(fs, "/home/guest", "about.txt")).toEqual(
+      [],
+    );
+
+    const tree = renderVirtualTree(fs, "/home/guest", "projects");
+    expect(tree.output).toContain("projects");
+    expect(tree.output).toContain("index.txt");
+    expect(tree.output).toContain("01-live-app.txt");
+
+    expect(renderVirtualTree(fs, "/home/guest", "missing").error).toContain(
+      "No such file",
+    );
+    expect(renderVirtualTree(fs, "/home/guest", "about.txt").output).toBe(
+      "about.txt",
+    );
+    expect(
+      renderVirtualTree(fs, "/home/guest", "projects", { maxDepth: 0 }).output,
+    ).toBe("projects");
   });
 
   it("builds repos output with project groups", () => {

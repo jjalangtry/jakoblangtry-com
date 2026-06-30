@@ -44,9 +44,11 @@ export const COMMAND_LIST = [
   "login",
   "logout",
   "sudo",
+  "cat",
   "cd",
   "close",
   "exit",
+  "tree",
 ];
 
 export function buildProjectsListOutput(projects) {
@@ -440,6 +442,301 @@ export function buildStatsOutput(stats) {
     });
   }
   return lines.join("\n");
+}
+
+function createDirectory(children = {}) {
+  return { type: "directory", children };
+}
+
+function createFile(content) {
+  return { type: "file", content: String(content || "") };
+}
+
+function safeFileName(name, fallback = "untitled") {
+  const normalized = String(name || fallback)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+}
+
+function flattenProjectGroups(projectGroups) {
+  const groups = projectGroups || {};
+  return [
+    ["featured", groups.featured || []],
+    ["contributions", groups.contributions || []],
+    ["github", groups.github || []],
+  ].flatMap(([section, projects]) =>
+    (Array.isArray(projects) ? projects : [])
+      .filter((project) => project && project.name)
+      .map((project) => ({
+        ...project,
+        section,
+      })),
+  );
+}
+
+function formatProjectFile(project) {
+  const lines = [
+    `Name: ${project.name || "Untitled"}`,
+    `Section: ${project.section || "project"}`,
+  ];
+  if (project.description) lines.push(`About: ${project.description}`);
+  if (project.language) lines.push(`Language: ${project.language}`);
+  if (project.url) lines.push(`URL: ${project.url}`);
+  if (project.repo && project.repo !== project.url) {
+    lines.push(`Source: ${project.repo}`);
+  }
+  if (project.fork) lines.push("Fork: yes");
+  return lines.join("\n");
+}
+
+function formatProjectsIndex(projects) {
+  if (!projects.length) return "No projects are configured.";
+  return projects
+    .map((project, index) => {
+      const language = project.language ? ` [${project.language}]` : "";
+      const section = project.section ? ` (${project.section})` : "";
+      return `${index + 1}. ${project.name || "Untitled"}${language}${section}`;
+    })
+    .join("\n");
+}
+
+function formatPostsIndex(posts) {
+  if (!posts.length) return "No blog posts yet.";
+  return posts
+    .map((post, index) => {
+      const date = post.date ? `${post.date}  ` : "";
+      return `${index + 1}. ${date}${post.title || "Untitled"} (${post.slug || "post"})`;
+    })
+    .join("\n");
+}
+
+export function buildPortfolioFileSystem(data = {}) {
+  const projectGroups = data.projectGroups || {};
+  const projects = flattenProjectGroups(projectGroups);
+  const posts = Array.isArray(data.posts) ? data.posts : [];
+  const resumeUrl =
+    data.siteConfig?.resumeUrl || "https://resume.jjalangtry.com";
+
+  const projectFiles = {};
+  projects.forEach((project, index) => {
+    const fileName = `${String(index + 1).padStart(2, "0")}-${safeFileName(project.name)}.txt`;
+    projectFiles[fileName] = createFile(formatProjectFile(project));
+  });
+
+  const postFiles = {};
+  posts.forEach((post) => {
+    const slug = safeFileName(post.slug || post.title, "post");
+    postFiles[`${slug}.md`] = createFile(
+      [
+        `# ${post.title || "Untitled"}`,
+        post.date ? `Date: ${post.date}` : "",
+        post.summary ? `Summary: ${post.summary}` : "",
+        "",
+        post.content || "",
+      ]
+        .filter((line, index) => index === 3 || line)
+        .join("\n"),
+    );
+  });
+
+  const home = createDirectory({
+    "README.txt": createFile(
+      [
+        "Welcome to Jakob Langtry's portfolio filesystem.",
+        "",
+        "Try:",
+        "  ls",
+        "  cd projects",
+        "  cat about.txt",
+        "  tree ~/repos",
+        "",
+        "This is a read-only filesystem generated from the website's data.",
+      ].join("\n"),
+    ),
+    "about.txt": createFile(
+      [
+        "Jakob Langtry",
+        "Software Engineering Student at Rochester Institute of Technology.",
+        "Interested in web development, backend systems, systems programming, and useful tools.",
+      ].join("\n"),
+    ),
+    "contact.txt": createFile(
+      [
+        "Email: jjalangtry@gmail.com",
+        "GitHub: https://github.com/JJALANGTRY",
+        "LinkedIn: https://linkedin.com/in/jjalangtry",
+        "Website: https://jakoblangtry.com",
+      ].join("\n"),
+    ),
+    "resume.url": createFile(resumeUrl),
+    "skills.txt": createFile(buildSkillsOutput(data.skills || [])),
+    "experience.txt": createFile(buildExperienceOutput(data.experience || [])),
+    projects: createDirectory({
+      "index.txt": createFile(formatProjectsIndex(projects)),
+      ...projectFiles,
+    }),
+    repos: createDirectory({
+      "index.txt": createFile(buildRepoExplorerOutput(projectGroups)),
+    }),
+    blog: createDirectory({
+      "index.txt": createFile(formatPostsIndex(posts)),
+      ...postFiles,
+    }),
+  });
+
+  return createDirectory({
+    home: createDirectory({
+      guest: home,
+    }),
+  });
+}
+
+function splitPath(path) {
+  return String(path || "")
+    .split("/")
+    .filter(Boolean);
+}
+
+export function normalizeVirtualPath(path) {
+  const parts = [];
+  splitPath(path).forEach((part) => {
+    if (part === ".") return;
+    if (part === "..") {
+      parts.pop();
+    } else {
+      parts.push(part);
+    }
+  });
+  return `/${parts.join("/")}`.replace(/\/$/, "") || "/";
+}
+
+export function resolveVirtualPath(currentPath = "/home/guest", target = "") {
+  const rawTarget = String(target || "").trim();
+  if (!rawTarget) return normalizeVirtualPath(currentPath);
+  if (rawTarget === "~") return "/home/guest";
+  if (rawTarget === "-") return "/home/guest";
+
+  const expanded = rawTarget.startsWith("~")
+    ? `/home/guest${rawTarget.slice(1)}`
+    : rawTarget;
+  const candidate = expanded.startsWith("/")
+    ? expanded
+    : `${currentPath.replace(/\/$/, "")}/${expanded}`;
+
+  return normalizeVirtualPath(candidate);
+}
+
+export function getVirtualNode(fileSystem, path) {
+  const normalized = normalizeVirtualPath(path);
+  let node = fileSystem;
+  for (const part of splitPath(normalized)) {
+    if (!node || node.type !== "directory") return null;
+    node = node.children?.[part];
+  }
+  return node || null;
+}
+
+export function formatVirtualPromptPath(path) {
+  const normalized = normalizeVirtualPath(path);
+  if (normalized === "/home/guest") return "~";
+  if (normalized.startsWith("/home/guest/")) {
+    return `~${normalized.slice("/home/guest".length)}`;
+  }
+  return normalized;
+}
+
+export function formatVirtualLsOutput(fileSystem, currentPath, target = "") {
+  const path = resolveVirtualPath(currentPath, target);
+  const node = getVirtualNode(fileSystem, path);
+  if (!node)
+    return {
+      error: `ls: cannot access '${target || "."}': No such file or directory`,
+    };
+  if (node.type === "file") return { output: path.split("/").pop() || path };
+
+  const names = Object.keys(node.children || {}).sort((a, b) =>
+    a.localeCompare(b),
+  );
+  if (names.length === 0) return { output: "" };
+  return {
+    output: names
+      .map((name) => {
+        const child = node.children[name];
+        return child?.type === "directory" ? `${name}/` : name;
+      })
+      .join("  "),
+  };
+}
+
+export function readVirtualFile(fileSystem, currentPath, target) {
+  const label = target || "";
+  if (!label.trim()) return { error: "cat: missing file operand" };
+
+  const path = resolveVirtualPath(currentPath, label);
+  const node = getVirtualNode(fileSystem, path);
+  if (!node) return { error: `cat: ${label}: No such file or directory` };
+  if (node.type === "directory")
+    return { error: `cat: ${label}: Is a directory` };
+  return { output: node.content };
+}
+
+export function getVirtualDirectoryEntries(
+  fileSystem,
+  currentPath,
+  target = "",
+) {
+  const path = resolveVirtualPath(currentPath, target);
+  const node = getVirtualNode(fileSystem, path);
+  if (!node || node.type !== "directory") return [];
+
+  return Object.keys(node.children || {})
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({
+      name,
+      path: normalizeVirtualPath(`${path}/${name}`),
+      type: node.children[name].type,
+    }));
+}
+
+export function renderVirtualTree(
+  fileSystem,
+  currentPath,
+  target = "",
+  options = {},
+) {
+  const path = resolveVirtualPath(currentPath, target);
+  const node = getVirtualNode(fileSystem, path);
+  const label = target || formatVirtualPromptPath(path);
+  if (!node)
+    return { error: `tree: ${target || "."}: No such file or directory` };
+  const maxDepth = Number.isInteger(options.maxDepth) ? options.maxDepth : 3;
+  const lines = [label || "/"];
+
+  function walk(currentNode, prefix, depth) {
+    if (currentNode.type !== "directory" || depth >= maxDepth) return;
+    const entries = Object.keys(currentNode.children || {}).sort((a, b) =>
+      a.localeCompare(b),
+    );
+    entries.forEach((name, index) => {
+      const child = currentNode.children[name];
+      const isLast = index === entries.length - 1;
+      const connector = isLast ? "`-- " : "|-- ";
+      const childLabel = child.type === "directory" ? `${name}/` : name;
+      lines.push(`${prefix}${connector}${childLabel}`);
+      walk(child, `${prefix}${isLast ? "    " : "|   "}`, depth + 1);
+    });
+  }
+
+  if (node.type === "file") {
+    lines[0] = path.split("/").pop() || label;
+  } else {
+    walk(node, "", 0);
+  }
+
+  return { output: lines.join("\n") };
 }
 
 export const SYSTEMS_REPO_LANGUAGES = ["C", "C++", "Assembly", "Shell", "Rust"];
