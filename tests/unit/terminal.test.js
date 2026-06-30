@@ -39,6 +39,15 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  buildVirtualFileSystem,
+  changeVirtualDirectory,
+  formatVirtualDirectoryListing,
+  formatVirtualPromptPath,
+  formatVirtualTree,
+  listVirtualPathCompletions,
+  readVirtualFile,
+  resolveVirtualPath,
+  VIRTUAL_HOME,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -69,9 +78,11 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("repos");
     expect(COMMAND_LIST).toContain("calc");
     expect(COMMAND_LIST).toContain("countdown");
+    expect(COMMAND_LIST).toContain("cat");
     expect(COMMAND_LIST).toContain("flip");
     expect(COMMAND_LIST).toContain("fortune");
     expect(COMMAND_LIST).toContain("matrix");
+    expect(COMMAND_LIST).toContain("tree");
   });
 
   it("builds repos output with project groups", () => {
@@ -324,6 +335,191 @@ describe("terminal helpers", () => {
       }),
     ).toBe("git clone https://github.com/jjalangtry/wordlehelper.git");
     expect(buildRepositoryCloneCommand(null)).toBe("");
+  });
+
+  it("builds a read-only virtual portfolio filesystem from site data", () => {
+    const fs = buildVirtualFileSystem({
+      siteConfig: { resumeUrl: "https://resume.example.com" },
+      version: "9.9.9",
+      projectGroups: {
+        featured: [
+          {
+            name: "Live App",
+            url: "https://live.example.com",
+            repo: "https://github.com/jjalangtry/live-app",
+            description: "Deployed app",
+            language: "TypeScript",
+          },
+        ],
+        contributions: [],
+        github: [
+          {
+            name: "Terminal Site",
+            url: "https://github.com/jjalangtry/jakoblangtry-com",
+            description: "Portfolio terminal",
+            language: "JavaScript",
+          },
+        ],
+      },
+      skills: [{ name: "Languages", skills: [{ name: "C", level: 90 }] }],
+      experience: [
+        {
+          title: "Engineer",
+          org: "Acme",
+          period: "2026",
+          description: "Built tools.",
+        },
+      ],
+      posts: [
+        {
+          slug: "hello",
+          title: "Hello",
+          date: "2026-01-01",
+          summary: "Intro",
+          content: "Welcome.",
+        },
+      ],
+    });
+
+    expect(fs.home).toBe(VIRTUAL_HOME);
+    expect(formatVirtualDirectoryListing(fs, VIRTUAL_HOME).output).toContain(
+      "projects/",
+    );
+    expect(formatVirtualDirectoryListing(fs, VIRTUAL_HOME).output).toContain(
+      "repos/",
+    );
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "resume.url")).toEqual({
+      ok: true,
+      output: "https://resume.example.com",
+    });
+    expect(
+      readVirtualFile(fs, VIRTUAL_HOME, "projects/live-app.txt").output,
+    ).toContain("Source: https://github.com/jjalangtry/live-app");
+    expect(
+      readVirtualFile(
+        fs,
+        VIRTUAL_HOME,
+        "repos/jjalangtry__jakoblangtry-com.txt",
+      ).output,
+    ).toContain("git clone https://github.com/jjalangtry/jakoblangtry-com.git");
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "blog/hello.md").output).toContain(
+      "Welcome.",
+    );
+  });
+
+  it("resolves virtual paths and formats prompt paths", () => {
+    expect(resolveVirtualPath(VIRTUAL_HOME, "")).toBe(VIRTUAL_HOME);
+    expect(resolveVirtualPath(VIRTUAL_HOME, "~")).toBe(VIRTUAL_HOME);
+    expect(resolveVirtualPath(VIRTUAL_HOME, "~/projects")).toBe(
+      `${VIRTUAL_HOME}/projects`,
+    );
+    expect(resolveVirtualPath(`${VIRTUAL_HOME}/projects`, "../repos")).toBe(
+      `${VIRTUAL_HOME}/repos`,
+    );
+    expect(resolveVirtualPath(VIRTUAL_HOME, "/projects")).toBe(
+      `${VIRTUAL_HOME}/projects`,
+    );
+    expect(resolveVirtualPath(VIRTUAL_HOME, "/")).toBe(VIRTUAL_HOME);
+    expect(resolveVirtualPath(VIRTUAL_HOME, "../../..")).toBe(VIRTUAL_HOME);
+    expect(formatVirtualPromptPath(VIRTUAL_HOME)).toBe("~");
+    expect(formatVirtualPromptPath(`${VIRTUAL_HOME}/repos`)).toBe("~/repos");
+    expect(formatVirtualPromptPath("/tmp")).toBe("/tmp");
+  });
+
+  it("changes directories and reports virtual filesystem errors", () => {
+    const fs = buildVirtualFileSystem({
+      projectGroups: { featured: [], contributions: [], github: [] },
+      posts: [],
+      skills: [],
+      experience: [],
+    });
+
+    expect(changeVirtualDirectory(fs, VIRTUAL_HOME, "projects")).toMatchObject({
+      ok: true,
+      cwd: `${VIRTUAL_HOME}/projects`,
+    });
+    expect(
+      changeVirtualDirectory(fs, `${VIRTUAL_HOME}/projects`, ""),
+    ).toMatchObject({ ok: true, cwd: VIRTUAL_HOME });
+    expect(changeVirtualDirectory(fs, VIRTUAL_HOME, "README.md")).toMatchObject(
+      {
+        ok: false,
+        output: "cd: README.md: Not a directory",
+      },
+    );
+    expect(changeVirtualDirectory(fs, VIRTUAL_HOME, "missing")).toMatchObject({
+      ok: false,
+      cwd: VIRTUAL_HOME,
+      output: "cd: missing: No such file or directory",
+    });
+  });
+
+  it("lists, reads, and trees virtual filesystem targets", () => {
+    const fs = buildVirtualFileSystem({
+      projects: [{ name: "Loose Project", url: "https://example.com" }],
+      projectGroups: { featured: [], contributions: [], github: [] },
+      posts: [],
+      skills: [],
+      experience: [],
+      version: "dev",
+    });
+
+    expect(
+      formatVirtualDirectoryListing(fs, VIRTUAL_HOME, "README.md"),
+    ).toEqual({ ok: true, output: "README.md" });
+    expect(formatVirtualDirectoryListing(fs, VIRTUAL_HOME, "missing")).toEqual({
+      ok: false,
+      output: "ls: cannot access 'missing': No such file or directory",
+    });
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "")).toEqual({
+      ok: false,
+      output: "cat: missing file operand",
+    });
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "projects")).toEqual({
+      ok: false,
+      output: "cat: projects: Is a directory",
+    });
+    expect(readVirtualFile(fs, VIRTUAL_HOME, "missing")).toEqual({
+      ok: false,
+      output: "cat: missing: No such file or directory",
+    });
+
+    const tree = formatVirtualTree(fs, VIRTUAL_HOME);
+    expect(tree.ok).toBe(true);
+    expect(tree.output).toContain("projects/");
+    expect(tree.output).toContain("loose-project.txt");
+    expect(formatVirtualTree(fs, VIRTUAL_HOME, "missing")).toEqual({
+      ok: false,
+      output: "tree: missing: No such file or directory",
+    });
+  });
+
+  it("completes virtual paths for file and directory commands", () => {
+    const fs = buildVirtualFileSystem({
+      projectGroups: {
+        featured: [{ name: "Live App", url: "https://example.com" }],
+        contributions: [],
+        github: [],
+      },
+      posts: [],
+      skills: [],
+      experience: [],
+    });
+
+    expect(listVirtualPathCompletions(fs, VIRTUAL_HOME, "pro")).toEqual([
+      "projects/",
+    ]);
+    expect(
+      listVirtualPathCompletions(fs, VIRTUAL_HOME, "projects/live"),
+    ).toEqual(["projects/live-app.txt"]);
+    expect(
+      listVirtualPathCompletions(fs, VIRTUAL_HOME, "README", {
+        directoriesOnly: true,
+      }),
+    ).toEqual([]);
+    expect(listVirtualPathCompletions(fs, VIRTUAL_HOME, "missing/")).toEqual(
+      [],
+    );
   });
 
   it("builds contribution chart ASCII from API data", () => {
