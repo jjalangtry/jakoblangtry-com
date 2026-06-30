@@ -39,6 +39,11 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  DEFAULT_ALIASES,
+  isValidAliasName,
+  parseAliasDefinition,
+  formatAliasOutput,
+  expandAliasCommand,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -62,6 +67,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("pwd");
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
+    expect(COMMAND_LIST).toContain("unalias");
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
@@ -514,6 +520,72 @@ describe("terminal helpers", () => {
     const output = formatHistoryOutput(items);
     expect(output).toContain("   1  cmd0");
     expect(output).toContain("  12  cmd11");
+  });
+
+  it("validates and parses shell-style alias definitions", () => {
+    expect(DEFAULT_ALIASES).toEqual({ exit: "close" });
+    expect(isValidAliasName("h")).toBe(true);
+    expect(isValidAliasName("repo-sys")).toBe(true);
+    expect(isValidAliasName("1bad")).toBe(false);
+    expect(isValidAliasName("bad name")).toBe(false);
+
+    expect(parseAliasDefinition("h='history 10'")).toEqual({
+      name: "h",
+      command: "history 10",
+    });
+    expect(parseAliasDefinition('sys="repo --systems"')).toEqual({
+      name: "sys",
+      command: "repo --systems",
+    });
+    expect(parseAliasDefinition("bad")).toEqual({
+      error: "Usage: alias name='command'",
+    });
+    expect(parseAliasDefinition("empty=''")).toEqual({
+      error: "Alias command cannot be empty.",
+    });
+  });
+
+  it("formats aliases in deterministic terminal syntax", () => {
+    const output = formatAliasOutput({
+      sys: "repo --systems",
+      h: "history 10",
+    });
+    expect(output.split("\n")).toEqual([
+      "alias h='history 10'",
+      "alias sys='repo --systems'",
+    ]);
+    expect(formatAliasOutput({})).toContain("No aliases configured");
+  });
+
+  it("expands aliases with arguments and detects recursive loops", () => {
+    const aliases = {
+      h: "history 10",
+      sys: "repo --systems",
+      r: "sys",
+      a: "b",
+      b: "a",
+    };
+
+    expect(expandAliasCommand("h", aliases)).toEqual({
+      command: "history 10",
+      expanded: true,
+    });
+    expect(expandAliasCommand("sys C", aliases)).toEqual({
+      command: "repo --systems C",
+      expanded: true,
+    });
+    expect(expandAliasCommand("r", aliases)).toEqual({
+      command: "repo --systems",
+      expanded: true,
+    });
+    expect(expandAliasCommand("help", aliases)).toEqual({
+      command: "help",
+      expanded: false,
+    });
+    expect(expandAliasCommand("a", aliases)).toMatchObject({
+      expanded: true,
+      error: "Alias loop detected: a -> b -> a",
+    });
   });
 
   it("grepFilter matches with simple substring (default)", () => {

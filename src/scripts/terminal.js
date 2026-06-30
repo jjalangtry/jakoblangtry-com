@@ -22,6 +22,11 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  DEFAULT_ALIASES,
+  isValidAliasName,
+  parseAliasDefinition,
+  formatAliasOutput,
+  expandAliasCommand,
 } from "../lib/terminal/index.js";
 
 // Global variables for managing input and command history
@@ -41,6 +46,9 @@ let countdownActive = false;
 let countdownInterval = null;
 let editorState = null; // null | { phase: "title" } | { phase: "body", title, lines } | { phase: "login" }
 let isAdmin = false;
+let customAliases = {};
+
+const ALIAS_STORAGE_KEY = "terminal-aliases";
 
 async function hashPassword(password) {
   const data = new TextEncoder().encode(password);
@@ -97,6 +105,100 @@ function saveCustomWhoami(text) {
     // ignore
   }
 }
+
+function loadCustomAliases() {
+  try {
+    const raw = localStorage.getItem(ALIAS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        ([name, command]) =>
+          isValidAliasName(name) &&
+          typeof command === "string" &&
+          command.trim(),
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function saveCustomAliases() {
+  try {
+    localStorage.setItem(ALIAS_STORAGE_KEY, JSON.stringify(customAliases));
+  } catch {
+    // ignore
+  }
+}
+
+function getAliasMap() {
+  return { ...DEFAULT_ALIASES, ...customAliases };
+}
+
+function displayAliases() {
+  appendOutput(formatAliasOutput(getAliasMap()), "info-text");
+}
+
+function setAlias(args) {
+  const parsed = parseAliasDefinition(args);
+  if (parsed.error) {
+    appendOutput(parsed.error, "error-text");
+    return;
+  }
+
+  if (parsed.name === "alias" || parsed.name === "unalias") {
+    appendOutput(`alias: '${parsed.name}' is reserved.`, "error-text");
+    return;
+  }
+
+  if (DEFAULT_ALIASES[parsed.name]) {
+    appendOutput(
+      `alias: '${parsed.name}' is a built-in alias and cannot be overwritten.`,
+      "error-text",
+    );
+    return;
+  }
+
+  customAliases[parsed.name] = parsed.command;
+  saveCustomAliases();
+  appendOutput(
+    formatAliasOutput({ [parsed.name]: parsed.command }),
+    "success-text",
+  );
+}
+
+function removeAlias(args) {
+  const name = String(args || "")
+    .trim()
+    .toLowerCase();
+
+  if (!name) {
+    appendOutput("Usage: unalias [name]", "info-text");
+    return;
+  }
+
+  if (DEFAULT_ALIASES[name]) {
+    appendOutput(
+      `unalias: '${name}' is a built-in alias and cannot be removed.`,
+      "error-text",
+    );
+    return;
+  }
+
+  if (!customAliases[name]) {
+    appendOutput(`unalias: '${name}' not found.`, "error-text");
+    return;
+  }
+
+  delete customAliases[name];
+  saveCustomAliases();
+  appendOutput(`Removed alias '${name}'.`, "success-text");
+}
+
 function getAllPosts() {
   const staticPosts = terminalData.posts || [];
   const localPosts = loadLocalPosts();
@@ -157,6 +259,7 @@ try {
 } catch (e) {
   // ignore
 }
+customAliases = loadCustomAliases();
 let historyIndex = commandHistory.length;
 let currentInputBuffer = "";
 let cursor; // Global cursor element
@@ -243,6 +346,7 @@ const commandList = [
   "snake",
   "stats",
   "theme",
+  "unalias",
   "uptime",
   "weather",
   "which",
@@ -665,7 +769,7 @@ function displayOnboardingCommands() {
   const hints = document.createElement("div");
   hints.className = "keyboard-hints log-text";
   hints.textContent =
-    "Tip: Tab to autocomplete  ↑↓ history  Ctrl+L clear  Ctrl+C cancel";
+    "Tip: Tab autocomplete  ↑↓ history  alias h='history 10'  Ctrl+L clear";
 
   const container = document.createElement("div");
   container.className = "onboarding-block";
@@ -801,6 +905,13 @@ function executeCommand(command, options = {}) {
     cliOutput.insertBefore(commandLine, inputLine);
   }
 
+  const aliasExpansion = expandAliasCommand(command, getAliasMap());
+  if (aliasExpansion.error) {
+    appendOutput(aliasExpansion.error, "error-text");
+    return;
+  }
+  command = aliasExpansion.command;
+
   const normalizedCommand = command.toLowerCase();
   switch (normalizedCommand) {
     case "help":
@@ -840,6 +951,7 @@ function executeCommand(command, options = {}) {
   hostname    show hostname
   which       find a command
   alias       manage aliases
+  unalias     remove aliases
   cd          change directory
   rss         RSS feed URL
   sudo        sudo mode
@@ -910,7 +1022,10 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias exit='close'", "info-text");
+      displayAliases();
+      break;
+    case "unalias":
+      appendOutput("Usage: unalias [name]", "info-text");
       break;
     case "skills":
       displaySkills();
@@ -1184,6 +1299,12 @@ Currently seeking opportunities in software engineering.`,
             appendOutput("Usage: history [clear|N]", "info-text");
           }
         }
+        break;
+      } else if (normalizedCommand.startsWith("alias ")) {
+        setAlias(command.substring(6).trim());
+        break;
+      } else if (normalizedCommand.startsWith("unalias ")) {
+        removeAlias(command.substring(8).trim());
         break;
       } else if (normalizedCommand.startsWith("blog ")) {
         const slug = command.substring(5).trim();
@@ -2910,6 +3031,13 @@ function displayManPage(cmd) {
 
 function getHelpDetails() {
   return {
+    alias: {
+      desc: "Create, list, and persist command aliases.",
+      usage: "alias [name='command']",
+      examples: ["alias", "alias h='history 10'", "alias sys='repo --systems'"],
+      notes:
+        "Aliases expand the first word of a command before execution and are saved in localStorage. Built-in aliases such as exit='close' are read-only.",
+    },
     banner: {
       desc: "Display the ASCII art banner for the terminal.",
       usage: "banner",
@@ -3153,6 +3281,13 @@ function getHelpDetails() {
       examples: ["theme", "theme dark", "theme light"],
       notes:
         "Without arguments, toggles to the opposite theme. Preference is saved in your browser.",
+    },
+    unalias: {
+      desc: "Remove a custom command alias.",
+      usage: "unalias [name]",
+      examples: ["unalias h", "unalias sys"],
+      notes:
+        "Removes custom aliases saved in localStorage. Built-in aliases cannot be removed.",
     },
     uptime: {
       desc: "Display how long the current terminal session has been active.",
@@ -4037,7 +4172,13 @@ function executePipeline(input) {
   echoLine.textContent = `guest@jjalangtry.com:~$ ${input}`;
   cliOutput.insertBefore(echoLine, inputLine);
 
-  const firstCmd = filtered[0].trim().toLowerCase();
+  const firstExpansion = expandAliasCommand(filtered[0], getAliasMap());
+  if (firstExpansion.error) {
+    appendOutput(firstExpansion.error, "error-text");
+    return;
+  }
+
+  const firstCmd = firstExpansion.command.trim().toLowerCase();
   if (
     firstCmd === "repos" ||
     firstCmd.startsWith("weather ") ||
@@ -4053,7 +4194,7 @@ function executePipeline(input) {
   // Capture output from first command
   captureMode = true;
   capturedLines = [];
-  executeCommand(filtered[0], { skipEcho: true });
+  executeCommand(firstExpansion.command, { skipEcho: true });
   captureMode = false;
 
   // Combine captured text
@@ -4061,7 +4202,13 @@ function executePipeline(input) {
 
   // Process pipe segments
   for (let i = 1; i < filtered.length; i++) {
-    const pipeCmd = filtered[i].trim();
+    const pipeExpansion = expandAliasCommand(filtered[i].trim(), getAliasMap());
+    if (pipeExpansion.error) {
+      appendOutput(pipeExpansion.error, "error-text");
+      return;
+    }
+
+    const pipeCmd = pipeExpansion.command;
     const pipeCmdLower = pipeCmd.toLowerCase();
 
     if (pipeCmdLower.startsWith("grep ")) {
