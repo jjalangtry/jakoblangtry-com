@@ -1,9 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
   COMMAND_LIST,
+  VIRTUAL_HOME_PATH,
+  buildVirtualFileSystem,
   buildProjectsListOutput,
+  completeVirtualPath,
   findProjectByCommand,
+  formatVirtualDirectoryListing,
+  formatVirtualPromptPath,
   celsiusToFahrenheit,
+  getVirtualEntry,
   getOutputA11yAttrs,
   normalizeThemeCommand,
   autocompleteCommand,
@@ -13,6 +19,7 @@ import {
   formatHistoryOutput,
   grepFilter,
   parseGrepArgs,
+  parseLsArgs,
   globToRegex,
   expandGlob,
   parsePipeline,
@@ -39,11 +46,14 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  readVirtualFile,
+  resolveVirtualPath,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
   it("includes core command surface", () => {
     expect(COMMAND_LIST).toContain("help");
+    expect(COMMAND_LIST).toContain("cat");
     expect(COMMAND_LIST).toContain("projects");
     expect(COMMAND_LIST).toContain("weather");
     expect(COMMAND_LIST).toContain("sudo");
@@ -72,6 +82,157 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("flip");
     expect(COMMAND_LIST).toContain("fortune");
     expect(COMMAND_LIST).toContain("matrix");
+  });
+
+  it("builds a read-only virtual filesystem from portfolio data", () => {
+    const fs = buildVirtualFileSystem({
+      siteConfig: { resumeUrl: "https://resume.example.com" },
+      projects: [
+        {
+          name: "Link Converter",
+          url: "https://convert.example.com",
+          repo: "https://github.com/jjalangtry/link-converter",
+          description: "Convert links",
+          language: "TypeScript",
+        },
+      ],
+      projectGroups: {
+        featured: [
+          {
+            name: "Link Converter",
+            url: "https://convert.example.com",
+            repo: "https://github.com/jjalangtry/link-converter",
+          },
+        ],
+        contributions: [],
+        github: [],
+      },
+      skills: [
+        {
+          name: "Languages",
+          skills: [{ name: "C", level: 90, note: "systems work" }],
+        },
+      ],
+      experience: [
+        {
+          title: "Software Engineer",
+          org: "Example Co",
+          period: "2026",
+          description: "Built useful things.",
+          tags: ["Work"],
+        },
+      ],
+      posts: [
+        {
+          slug: "hello-terminal",
+          title: "Hello Terminal",
+          date: "2026-06-07",
+          summary: "A test post",
+          content: "Post body",
+        },
+      ],
+    });
+
+    expect(getVirtualEntry(fs, VIRTUAL_HOME_PATH)?.type).toBe("dir");
+    expect(getVirtualEntry(fs, "/home/guest/projects")?.type).toBe("dir");
+    expect(
+      readVirtualFile(fs, "/home/guest/projects/link-converter.txt").content,
+    ).toContain("Convert links");
+    expect(readVirtualFile(fs, "~/contact.txt").content).toContain(
+      "https://resume.example.com",
+    );
+    expect(readVirtualFile(fs, "~/skills/languages.txt").content).toContain(
+      "systems work",
+    );
+    expect(
+      readVirtualFile(fs, "~/experience/software-engineer.txt").content,
+    ).toContain("Example Co");
+    expect(readVirtualFile(fs, "~/blog/hello-terminal.txt").content).toContain(
+      "Post body",
+    );
+  });
+
+  it("resolves virtual paths and formats prompt paths", () => {
+    expect(resolveVirtualPath(VIRTUAL_HOME_PATH, "projects")).toBe(
+      "/home/guest/projects",
+    );
+    expect(resolveVirtualPath("/home/guest/projects", "../skills/./")).toBe(
+      "/home/guest/skills",
+    );
+    expect(resolveVirtualPath("/home/guest/projects", "~/blog")).toBe(
+      "/home/guest/blog",
+    );
+    expect(resolveVirtualPath("/home/guest", "../../")).toBe("/");
+    expect(formatVirtualPromptPath("/home/guest")).toBe("~");
+    expect(formatVirtualPromptPath("/home/guest/projects")).toBe("~/projects");
+    expect(formatVirtualPromptPath("/home")).toBe("/home");
+  });
+
+  it("parses ls arguments and formats virtual directory listings", () => {
+    const fs = buildVirtualFileSystem({
+      projects: [{ name: "Alpha App", url: "https://alpha.example.com" }],
+      projectGroups: { featured: [], contributions: [], github: [] },
+    });
+
+    expect(parseLsArgs("-la projects")).toMatchObject({
+      all: true,
+      long: true,
+      path: "projects",
+    });
+    expect(parseLsArgs("--commands")).toMatchObject({ commands: true });
+    expect(parseLsArgs("-z").error).toBe("ls: invalid option -- 'z'");
+    expect(parseLsArgs("one two").error).toContain("too many path arguments");
+
+    const home = formatVirtualDirectoryListing(fs, VIRTUAL_HOME_PATH);
+    expect(home.output).toContain("projects/");
+    expect(home.output).not.toContain(".profile");
+
+    const all = formatVirtualDirectoryListing(fs, VIRTUAL_HOME_PATH, {
+      all: true,
+    });
+    expect(all.output).toContain(".profile");
+
+    const long = formatVirtualDirectoryListing(fs, "/home/guest/projects", {
+      long: true,
+    });
+    expect(long.output).toContain("alpha-app.txt");
+    expect(long.output).toContain("-r--r--r--");
+    expect(
+      formatVirtualDirectoryListing(fs, "/home/guest/contact.txt").output,
+    ).toBe("contact.txt");
+
+    expect(formatVirtualDirectoryListing(fs, "/missing").error).toContain(
+      "No such file or directory",
+    );
+  });
+
+  it("reads virtual files and completes virtual paths", () => {
+    const fs = buildVirtualFileSystem({
+      projects: [{ name: "Alpha App", url: "https://alpha.example.com" }],
+      projectGroups: { featured: [], contributions: [], github: [] },
+    });
+
+    expect(readVirtualFile(fs, "/home/guest").error).toContain(
+      "Is a directory",
+    );
+    expect(readVirtualFile(fs, "/home/guest/nope.txt").error).toContain(
+      "No such file",
+    );
+    expect(completeVirtualPath(fs, VIRTUAL_HOME_PATH, "pro")).toEqual([
+      "projects/",
+    ]);
+    expect(completeVirtualPath(fs, VIRTUAL_HOME_PATH, ".")).toContain(
+      ".profile",
+    );
+    const homeCompletions = completeVirtualPath(fs, VIRTUAL_HOME_PATH, "");
+    expect(homeCompletions.indexOf("projects/")).toBeLessThan(
+      homeCompletions.indexOf("README.md"),
+    );
+    expect(homeCompletions).toContain("about.txt");
+    expect(completeVirtualPath(fs, "/home/guest", "projects/al")).toEqual([
+      "projects/alpha-app.txt",
+    ]);
+    expect(completeVirtualPath(fs, "/missing", "")).toEqual([]);
   });
 
   it("builds repos output with project groups", () => {
