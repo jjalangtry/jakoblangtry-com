@@ -5,6 +5,9 @@ import {
   parseGrepArgs,
   expandGlob,
   parsePipeline,
+  parseAliasAssignment,
+  formatAliasesOutput,
+  expandAliasCommand,
   buildNeofetchOutput,
   formatManPage,
   buildSkillsOutput,
@@ -243,6 +246,7 @@ const commandList = [
   "snake",
   "stats",
   "theme",
+  "unalias",
   "uptime",
   "weather",
   "which",
@@ -258,6 +262,56 @@ const commandList = [
   "close",
   "exit",
 ];
+
+const ALIAS_STORAGE_KEY = "terminal-aliases";
+let terminalAliases = loadAliases();
+
+function loadAliases() {
+  try {
+    const raw = localStorage.getItem(ALIAS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([name, value]) => name && typeof value === "string")
+        .map(([name, value]) => [name, value]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function saveAliases(aliases) {
+  try {
+    localStorage.setItem(ALIAS_STORAGE_KEY, JSON.stringify(aliases));
+  } catch {
+    // ignore storage failures; aliases still work for the current session
+  }
+}
+
+function expandAliasesInCommandLine(command) {
+  const segments = parsePipeline(command);
+  if (segments.length <= 1) {
+    return expandAliasCommand(command, terminalAliases).command;
+  }
+  return segments
+    .map((segment) => expandAliasCommand(segment, terminalAliases).command)
+    .join(" | ");
+}
+
+function executeCommandLine(command) {
+  const expandedCommand = expandAliasesInCommandLine(command);
+  const options =
+    expandedCommand === command ? {} : { displayCommand: command };
+
+  if (expandedCommand.includes("|")) {
+    executePipeline(expandedCommand, options);
+  } else {
+    executeCommand(expandedCommand, options);
+  }
+}
 
 function applyTheme(theme) {
   if (theme === "light") {
@@ -793,11 +847,12 @@ function openResume() {
  * @param {string} command - The command to execute.
  * @param {Object} [options] - Execution options.
  * @param {boolean} [options.skipEcho] - Skip echoing the command line.
+ * @param {string} [options.displayCommand] - Command text to show in history echo.
  */
 function executeCommand(command, options = {}) {
   if (!options.skipEcho) {
     const commandLine = document.createElement("div");
-    commandLine.textContent = `${getPromptPrefix()}${command}`;
+    commandLine.textContent = `${getPromptPrefix()}${options.displayCommand || command}`;
     cliOutput.insertBefore(commandLine, inputLine);
   }
 
@@ -840,6 +895,7 @@ function executeCommand(command, options = {}) {
   hostname    show hostname
   which       find a command
   alias       manage aliases
+  unalias     remove aliases
   cd          change directory
   rss         RSS feed URL
   sudo        sudo mode
@@ -910,7 +966,10 @@ Currently seeking opportunities in software engineering.`,
       appendOutput("jjalangtry.com", "info-text");
       break;
     case "alias":
-      appendOutput("alias exit='close'", "info-text");
+      appendOutput(formatAliasesOutput(terminalAliases), "info-text");
+      break;
+    case "unalias":
+      appendOutput("Usage: unalias [name] | unalias -a", "info-text");
       break;
     case "skills":
       displaySkills();
@@ -1092,6 +1151,49 @@ Currently seeking opportunities in software engineering.`,
           "guest is not in the sudoers file. This incident will be reported.",
           "error-text",
         );
+        break;
+      } else if (normalizedCommand.startsWith("alias ")) {
+        const aliasArgs = command.substring(6).trim();
+        const assignment = parseAliasAssignment(aliasArgs);
+
+        if (assignment?.error) {
+          appendOutput(`alias: ${assignment.error}`, "error-text");
+        } else if (assignment) {
+          terminalAliases = {
+            ...terminalAliases,
+            [assignment.name]: assignment.value,
+          };
+          saveAliases(terminalAliases);
+          appendOutput(
+            formatAliasesOutput({ [assignment.name]: assignment.value }),
+            "success-text",
+          );
+        } else if (terminalAliases[aliasArgs]) {
+          appendOutput(
+            formatAliasesOutput({ [aliasArgs]: terminalAliases[aliasArgs] }),
+            "info-text",
+          );
+        } else {
+          appendOutput(`alias: ${aliasArgs}: not found`, "error-text");
+        }
+        break;
+      } else if (normalizedCommand.startsWith("unalias ")) {
+        const name = command.substring(8).trim();
+        if (name === "-a") {
+          terminalAliases = {};
+          saveAliases(terminalAliases);
+          appendOutput("All aliases removed.", "success-text");
+        } else if (!name) {
+          appendOutput("Usage: unalias [name] | unalias -a", "info-text");
+        } else if (terminalAliases[name]) {
+          const remainingAliases = { ...terminalAliases };
+          delete remainingAliases[name];
+          terminalAliases = remainingAliases;
+          saveAliases(terminalAliases);
+          appendOutput(`Removed alias '${name}'.`, "success-text");
+        } else {
+          appendOutput(`unalias: ${name}: not found`, "error-text");
+        }
         break;
       } else if (
         normalizedCommand.startsWith("cd ") ||
@@ -1306,13 +1408,17 @@ Currently seeking opportunities in software engineering.`,
         exportLocalPosts();
         break;
       } else if (normalizedCommand.startsWith("which ")) {
-        const target = normalizedCommand.substring(6).trim();
-        const matches = expandGlob(target, commandList);
+        const target = command.substring(6).trim();
+        const commandMatches = expandGlob(target.toLowerCase(), commandList);
+        const aliasMatches = expandGlob(target, Object.keys(terminalAliases));
+        const matches = [
+          ...aliasMatches.map(
+            (name) => `${name}: aliased to '${terminalAliases[name]}'`,
+          ),
+          ...commandMatches.map((m) => `${m}: shell built-in`),
+        ];
         if (matches.length > 0) {
-          appendOutput(
-            matches.map((m) => `${m}: shell built-in`).join("\n"),
-            "info-text",
-          );
+          appendOutput(matches.join("\n"), "info-text");
         } else {
           appendOutput(`${target}: not found`, "error-text");
         }
@@ -2910,6 +3016,18 @@ function displayManPage(cmd) {
 
 function getHelpDetails() {
   return {
+    alias: {
+      desc: "Create, inspect, and list persistent command aliases.",
+      usage: "alias [name[='command']]",
+      examples: [
+        "alias",
+        "alias h='history 10'",
+        "alias gs='repo --systems'",
+        "alias h",
+      ],
+      notes:
+        "Aliases expand the first command word before execution, including pipeline segments, and are saved in localStorage.",
+    },
     banner: {
       desc: "Display the ASCII art banner for the terminal.",
       usage: "banner",
@@ -3154,6 +3272,13 @@ function getHelpDetails() {
       notes:
         "Without arguments, toggles to the opposite theme. Preference is saved in your browser.",
     },
+    unalias: {
+      desc: "Remove one alias or clear all aliases.",
+      usage: "unalias [name|-a]",
+      examples: ["unalias h", "unalias -a"],
+      notes:
+        "Use 'alias' to list current aliases before removing them. Clearing aliases updates localStorage immediately.",
+    },
     uptime: {
       desc: "Display how long the current terminal session has been active.",
       usage: "uptime",
@@ -3171,6 +3296,13 @@ function getHelpDetails() {
       ],
       notes:
         "Weather data is retrieved in real-time. The display format will adapt based on your device type.",
+    },
+    which: {
+      desc: "Show whether a name resolves to an alias or shell built-in.",
+      usage: "which [name|glob]",
+      examples: ["which repo", "which h", "which 'rep*'"],
+      notes:
+        "Alias matches are shown before built-in command matches. Glob patterns use * and ?.",
     },
     whoami: {
       desc: "Display information about Jakob Langtry.",
@@ -4024,7 +4156,7 @@ function exportLocalPosts() {
 
 // ── Pipe support ──────────────────────────────────────────────
 
-function executePipeline(input) {
+function executePipeline(input, options = {}) {
   const filtered = parsePipeline(input);
 
   if (filtered.length <= 1) {
@@ -4034,7 +4166,7 @@ function executePipeline(input) {
 
   // Echo the full pipeline
   const echoLine = document.createElement("div");
-  echoLine.textContent = `guest@jjalangtry.com:~$ ${input}`;
+  echoLine.textContent = `${getPromptPrefix()}${options.displayCommand || input}`;
   cliOutput.insertBefore(echoLine, inputLine);
 
   const firstCmd = filtered[0].trim().toLowerCase();
@@ -4270,6 +4402,14 @@ function initCLI() {
           completions = ["dark", "light"].filter((s) => s.startsWith(arg));
         } else if (baseCmd === "man" || baseCmd === "help") {
           completions = commandList.filter((c) => c.startsWith(arg));
+        } else if (baseCmd === "unalias") {
+          completions = Object.keys(terminalAliases).filter((name) =>
+            name.startsWith(arg),
+          );
+        } else if (baseCmd === "which") {
+          completions = [...commandList, ...Object.keys(terminalAliases)]
+            .sort()
+            .filter((name) => name.startsWith(arg));
         } else if (currentLower.startsWith("skills --category ")) {
           const catArg = currentLower.substring(18);
           completions = (terminalData.skills || [])
@@ -4280,7 +4420,7 @@ function initCLI() {
           e.target.value = `${baseCmd} ${completions[0]}`;
         } else if (completions.length > 1) {
           const commandLine = document.createElement("div");
-          commandLine.textContent = `guest@jjalangtry.com:~$ ${currentText}`;
+          commandLine.textContent = `${getPromptPrefix()}${currentText}`;
           cliOutput.insertBefore(commandLine, inputLine);
           appendOutput(completions.join("  "), "info-text");
           cliOutput.scrollTop = cliOutput.scrollHeight;
@@ -4289,13 +4429,15 @@ function initCLI() {
       }
 
       // Command name completion
-      const matches = commandList.filter((cmd) => cmd.startsWith(currentLower));
+      const matches = [...commandList, ...Object.keys(terminalAliases)]
+        .sort()
+        .filter((cmd) => cmd.startsWith(currentLower));
 
       if (matches.length === 1) {
         e.target.value = matches[0] + " ";
       } else if (matches.length > 1) {
         const commandLine = document.createElement("div");
-        commandLine.textContent = `guest@jjalangtry.com:~$ ${currentText}`;
+        commandLine.textContent = `${getPromptPrefix()}${currentText}`;
         cliOutput.insertBefore(commandLine, inputLine);
         appendOutput(matches.join("  "), "info-text");
         cliOutput.scrollTop = cliOutput.scrollHeight;
@@ -4329,11 +4471,7 @@ function initCLI() {
         historyIndex = commandHistory.length;
         currentInputBuffer = "";
         trackCommand(command);
-        if (command.includes("|")) {
-          executePipeline(command);
-        } else {
-          executeCommand(command);
-        }
+        executeCommandLine(command);
         e.target.value = "";
       }
       return;

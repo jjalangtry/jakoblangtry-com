@@ -15,6 +15,10 @@ import {
   parseGrepArgs,
   globToRegex,
   expandGlob,
+  isValidAliasName,
+  parseAliasAssignment,
+  formatAliasesOutput,
+  expandAliasCommand,
   parsePipeline,
   buildNeofetchOutput,
   formatManPage,
@@ -62,6 +66,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("pwd");
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
+    expect(COMMAND_LIST).toContain("unalias");
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
@@ -636,6 +641,68 @@ describe("terminal helpers", () => {
     expect(expandGlob("nope", items)).toEqual([]);
     expect(expandGlob("", items)).toEqual([]);
     expect(expandGlob("*", null)).toEqual([]);
+  });
+
+  it("validates and parses alias assignments", () => {
+    expect(isValidAliasName("ll")).toBe(true);
+    expect(isValidAliasName("_repo")).toBe(true);
+    expect(isValidAliasName("repo-systems")).toBe(true);
+    expect(isValidAliasName("2bad")).toBe(false);
+    expect(isValidAliasName("bad name")).toBe(false);
+
+    expect(parseAliasAssignment("ll='ls'")).toEqual({
+      name: "ll",
+      value: "ls",
+    });
+    expect(parseAliasAssignment('gs="repo --systems"')).toEqual({
+      name: "gs",
+      value: "repo --systems",
+    });
+    expect(parseAliasAssignment("weather-local=weather Syracuse NY")).toEqual({
+      name: "weather-local",
+      value: "weather Syracuse NY",
+    });
+    expect(parseAliasAssignment("ll")).toBeNull();
+    expect(parseAliasAssignment("2bad=ls")).toHaveProperty("error");
+    expect(parseAliasAssignment("empty=''")).toHaveProperty("error");
+  });
+
+  it("formats aliases in shell syntax", () => {
+    expect(formatAliasesOutput({})).toContain("No aliases defined");
+    expect(
+      formatAliasesOutput({
+        gs: "repo --systems",
+        h: "history 10",
+      }),
+    ).toBe("alias gs='repo --systems'\nalias h='history 10'");
+    expect(formatAliasesOutput({ quote: "echo can't" })).toBe(
+      "alias quote='echo can'\\''t'",
+    );
+  });
+
+  it("expands aliases while preserving arguments", () => {
+    expect(expandAliasCommand("h", { h: "history 10" })).toMatchObject({
+      command: "history 10",
+      expanded: true,
+      name: "h",
+    });
+    expect(expandAliasCommand("gs wordle", { gs: "repo --search" })).toEqual({
+      command: "repo --search wordle",
+      expanded: true,
+      name: "gs",
+      value: "repo --search",
+    });
+    expect(expandAliasCommand("  ll", { ll: "ls" }).command).toBe("  ls");
+    expect(expandAliasCommand("unknown", { h: "history" })).toEqual({
+      command: "unknown",
+      expanded: false,
+      name: "unknown",
+    });
+    expect(expandAliasCommand("", { h: "history" })).toEqual({
+      command: "",
+      expanded: false,
+      name: "",
+    });
   });
 
   it("parses pipeline segments", () => {
