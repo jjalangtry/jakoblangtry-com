@@ -18,6 +18,7 @@ import {
   buildRepositoryCloneCommand,
   resolveRepository,
   buildContributionChartAscii,
+  searchCommandHistory,
   getRandomFortune,
   flipText,
   safeCalc,
@@ -159,6 +160,7 @@ try {
 }
 let historyIndex = commandHistory.length;
 let currentInputBuffer = "";
+let historySearchState = null;
 let cursor; // Global cursor element
 let isMobileDevice = false; // Flag to track if we're on a mobile device
 
@@ -665,7 +667,7 @@ function displayOnboardingCommands() {
   const hints = document.createElement("div");
   hints.className = "keyboard-hints log-text";
   hints.textContent =
-    "Tip: Tab to autocomplete  ↑↓ history  Ctrl+L clear  Ctrl+C cancel";
+    "Tip: Tab autocomplete  ↑↓ history  Ctrl+R search  Ctrl+L clear  Ctrl+C cancel";
 
   const container = document.createElement("div");
   container.className = "onboarding-block";
@@ -845,7 +847,7 @@ function executeCommand(command, options = {}) {
   sudo        sudo mode
 
   ──────────────────────────────────────────────────────────────────────────
-  PIPES  help | grep [term]    ·    MAN  man [command]    ·    [cmd] --help
+  PIPES  help | grep [term]    ·    KEYS  Ctrl+R history search    ·    [cmd] --help
   ──────────────────────────────────────────────────────────────────────────`;
 
       // Create a div with pre-formatted text for help output
@@ -3055,9 +3057,9 @@ function getHelpDetails() {
     history: {
       desc: "Show command history for the current and previous sessions.",
       usage: "history [clear|N]",
-      examples: ["history", "history 10", "history clear"],
+      examples: ["history", "history 10", "history clear", "Ctrl+R"],
       notes:
-        "History is persisted in localStorage (up to 50 commands). Use 'history clear' to reset.",
+        "History is persisted in localStorage (up to 50 commands). Press Ctrl+R to reverse-search it, Ctrl+R again to cycle matches, Enter to run the match, or Esc/Ctrl+C to cancel. Use 'history clear' to reset.",
     },
     ls: {
       desc: "List available terminal commands.",
@@ -3776,6 +3778,141 @@ function getPromptPrefix() {
   return `${user}@jjalangtry.com:~$ `;
 }
 
+function setTerminalInputValue(inputElement, value) {
+  if (!inputElement) return;
+  inputElement.value = value;
+  inputElement.setSelectionRange(value.length, value.length);
+  inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function persistCommandHistory() {
+  try {
+    localStorage.setItem("terminal-history", JSON.stringify(commandHistory));
+  } catch (err) {
+    // ignore
+  }
+}
+
+function submitTerminalCommand(command, inputElement) {
+  commandHistory.push(command);
+  if (commandHistory.length > 50) commandHistory.shift();
+  persistCommandHistory();
+  historyIndex = commandHistory.length;
+  currentInputBuffer = "";
+  trackCommand(command);
+  if (command.includes("|")) {
+    executePipeline(command);
+  } else {
+    executeCommand(command);
+  }
+  setTerminalInputValue(inputElement, "");
+}
+
+function getHistorySearchPrompt(query, hasMatch) {
+  const label = hasMatch ? "reverse-i-search" : "failed reverse-i-search";
+  return `(${label})\`${query}': `;
+}
+
+function refreshHistorySearch(
+  inputElement,
+  startIndex = commandHistory.length,
+) {
+  if (!historySearchState) return;
+  const result = searchCommandHistory(
+    commandHistory,
+    historySearchState.query,
+    startIndex,
+  );
+  historySearchState.matchIndex = result.index;
+  historySearchState.match = result.match;
+  setPromptText(
+    getHistorySearchPrompt(historySearchState.query, !!result.match),
+  );
+  setTerminalInputValue(inputElement, result.match || "");
+}
+
+function startHistorySearch(inputElement) {
+  if (editorState || snakeActive || matrixActive || countdownActive) {
+    return false;
+  }
+  historySearchState = {
+    query: "",
+    originalInput: inputElement.value,
+    matchIndex: commandHistory.length,
+    match: null,
+  };
+  currentInputBuffer = inputElement.value;
+  refreshHistorySearch(inputElement);
+  return true;
+}
+
+function cancelHistorySearch(inputElement) {
+  const originalInput = historySearchState?.originalInput || "";
+  historySearchState = null;
+  updatePromptUser();
+  setTerminalInputValue(inputElement, originalInput);
+}
+
+function acceptHistorySearch(inputElement) {
+  const state = historySearchState;
+  historySearchState = null;
+  updatePromptUser();
+  if (state?.match) {
+    submitTerminalCommand(state.match, inputElement);
+  } else {
+    setTerminalInputValue(inputElement, state?.originalInput || "");
+  }
+}
+
+function handleHistorySearchKeydown(event) {
+  if (!historySearchState) return false;
+
+  event.preventDefault();
+  const key = event.key;
+  const inputElement = event.target;
+
+  if (key === "Enter") {
+    acceptHistorySearch(inputElement);
+    return true;
+  }
+
+  if (key === "Escape") {
+    cancelHistorySearch(inputElement);
+    return true;
+  }
+
+  if (event.ctrlKey) {
+    const ctrlKey = key.toLowerCase();
+    if (ctrlKey === "r") {
+      const startIndex =
+        historySearchState.matchIndex >= 0
+          ? historySearchState.matchIndex
+          : commandHistory.length;
+      refreshHistorySearch(inputElement, startIndex);
+      return true;
+    }
+    if (ctrlKey === "c" || ctrlKey === "g") {
+      cancelHistorySearch(inputElement);
+      return true;
+    }
+    return true;
+  }
+
+  if (key === "Backspace") {
+    historySearchState.query = historySearchState.query.slice(0, -1);
+    refreshHistorySearch(inputElement);
+    return true;
+  }
+
+  if (key.length === 1 && !event.altKey && !event.metaKey) {
+    historySearchState.query += key;
+    refreshHistorySearch(inputElement);
+    return true;
+  }
+
+  return true;
+}
+
 function updatePromptUser() {
   setPromptText(getPromptPrefix());
 }
@@ -4207,6 +4344,10 @@ function initCLI() {
 
   // Add event listener for navigating command history
   input.addEventListener("keydown", (e) => {
+    if (handleHistorySearchKeydown(e)) {
+      return;
+    }
+
     // Ctrl+L (Clear screen)
     if (e.ctrlKey && e.key.toLowerCase() === "l") {
       e.preventDefault();
@@ -4225,6 +4366,13 @@ function initCLI() {
       e.target.value = "";
       currentInputBuffer = "";
       cliOutput.scrollTop = cliOutput.scrollHeight;
+      return;
+    }
+
+    // Ctrl+R (Reverse incremental history search)
+    if (e.ctrlKey && e.key.toLowerCase() === "r") {
+      e.preventDefault();
+      startHistorySearch(e.target);
       return;
     }
 
@@ -4316,25 +4464,7 @@ function initCLI() {
       }
 
       if (command) {
-        commandHistory.push(command);
-        if (commandHistory.length > 50) commandHistory.shift();
-        try {
-          localStorage.setItem(
-            "terminal-history",
-            JSON.stringify(commandHistory),
-          );
-        } catch (err) {
-          // ignore
-        }
-        historyIndex = commandHistory.length;
-        currentInputBuffer = "";
-        trackCommand(command);
-        if (command.includes("|")) {
-          executePipeline(command);
-        } else {
-          executeCommand(command);
-        }
-        e.target.value = "";
+        submitTerminalCommand(command, e.target);
       }
       return;
     }
