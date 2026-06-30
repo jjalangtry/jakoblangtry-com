@@ -39,6 +39,9 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  parseAliasDefinition,
+  formatAliasOutput,
+  expandAliasCommand,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -62,6 +65,7 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("pwd");
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
+    expect(COMMAND_LIST).toContain("unalias");
     expect(COMMAND_LIST).toContain("which");
     expect(COMMAND_LIST).toContain("login");
     expect(COMMAND_LIST).toContain("logout");
@@ -514,6 +518,69 @@ describe("terminal helpers", () => {
     const output = formatHistoryOutput(items);
     expect(output).toContain("   1  cmd0");
     expect(output).toContain("  12  cmd11");
+  });
+
+  it("parses alias definitions and lookups", () => {
+    expect(parseAliasDefinition("")).toEqual({ type: "list" });
+    expect(parseAliasDefinition("ll")).toEqual({ type: "lookup", name: "ll" });
+    expect(parseAliasDefinition("ll='ls -la'")).toEqual({
+      type: "set",
+      name: "ll",
+      value: "ls -la",
+    });
+    expect(parseAliasDefinition('reposc="repo --lang C"')).toEqual({
+      type: "set",
+      name: "reposc",
+      value: "repo --lang C",
+    });
+    expect(parseAliasDefinition("bad name")).toMatchObject({ type: "error" });
+    expect(parseAliasDefinition("1bad='help'")).toMatchObject({
+      type: "error",
+    });
+    expect(parseAliasDefinition("ll='ls")).toMatchObject({ type: "error" });
+  });
+
+  it("formats alias lists and missing lookups", () => {
+    expect(formatAliasOutput({ z: "repo", a: "help" })).toBe(
+      "alias a='help'\nalias z='repo'",
+    );
+    expect(formatAliasOutput({ say: "echo it's ok" }, "say")).toBe(
+      "alias say='echo it'\\''s ok'",
+    );
+    expect(formatAliasOutput({}, "missing")).toBe("alias: missing: not found");
+    expect(formatAliasOutput({})).toContain("No aliases defined");
+  });
+
+  it("expands aliases with args, nested aliases, and pipelines", () => {
+    const aliases = {
+      h: "help",
+      reposc: "repo --lang C",
+      hc: "h | grep repo",
+    };
+
+    expect(expandAliasCommand("h", aliases)).toEqual({
+      command: "help",
+      expanded: true,
+    });
+    expect(expandAliasCommand("reposc --search shell", aliases)).toEqual({
+      command: "repo --lang C --search shell",
+      expanded: true,
+    });
+    expect(expandAliasCommand("hc", aliases)).toEqual({
+      command: "help | grep repo",
+      expanded: true,
+    });
+    expect(expandAliasCommand("weather London", aliases)).toEqual({
+      command: "weather London",
+      expanded: false,
+    });
+  });
+
+  it("prevents alias expansion loops", () => {
+    const result = expandAliasCommand("a", { a: "b", b: "a" });
+    expect(result.command).toBe("a");
+    expect(result.expanded).toBe(false);
+    expect(result.error).toContain("a -> b -> a");
   });
 
   it("grepFilter matches with simple substring (default)", () => {
