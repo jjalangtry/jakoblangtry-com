@@ -39,6 +39,16 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  VIRTUAL_HOME_PATH,
+  buildVirtualFileSystem,
+  normalizeVirtualPath,
+  formatVirtualPath,
+  resolveVirtualPath,
+  getVirtualLsResult,
+  getVirtualCdResult,
+  getVirtualCatResult,
+  getVirtualTreeResult,
+  getVirtualPathCompletions,
 } from "../../src/lib/terminal/index.js";
 
 describe("terminal helpers", () => {
@@ -60,6 +70,8 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("snake");
     expect(COMMAND_LIST).toContain("stats");
     expect(COMMAND_LIST).toContain("pwd");
+    expect(COMMAND_LIST).toContain("cat");
+    expect(COMMAND_LIST).toContain("tree");
     expect(COMMAND_LIST).toContain("hostname");
     expect(COMMAND_LIST).toContain("alias");
     expect(COMMAND_LIST).toContain("which");
@@ -304,6 +316,22 @@ describe("terminal helpers", () => {
           ],
         },
         "--systems",
+      ),
+    ).toContain("No repositories match");
+    expect(
+      buildRepoExplorerOutput(
+        {
+          featured: [],
+          contributions: [],
+          github: [
+            {
+              name: "read-faster",
+              url: "https://github.com/jjalangtry/read-faster",
+              language: "Swift",
+            },
+          ],
+        },
+        "does-not-exist",
       ),
     ).toContain("No repositories match");
   });
@@ -669,6 +697,207 @@ describe("terminal helpers", () => {
     expect(parsePipeline("   ")).toEqual([]);
   });
 
+  const virtualFsFixture = () =>
+    buildVirtualFileSystem({
+      siteConfig: { resumeUrl: "https://resume.example.com" },
+      projects: [
+        {
+          name: "Link Converter",
+          url: "https://convert.example.com",
+          repo: "https://github.com/jjalangtry/convert",
+          description: "Convert music links",
+          language: "TypeScript",
+        },
+      ],
+      projectGroups: {
+        featured: [
+          {
+            name: "Link Converter",
+            url: "https://convert.example.com",
+            repo: "https://github.com/jjalangtry/convert",
+            description: "Convert music links",
+            language: "TypeScript",
+          },
+        ],
+        contributions: [],
+        github: [
+          {
+            name: "Unix Tool",
+            url: "https://github.com/jjalangtry/unix-tool",
+            description: "C utility",
+            language: "C",
+          },
+        ],
+      },
+      skills: [
+        {
+          name: "Systems",
+          skills: [{ name: "C", level: 90, note: "Unix tools" }],
+        },
+      ],
+      posts: [
+        {
+          slug: "hello-terminal",
+          title: "Hello Terminal",
+          date: "2026-01-01",
+          summary: "A terminal note.",
+          content: "Portfolio filesystem content.",
+        },
+      ],
+    });
+
+  it("builds a portfolio virtual filesystem from site data", () => {
+    const fs = virtualFsFixture();
+
+    expect(
+      resolveVirtualPath(fs, VIRTUAL_HOME_PATH, "README.md"),
+    ).toMatchObject({
+      ok: true,
+      path: "/home/guest/README.md",
+    });
+    expect(resolveVirtualPath(fs, VIRTUAL_HOME_PATH, "projects")).toMatchObject(
+      {
+        ok: true,
+        path: "/home/guest/projects",
+      },
+    );
+    expect(
+      getVirtualCatResult(fs, VIRTUAL_HOME_PATH, "projects/link-converter.txt")
+        .output,
+    ).toContain("Convert music links");
+    expect(
+      getVirtualCatResult(fs, VIRTUAL_HOME_PATH, "repos/unix-tool.txt").output,
+    ).toContain("git clone https://github.com/jjalangtry/unix-tool.git");
+    expect(
+      getVirtualCatResult(fs, VIRTUAL_HOME_PATH, "blog/hello-terminal.md")
+        .output,
+    ).toContain("Portfolio filesystem content.");
+  });
+
+  it("normalizes virtual paths with home, absolute, relative, and parent segments", () => {
+    expect(normalizeVirtualPath(VIRTUAL_HOME_PATH, "")).toBe(VIRTUAL_HOME_PATH);
+    expect(normalizeVirtualPath("/home/guest/projects", "../skills")).toBe(
+      "/home/guest/skills",
+    );
+    expect(normalizeVirtualPath("/home/guest/projects", "~/repos")).toBe(
+      "/home/guest/repos",
+    );
+    expect(normalizeVirtualPath("/home/guest/projects", "/home/guest")).toBe(
+      VIRTUAL_HOME_PATH,
+    );
+    expect(normalizeVirtualPath("/home/guest", "../../../")).toBe("/");
+    expect(formatVirtualPath("/home/guest/projects")).toBe("~/projects");
+  });
+
+  it("lists virtual directories and reports ls errors", () => {
+    const fs = virtualFsFixture();
+
+    const home = getVirtualLsResult(fs, VIRTUAL_HOME_PATH);
+    expect(home.ok).toBe(true);
+    expect(home.output).toContain("projects/");
+    expect(home.output).toContain("README.md");
+
+    const longListing = getVirtualLsResult(fs, VIRTUAL_HOME_PATH, "-l repos");
+    expect(longListing.output).toContain("-r--r--r--");
+    expect(longListing.output).toContain("unix-tool.txt");
+
+    const fileListing = getVirtualLsResult(fs, VIRTUAL_HOME_PATH, "resume.url");
+    expect(fileListing.output).toBe("resume.url");
+
+    const missing = getVirtualLsResult(fs, VIRTUAL_HOME_PATH, "missing");
+    expect(missing).toEqual({
+      ok: false,
+      error: "ls: cannot access 'missing': No such file or directory",
+    });
+
+    const longHome = getVirtualLsResult(fs, VIRTUAL_HOME_PATH, "-l --all");
+    expect(longHome.output).toContain("dr-xr-xr-x");
+    expect(longHome.output).toContain("projects/");
+  });
+
+  it("changes directories only when virtual targets are directories", () => {
+    const fs = virtualFsFixture();
+
+    expect(getVirtualCdResult(fs, VIRTUAL_HOME_PATH, "projects")).toEqual({
+      ok: true,
+      path: "/home/guest/projects",
+    });
+    expect(getVirtualCdResult(fs, "/home/guest/projects", "..")).toEqual({
+      ok: true,
+      path: VIRTUAL_HOME_PATH,
+    });
+    expect(getVirtualCdResult(fs, "/home/guest/projects", "")).toEqual({
+      ok: true,
+      path: VIRTUAL_HOME_PATH,
+    });
+    expect(getVirtualCdResult(fs, VIRTUAL_HOME_PATH, "README.md")).toEqual({
+      ok: false,
+      error: "cd: not a directory: README.md",
+    });
+    expect(getVirtualCdResult(fs, VIRTUAL_HOME_PATH, "missing")).toEqual({
+      ok: false,
+      error: "cd: no such file or directory: missing",
+    });
+  });
+
+  it("reads virtual files and rejects directories or missing paths", () => {
+    const fs = virtualFsFixture();
+
+    expect(
+      getVirtualCatResult(fs, VIRTUAL_HOME_PATH, "about.txt").output,
+    ).toContain("Jakob Langtry");
+    expect(getVirtualCatResult(fs, VIRTUAL_HOME_PATH, "")).toEqual({
+      ok: false,
+      error: "cat: missing file operand",
+    });
+    expect(getVirtualCatResult(fs, VIRTUAL_HOME_PATH, "projects")).toEqual({
+      ok: false,
+      error: "cat: projects: Is a directory",
+    });
+    expect(getVirtualCatResult(fs, VIRTUAL_HOME_PATH, "nope.txt")).toEqual({
+      ok: false,
+      error: "cat: nope.txt: No such file or directory",
+    });
+  });
+
+  it("renders virtual tree output and path completions", () => {
+    const fs = virtualFsFixture();
+
+    const tree = getVirtualTreeResult(fs, VIRTUAL_HOME_PATH, "projects");
+    expect(tree.ok).toBe(true);
+    expect(tree.output).toContain("~/projects");
+    expect(tree.output).toContain("├──");
+    expect(tree.output).toContain("link-converter.txt");
+
+    const homeTree = getVirtualTreeResult(fs, VIRTUAL_HOME_PATH);
+    expect(homeTree.output).toContain("projects/");
+    expect(homeTree.output).toContain("│   ├── index.txt");
+
+    expect(getVirtualTreeResult(fs, VIRTUAL_HOME_PATH, "README.md")).toEqual({
+      ok: true,
+      output: "~/README.md",
+      path: "/home/guest/README.md",
+    });
+
+    expect(getVirtualTreeResult(fs, VIRTUAL_HOME_PATH, "missing")).toEqual({
+      ok: false,
+      error: "tree: missing: No such file or directory",
+    });
+    expect(getVirtualPathCompletions(fs, VIRTUAL_HOME_PATH, "pro")).toEqual([
+      "projects/",
+    ]);
+    expect(
+      getVirtualPathCompletions(fs, VIRTUAL_HOME_PATH, "projects/l", {
+        filesOnly: true,
+      }),
+    ).toEqual(["projects/link-converter.txt"]);
+    expect(
+      getVirtualPathCompletions(fs, VIRTUAL_HOME_PATH, "README", {
+        directoriesOnly: true,
+      }),
+    ).toEqual([]);
+  });
+
   it("builds neofetch output with site info", () => {
     const output = buildNeofetchOutput("2.4.7", "Dark", 26, "3m 22s");
     expect(output).toContain("guest@jjalangtry.com");
@@ -961,6 +1190,12 @@ describe("terminal helpers", () => {
   it("safeCalc returns error for invalid characters", () => {
     const result = safeCalc("require('fs')");
     expect(result).toHaveProperty("error");
+  });
+
+  it("safeCalc returns error for malformed expressions", () => {
+    expect(safeCalc("sqrt(")).toEqual({
+      error: "Could not evaluate expression.",
+    });
   });
 
   it("safeCalc handles division by zero as Infinity", () => {
