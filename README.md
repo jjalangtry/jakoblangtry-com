@@ -40,10 +40,16 @@ repo --search term    # search names, descriptions, languages, and URLs
 repo <name|number>    # show source/live/clone details
 repo open <name>      # open the source repository
 repo clone <name>     # print a git clone command
+repo files <name>     # list root files via GitHub's contents API
+repo files <name> src # list a directory
+repo readme <name>    # print the repository README in-terminal
+repo cat <name> PATH  # print a tracked file, truncated for terminal safety
 ```
 
 The catalog is static and sourced from `public/data/projects.json`, which keeps
-the website usable without GitHub API credentials at runtime.
+the website usable without GitHub API credentials at runtime. Content browsing
+commands call GitHub's public API on demand, so public repositories can be
+inspected from the terminal without adding API keys.
 
 ## Build
 

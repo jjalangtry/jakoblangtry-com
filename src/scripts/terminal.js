@@ -16,6 +16,12 @@ import {
   buildReposOutput,
   buildRepoExplorerOutput,
   buildRepositoryCloneCommand,
+  buildGitHubContentsApiUrl,
+  buildGitHubReadmeApiUrl,
+  buildRepositoryFilesOutput,
+  buildRepositoryReadmeOutput,
+  buildRepositoryFileOutput,
+  parseRepositoryContentArgs,
   resolveRepository,
   buildContributionChartAscii,
   getRandomFortune,
@@ -204,6 +210,7 @@ function loadTerminalDataFromDOM() {
 }
 
 const terminalData = loadTerminalDataFromDOM();
+const MAX_REPO_CAT_BYTES = 1024 * 1024;
 
 // Load terminal logic functions. In a real module setup we would import, but
 // for a vanilla script we need to ensure the logic exists here if not bundled.
@@ -1220,8 +1227,24 @@ Currently seeking opportunities in software engineering.`,
         break;
       } else if (normalizedCommand.startsWith("repo ")) {
         const repoArgs = command.substring(5).trim();
+        const contentMatch = repoArgs.match(
+          /^(files|ls|readme|cat|show)\b\s*(.*)$/i,
+        );
         const openMatch = repoArgs.match(/^(open|view)\s+(.+)$/i);
         const cloneMatch = repoArgs.match(/^clone\s+(.+)$/i);
+
+        if (contentMatch) {
+          const action = contentMatch[1].toLowerCase();
+          const contentArgs = contentMatch[2].trim();
+          if (action === "files" || action === "ls") {
+            displayRepositoryFiles(contentArgs);
+          } else if (action === "readme") {
+            displayRepositoryReadme(contentArgs);
+          } else {
+            displayRepositoryFile(contentArgs);
+          }
+          break;
+        }
 
         if (openMatch) {
           const entry = resolveRepository(
@@ -1441,6 +1464,156 @@ async function fetchContributionChart() {
       `Could not fetch contribution chart: ${err.message}. Try 'github' to open profile.`,
       "info-text",
     );
+  }
+}
+
+async function fetchGitHubJson(url, unavailableMessage) {
+  if (!url) {
+    appendOutput(
+      "This catalog entry does not point to a GitHub repository that can be browsed.",
+      "error-text",
+    );
+    return null;
+  }
+
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (res.status === 404) {
+      appendOutput(unavailableMessage, "error-text");
+      return null;
+    }
+    if (!res.ok) {
+      appendOutput(
+        `GitHub API request failed (${res.status}). Try 'repo open <name>' to view it on GitHub.`,
+        "error-text",
+      );
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    appendOutput(`Could not reach GitHub: ${err.message}`, "error-text");
+    return null;
+  }
+}
+
+async function fetchGitHubTextContent(content) {
+  if (content?.download_url) {
+    const res = await fetch(content.download_url);
+    if (!res.ok) {
+      throw new Error(`raw file request failed (${res.status})`);
+    }
+    return await res.text();
+  }
+
+  if (content?.content && content?.encoding === "base64") {
+    const binary = atob(content.content.replace(/\s/g, ""));
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  return "";
+}
+
+async function displayRepositoryFiles(argsString) {
+  const parsed = parseRepositoryContentArgs(
+    terminalData.projectGroups,
+    argsString,
+  );
+  if (parsed.error) {
+    appendOutput(parsed.error, "error-text");
+    return;
+  }
+
+  const url = buildGitHubContentsApiUrl(parsed.entry, parsed.path);
+  const location = parsed.path
+    ? `${parsed.entry.name}/${parsed.path}`
+    : parsed.entry.name;
+  appendOutput(`Fetching repository files for ${location}...`, "info-text");
+  const data = await fetchGitHubJson(
+    url,
+    `No repository path found for ${location}.`,
+  );
+  if (!data) return;
+
+  appendOutput(
+    buildRepositoryFilesOutput(parsed.entry, data, parsed.path),
+    "info-text",
+  );
+}
+
+async function displayRepositoryReadme(argsString) {
+  const parsed = parseRepositoryContentArgs(
+    terminalData.projectGroups,
+    argsString,
+  );
+  if (parsed.error) {
+    appendOutput(parsed.error, "error-text");
+    return;
+  }
+
+  const url = buildGitHubReadmeApiUrl(parsed.entry);
+  appendOutput(`Fetching README for ${parsed.entry.name}...`, "info-text");
+  const data = await fetchGitHubJson(
+    url,
+    `No README found for ${parsed.entry.name}.`,
+  );
+  if (!data) return;
+
+  try {
+    const text = await fetchGitHubTextContent(data);
+    appendOutput(buildRepositoryReadmeOutput(parsed.entry, text), "info-text");
+  } catch (err) {
+    appendOutput(`Could not read README: ${err.message}`, "error-text");
+  }
+}
+
+async function displayRepositoryFile(argsString) {
+  const parsed = parseRepositoryContentArgs(
+    terminalData.projectGroups,
+    argsString,
+    {
+      requiresPath: true,
+    },
+  );
+  if (parsed.error) {
+    appendOutput(parsed.error, "error-text");
+    return;
+  }
+
+  const url = buildGitHubContentsApiUrl(parsed.entry, parsed.path);
+  appendOutput(`Fetching ${parsed.entry.name}/${parsed.path}...`, "info-text");
+  const data = await fetchGitHubJson(
+    url,
+    `No file found at ${parsed.entry.name}/${parsed.path}.`,
+  );
+  if (!data) return;
+
+  if (Array.isArray(data) || data.type === "dir") {
+    appendOutput(
+      `${parsed.entry.name}/${parsed.path} is a directory. Use 'repo files ${parsed.entry.name} ${parsed.path}' to list it.`,
+      "info-text",
+    );
+    return;
+  }
+
+  if (Number(data.size) > MAX_REPO_CAT_BYTES) {
+    appendOutput(
+      `${parsed.entry.name}/${parsed.path} is too large to print in the terminal. Use 'repo open ${parsed.entry.name}' to view it on GitHub.`,
+      "error-text",
+    );
+    return;
+  }
+
+  try {
+    const text = await fetchGitHubTextContent(data);
+    appendOutput(
+      buildRepositoryFileOutput(parsed.entry, parsed.path, text),
+      "info-text",
+    );
+  } catch (err) {
+    appendOutput(`Could not read file: ${err.message}`, "error-text");
   }
 }
 
@@ -3109,18 +3282,22 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: "Browse, inspect, open, and clone source repositories from the terminal catalog.",
-      usage: "repo [--systems|--lang LANG|--search TERM|NAME|NUMBER]",
+      desc: "Browse, inspect, open, clone, and read source repositories from the terminal catalog.",
+      usage:
+        "repo [--systems|--lang LANG|--search TERM|NAME|NUMBER|files NAME [path]|readme NAME|cat NAME PATH]",
       examples: [
         "repo",
         "repo --systems",
         "repo --lang C",
         "repo jakobs-ls-remake",
+        "repo files wordlehelper",
+        "repo readme jakobs-ls-remake",
+        "repo cat Unix-Permissions-Game README.md",
         "repo open wordlehelper",
         "repo clone 7",
       ],
       notes:
-        "The catalog is sourced from public/data/projects.json and includes deployed apps, contributions, GitHub repos, and forks.",
+        "The catalog is sourced from public/data/projects.json. files/readme/cat use GitHub's public contents API, so private or rate-limited repositories may be unavailable.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",
@@ -4041,10 +4218,15 @@ function executePipeline(input) {
   if (
     firstCmd === "repos" ||
     firstCmd.startsWith("weather ") ||
-    firstCmd.startsWith("curl ")
+    firstCmd.startsWith("curl ") ||
+    firstCmd.startsWith("repo files ") ||
+    firstCmd.startsWith("repo ls ") ||
+    firstCmd.startsWith("repo readme ") ||
+    firstCmd.startsWith("repo cat ") ||
+    firstCmd.startsWith("repo show ")
   ) {
     appendOutput(
-      "Pipe is not supported for async commands (repos, weather, curl).",
+      "Pipe is not supported for async commands (repos, repo content, weather, curl).",
       "error-text",
     );
     return;

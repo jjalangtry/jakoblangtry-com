@@ -28,6 +28,14 @@ import {
   buildRepoExplorerOutput,
   buildRepositoryCatalog,
   buildRepositoryCloneCommand,
+  normalizeRepositoryPath,
+  getGitHubRepoParts,
+  buildGitHubContentsApiUrl,
+  buildGitHubReadmeApiUrl,
+  buildRepositoryFilesOutput,
+  buildRepositoryReadmeOutput,
+  buildRepositoryFileOutput,
+  parseRepositoryContentArgs,
   getProjectSourceUrl,
   getRepositorySlug,
   isSystemsRepository,
@@ -324,6 +332,125 @@ describe("terminal helpers", () => {
       }),
     ).toBe("git clone https://github.com/jjalangtry/wordlehelper.git");
     expect(buildRepositoryCloneCommand(null)).toBe("");
+  });
+
+  it("builds GitHub contents URLs for repository browsing", () => {
+    const entry = {
+      sourceUrl: "https://github.com/jjalangtry/jakobs-ls-remake.git",
+    };
+
+    expect(normalizeRepositoryPath("/src/./main.c/")).toBe("src/main.c");
+    expect(normalizeRepositoryPath("../README.md")).toBe("README.md");
+    expect(getGitHubRepoParts(entry)).toEqual({
+      owner: "jjalangtry",
+      repo: "jakobs-ls-remake",
+    });
+    expect(getGitHubRepoParts("https://example.com/source")).toBeNull();
+    expect(buildGitHubContentsApiUrl(entry)).toBe(
+      "https://api.github.com/repos/jjalangtry/jakobs-ls-remake/contents",
+    );
+    expect(buildGitHubContentsApiUrl(entry, "src/main file.c")).toBe(
+      "https://api.github.com/repos/jjalangtry/jakobs-ls-remake/contents/src/main%20file.c",
+    );
+    expect(buildGitHubReadmeApiUrl(entry)).toBe(
+      "https://api.github.com/repos/jjalangtry/jakobs-ls-remake/readme",
+    );
+    expect(
+      buildGitHubContentsApiUrl({ sourceUrl: "https://example.com/x" }),
+    ).toBe("");
+  });
+
+  it("parses repository content command targets and paths", () => {
+    const groups = {
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jjalangtry.com",
+          repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "Unix Permissions Game",
+          url: "https://github.com/jjalangtry/Unix-Permissions-Game",
+          language: "C",
+        },
+      ],
+    };
+
+    expect(
+      parseRepositoryContentArgs(groups, "Link Converter src/index.ts"),
+    ).toMatchObject({
+      entry: expect.objectContaining({ name: "Link Converter" }),
+      path: "src/index.ts",
+      error: "",
+    });
+    expect(parseRepositoryContentArgs(groups, "2 README.md")).toMatchObject({
+      entry: expect.objectContaining({ name: "Unix Permissions Game" }),
+      path: "README.md",
+    });
+    expect(
+      parseRepositoryContentArgs(groups, "Unix Permissions Game", {
+        requiresPath: true,
+      }),
+    ).toMatchObject({
+      entry: expect.objectContaining({ name: "Unix Permissions Game" }),
+      error: "Missing file path. Usage: repo cat Unix Permissions Game <path>",
+    });
+    expect(parseRepositoryContentArgs(groups, "")).toMatchObject({
+      entry: null,
+      error: "Missing repository. Usage: repo files <name|number> [path]",
+    });
+    expect(parseRepositoryContentArgs(groups, "missing")).toMatchObject({
+      entry: null,
+      error: "No repository matches 'missing'.",
+    });
+  });
+
+  it("formats repository file listings, README content, and file content", () => {
+    const entry = {
+      name: "wordlehelper",
+      sourceUrl: "https://github.com/jjalangtry/wordlehelper",
+    };
+    const listing = buildRepositoryFilesOutput(entry, [
+      { name: "main.c", type: "file", size: 2048 },
+      { name: "src", type: "dir" },
+      { path: "LICENSE", type: "file", size: 900 },
+    ]);
+
+    expect(listing).toContain("Repository files: wordlehelper");
+    expect(listing.indexOf("src")).toBeLessThan(listing.indexOf("main.c"));
+    expect(listing).toContain("2.0 KB");
+    expect(listing).toContain("repo cat wordlehelper <path>");
+    expect(buildRepositoryFilesOutput(entry, [], "src")).toBe(
+      "No files found in wordlehelper/src.",
+    );
+
+    const readme = buildRepositoryReadmeOutput(entry, "hello\nworld", 100);
+    expect(readme).toContain("README: wordlehelper");
+    expect(readme).toContain("hello\nworld");
+    expect(buildRepositoryReadmeOutput(entry, "", 100)).toBe(
+      "README for wordlehelper is empty or unavailable.",
+    );
+    expect(buildRepositoryReadmeOutput(entry, "abcdef", 3)).toContain(
+      "[README truncated",
+    );
+
+    const file = buildRepositoryFileOutput(
+      entry,
+      "src/main.c",
+      "int main() {}",
+      100,
+    );
+    expect(file).toContain("File: wordlehelper/src/main.c");
+    expect(file).toContain("int main() {}");
+    expect(buildRepositoryFileOutput(entry, "empty.txt", "", 100)).toBe(
+      "wordlehelper/empty.txt is empty or unavailable.",
+    );
+    expect(buildRepositoryFileOutput(entry, "big.txt", "abcdef", 3)).toContain(
+      "[file truncated",
+    );
   });
 
   it("builds contribution chart ASCII from API data", () => {
