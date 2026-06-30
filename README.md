@@ -45,6 +45,15 @@ repo clone <name>     # print a git clone command
 The catalog is static and sourced from `public/data/projects.json`, which keeps
 the website usable without GitHub API credentials at runtime.
 
+## Terminal Keyboard Shortcuts
+
+- `Tab` completes command names and supported command arguments.
+- `Up` / `Down` walks through persisted command history.
+- `Ctrl+R` starts Bash-style reverse history search. Type to narrow matches,
+  press `Ctrl+R` again to cycle older matches, `Enter` to run the selected
+  command, or `Esc` / `Ctrl+C` to cancel.
+- `Ctrl+L` clears the terminal output while preserving history.
+
 ## Build
 
 ```bash

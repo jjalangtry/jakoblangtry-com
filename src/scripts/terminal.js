@@ -22,6 +22,7 @@ import {
   flipText,
   safeCalc,
   renderBigTime,
+  searchCommandHistory,
 } from "../lib/terminal/index.js";
 
 // Global variables for managing input and command history
@@ -159,6 +160,7 @@ try {
 }
 let historyIndex = commandHistory.length;
 let currentInputBuffer = "";
+let reverseSearchState = null;
 let cursor; // Global cursor element
 let isMobileDevice = false; // Flag to track if we're on a mobile device
 
@@ -665,7 +667,7 @@ function displayOnboardingCommands() {
   const hints = document.createElement("div");
   hints.className = "keyboard-hints log-text";
   hints.textContent =
-    "Tip: Tab to autocomplete  ↑↓ history  Ctrl+L clear  Ctrl+C cancel";
+    "Tip: Tab autocomplete  ↑↓ history  Ctrl+R search  Ctrl+L clear  Ctrl+C cancel";
 
   const container = document.createElement("div");
   container.className = "onboarding-block";
@@ -845,7 +847,7 @@ function executeCommand(command, options = {}) {
   sudo        sudo mode
 
   ──────────────────────────────────────────────────────────────────────────
-  PIPES  help | grep [term]    ·    MAN  man [command]    ·    [cmd] --help
+  PIPES  help | grep [term]    ·    HISTORY  Ctrl+R search    ·    MAN  man [command]
   ──────────────────────────────────────────────────────────────────────────`;
 
       // Create a div with pre-formatted text for help output
@@ -3055,9 +3057,9 @@ function getHelpDetails() {
     history: {
       desc: "Show command history for the current and previous sessions.",
       usage: "history [clear|N]",
-      examples: ["history", "history 10", "history clear"],
+      examples: ["history", "history 10", "history clear", "Ctrl+R"],
       notes:
-        "History is persisted in localStorage (up to 50 commands). Use 'history clear' to reset.",
+        "History is persisted in localStorage (up to 50 commands). Press Ctrl+R for Bash-style reverse search; type to narrow, press Ctrl+R again to cycle older matches, Enter to run, or Esc/Ctrl+C to cancel. Use 'history clear' to reset.",
     },
     ls: {
       desc: "List available terminal commands.",
@@ -4205,8 +4207,154 @@ function initCLI() {
   input.addEventListener("click", updateCursorPosition);
   input.addEventListener("select", updateCursorPosition);
 
+  function moveInputCursorToEnd(inputElement) {
+    setTimeout(() => {
+      inputElement.selectionStart = inputElement.selectionEnd =
+        inputElement.value.length;
+      updateCursorPosition();
+    }, 0);
+  }
+
+  function updateReverseSearchDisplay(inputElement, fromIndex) {
+    if (!reverseSearchState) return;
+    const match = searchCommandHistory(
+      commandHistory,
+      reverseSearchState.query,
+      fromIndex,
+    );
+    reverseSearchState.matchIndex = match ? match.index : commandHistory.length;
+    reverseSearchState.matchValue = match ? match.value : "";
+
+    const mode = match ? "reverse-i-search" : "failed reverse-i-search";
+    setPromptText(`(${mode})\`${reverseSearchState.query}': `);
+    inputElement.value = match ? match.value : reverseSearchState.query;
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+    moveInputCursorToEnd(inputElement);
+  }
+
+  function startReverseSearch(inputElement) {
+    if (editorState) return false;
+    if (commandHistory.length === 0) {
+      appendOutput("No commands in history to search.", "info-text");
+      return true;
+    }
+
+    reverseSearchState = {
+      originalInput: inputElement.value,
+      query: "",
+      matchIndex: commandHistory.length,
+      matchValue: "",
+    };
+    currentInputBuffer = inputElement.value;
+    historyIndex = commandHistory.length;
+    updateReverseSearchDisplay(inputElement, commandHistory.length);
+    return true;
+  }
+
+  function cancelReverseSearch(inputElement) {
+    if (!reverseSearchState) return;
+    const originalInput = reverseSearchState.originalInput;
+    reverseSearchState = null;
+    setPromptText(getPromptPrefix());
+    inputElement.value = originalInput;
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+    moveInputCursorToEnd(inputElement);
+  }
+
+  function acceptReverseSearch(inputElement) {
+    if (!reverseSearchState) return "";
+    const accepted =
+      reverseSearchState.matchValue || reverseSearchState.query || "";
+    reverseSearchState = null;
+    setPromptText(getPromptPrefix());
+    inputElement.value = accepted;
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+    return accepted;
+  }
+
+  function submitTerminalInput(inputElement, rawInput) {
+    const command = rawInput.trim();
+
+    // Editor mode handling
+    if (editorState) {
+      inputElement.value = "";
+      handleEditorInput(command, rawInput);
+      return;
+    }
+
+    if (command) {
+      commandHistory.push(command);
+      if (commandHistory.length > 50) commandHistory.shift();
+      try {
+        localStorage.setItem(
+          "terminal-history",
+          JSON.stringify(commandHistory),
+        );
+      } catch (err) {
+        // ignore
+      }
+      historyIndex = commandHistory.length;
+      currentInputBuffer = "";
+      trackCommand(command);
+      if (command.includes("|")) {
+        executePipeline(command);
+      } else {
+        executeCommand(command);
+      }
+      inputElement.value = "";
+    }
+  }
+
   // Add event listener for navigating command history
   input.addEventListener("keydown", (e) => {
+    if (reverseSearchState) {
+      if (e.ctrlKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        updateReverseSearchDisplay(e.target, reverseSearchState.matchIndex);
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const accepted = acceptReverseSearch(e.target);
+        submitTerminalInput(e.target, accepted);
+        return;
+      }
+
+      if (
+        e.key === "Escape" ||
+        (e.ctrlKey && ["c", "g"].includes(e.key.toLowerCase()))
+      ) {
+        e.preventDefault();
+        cancelReverseSearch(e.target);
+        return;
+      }
+
+      if (e.key === "Backspace") {
+        e.preventDefault();
+        reverseSearchState.query = reverseSearchState.query.slice(0, -1);
+        updateReverseSearchDisplay(e.target, commandHistory.length);
+        return;
+      }
+
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+        e.preventDefault();
+        reverseSearchState.query += e.key;
+        updateReverseSearchDisplay(e.target, commandHistory.length);
+        return;
+      }
+
+      e.preventDefault();
+      return;
+    }
+
+    // Ctrl+R (Reverse command history search)
+    if (e.ctrlKey && e.key.toLowerCase() === "r") {
+      e.preventDefault();
+      startReverseSearch(e.target);
+      return;
+    }
+
     // Ctrl+L (Clear screen)
     if (e.ctrlKey && e.key.toLowerCase() === "l") {
       e.preventDefault();
@@ -4305,37 +4453,7 @@ function initCLI() {
 
     if (e.key === "Enter") {
       e.preventDefault();
-      const rawInput = e.target.value;
-      const command = rawInput.trim();
-
-      // Editor mode handling
-      if (editorState) {
-        e.target.value = "";
-        handleEditorInput(command, rawInput);
-        return;
-      }
-
-      if (command) {
-        commandHistory.push(command);
-        if (commandHistory.length > 50) commandHistory.shift();
-        try {
-          localStorage.setItem(
-            "terminal-history",
-            JSON.stringify(commandHistory),
-          );
-        } catch (err) {
-          // ignore
-        }
-        historyIndex = commandHistory.length;
-        currentInputBuffer = "";
-        trackCommand(command);
-        if (command.includes("|")) {
-          executePipeline(command);
-        } else {
-          executeCommand(command);
-        }
-        e.target.value = "";
-      }
+      submitTerminalInput(e.target, e.target.value);
       return;
     }
 
@@ -4362,9 +4480,7 @@ function initCLI() {
         break;
     }
     // Move cursor to end of input
-    setTimeout(() => {
-      e.target.selectionStart = e.target.selectionEnd = e.target.value.length;
-    }, 0);
+    moveInputCursorToEnd(e.target);
   });
 
   // Global typing listener
