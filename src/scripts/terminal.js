@@ -15,7 +15,11 @@ import {
   buildStatsOutput,
   buildReposOutput,
   buildRepoExplorerOutput,
+  buildVirtualCatOutput,
+  buildVirtualFilesystem,
+  buildVirtualTreeOutput,
   buildRepositoryCloneCommand,
+  getVirtualPathCompletions,
   resolveRepository,
   buildContributionChartAscii,
   getRandomFortune,
@@ -213,6 +217,7 @@ const commandList = [
   "banner",
   "blog",
   "calc",
+  "cat",
   "clear",
   "contact",
   "converter",
@@ -243,6 +248,7 @@ const commandList = [
   "snake",
   "stats",
   "theme",
+  "tree",
   "uptime",
   "weather",
   "which",
@@ -781,6 +787,10 @@ function findProjectByCommand(command) {
   });
 }
 
+function getVirtualFilesystem() {
+  return buildVirtualFilesystem(terminalData.projectGroups, getAllPosts());
+}
+
 function openResume() {
   const resumeUrl =
     terminalData.siteConfig?.resumeUrl || DEFAULT_SITE_CONFIG.resumeUrl;
@@ -815,13 +825,13 @@ function executeCommand(command, options = {}) {
   experience  work & education      countdown   visual countdown
   skills      skill proficiency     curl        HTTP simulation
   contact     contact info          date        current date/time
-  email       email jakob           echo        print text
+  email       email jakob           cat         read virtual files
   github      github profile        flip        upside-down text
   repo        repo explorer         repos       repo summary
   resume      view resume           grep        regex search/pipe
   blog        read blog posts       fortune     random quote
   projects    projects pane         matrix      digital rain
-                                    qr          QR code generator
+  tree        virtual file tree      qr          QR code generator
   close       close pane            weather     weather forecast
                                     snake       play snake
 
@@ -832,6 +842,7 @@ function executeCommand(command, options = {}) {
   ls          list commands         write       create blog post
   history     command history       edit        edit site content
   clear       clear terminal        export      export posts
+  echo        print text
   theme       toggle dark/light
   uptime      session uptime
   neofetch    system info
@@ -936,6 +947,12 @@ Currently seeking opportunities in software engineering.`,
     case "calc":
       appendOutput(
         "Usage: calc [expression]\nExamples: calc 2+2, calc sqrt(144), calc sin(3.14/2)",
+        "info-text",
+      );
+      break;
+    case "cat":
+      appendOutput(
+        "Usage: cat [file]\nTry: cat README.md, cat about.txt, or cat repos/index.txt",
         "info-text",
       );
       break;
@@ -1056,6 +1073,9 @@ Currently seeking opportunities in software engineering.`,
         buildRepoExplorerOutput(terminalData.projectGroups),
         "info-text",
       );
+      break;
+    case "tree":
+      appendOutput(buildVirtualTreeOutput(getVirtualFilesystem()), "info-text");
       break;
     case "converter":
       appendOutput("Opening Link Converter...");
@@ -1324,6 +1344,22 @@ Currently seeking opportunities in software engineering.`,
         } else {
           appendOutput("Usage: echo [text to display]", "info-text");
         }
+      } else if (normalizedCommand.startsWith("cat ")) {
+        const target = command.substring(4).trim();
+        const output = buildVirtualCatOutput(getVirtualFilesystem(), target);
+        appendOutput(
+          output,
+          output.startsWith("cat:") ? "error-text" : "info-text",
+        );
+        break;
+      } else if (normalizedCommand.startsWith("tree ")) {
+        const target = command.substring(5).trim();
+        const output = buildVirtualTreeOutput(getVirtualFilesystem(), target);
+        appendOutput(
+          output,
+          output.startsWith("tree:") ? "error-text" : "info-text",
+        );
+        break;
       } else if (normalizedCommand.startsWith("calc ")) {
         const expr = command.substring(5).trim();
         if (!expr) {
@@ -2938,6 +2974,18 @@ function getHelpDetails() {
       notes:
         "Supports +, -, *, /, ^ (power), % (modulo), sqrt, abs, sin, cos, tan, log (base 10), ln (natural). Constants: pi, e.",
     },
+    cat: {
+      desc: "Read files from the terminal's read-only virtual portfolio filesystem.",
+      usage: "cat [file]",
+      examples: [
+        "cat README.md",
+        "cat about.txt",
+        "cat repos/index.txt",
+        "cat projects/link-converter.md",
+      ],
+      notes:
+        "Use 'tree' to discover available paths. The filesystem is generated from portfolio, repository, and blog data.",
+    },
     countdown: {
       desc: "Start a visual countdown timer with large ASCII digits.",
       usage: "countdown [seconds]",
@@ -3153,6 +3201,13 @@ function getHelpDetails() {
       examples: ["theme", "theme dark", "theme light"],
       notes:
         "Without arguments, toggles to the opposite theme. Preference is saved in your browser.",
+    },
+    tree: {
+      desc: "Display the read-only virtual portfolio filesystem as a directory tree.",
+      usage: "tree [path]",
+      examples: ["tree", "tree projects", "tree blog"],
+      notes:
+        "Pair with 'cat [file]' to inspect generated portfolio files without leaving the terminal.",
     },
     uptime: {
       desc: "Display how long the current terminal session has been active.",
@@ -4270,6 +4325,8 @@ function initCLI() {
           completions = ["dark", "light"].filter((s) => s.startsWith(arg));
         } else if (baseCmd === "man" || baseCmd === "help") {
           completions = commandList.filter((c) => c.startsWith(arg));
+        } else if (baseCmd === "cat" || baseCmd === "tree") {
+          completions = getVirtualPathCompletions(getVirtualFilesystem(), arg);
         } else if (currentLower.startsWith("skills --category ")) {
           const catArg = currentLower.substring(18);
           completions = (terminalData.skills || [])

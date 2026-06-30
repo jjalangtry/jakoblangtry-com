@@ -28,10 +28,17 @@ import {
   buildRepoExplorerOutput,
   buildRepositoryCatalog,
   buildRepositoryCloneCommand,
+  buildVirtualCatOutput,
+  buildVirtualFilesystem,
+  buildVirtualTreeOutput,
+  getVirtualPathCompletions,
   getProjectSourceUrl,
   getRepositorySlug,
   isSystemsRepository,
+  listVirtualDirectory,
+  normalizeVirtualPath,
   resolveRepository,
+  resolveVirtualPath,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -68,10 +75,12 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("repo");
     expect(COMMAND_LIST).toContain("repos");
     expect(COMMAND_LIST).toContain("calc");
+    expect(COMMAND_LIST).toContain("cat");
     expect(COMMAND_LIST).toContain("countdown");
     expect(COMMAND_LIST).toContain("flip");
     expect(COMMAND_LIST).toContain("fortune");
     expect(COMMAND_LIST).toContain("matrix");
+    expect(COMMAND_LIST).toContain("tree");
   });
 
   it("builds repos output with project groups", () => {
@@ -324,6 +333,124 @@ describe("terminal helpers", () => {
       }),
     ).toBe("git clone https://github.com/jjalangtry/wordlehelper.git");
     expect(buildRepositoryCloneCommand(null)).toBe("");
+  });
+
+  it("builds a virtual portfolio filesystem from projects and posts", () => {
+    const groups = {
+      featured: [
+        {
+          name: "Link Converter",
+          url: "https://convert.jakoblangtry.com",
+          repo: "https://github.com/jjalangtry/convert-jakoblangtry-com",
+          language: "TypeScript",
+          description: "Convert music links",
+        },
+      ],
+      contributions: [],
+      github: [
+        {
+          name: "wordlehelper",
+          url: "https://github.com/jjalangtry/wordlehelper",
+          language: "C",
+        },
+      ],
+    };
+    const posts = [
+      {
+        slug: "terminal-files",
+        title: "Terminal Files",
+        date: "2026-05-20",
+        summary: "Exploring the terminal filesystem.",
+        content: "A short post body.",
+      },
+    ];
+
+    const filesystem = buildVirtualFilesystem(groups, posts);
+    expect(
+      resolveVirtualPath(filesystem, "/home/guest/README.md")?.content,
+    ).toContain("virtual filesystem");
+    expect(
+      resolveVirtualPath(filesystem, "projects/link-converter.md")?.content,
+    ).toContain(
+      "Source: https://github.com/jjalangtry/convert-jakoblangtry-com",
+    );
+    expect(
+      resolveVirtualPath(filesystem, "blog/terminal-files.md")?.content,
+    ).toContain("A short post body.");
+    expect(
+      resolveVirtualPath(filesystem, "repos/index.txt")?.content,
+    ).toContain("jjalangtry/wordlehelper");
+    expect(
+      listVirtualDirectory(filesystem, "projects").map((entry) => entry.name),
+    ).toContain("link-converter.md");
+  });
+
+  it("renders and reads the virtual filesystem like shell commands", () => {
+    const filesystem = buildVirtualFilesystem(
+      {
+        featured: [],
+        contributions: [],
+        github: [
+          { name: "Same Name", url: "https://github.com/jjalangtry/one" },
+          { name: "Same Name", url: "https://github.com/jjalangtry/two" },
+        ],
+      },
+      [],
+    );
+
+    const tree = buildVirtualTreeOutput(filesystem);
+    expect(tree).toContain("projects/");
+    expect(tree).toContain("same-name.md");
+    expect(tree).toContain("same-name-2.md");
+    expect(buildVirtualTreeOutput(filesystem, "README.md")).toBe("README.md");
+    expect(buildVirtualTreeOutput(filesystem, "missing")).toBe(
+      "tree: missing: No such file or directory",
+    );
+
+    expect(buildVirtualCatOutput(filesystem, "")).toContain("Usage: cat");
+    expect(buildVirtualCatOutput(filesystem, "projects")).toBe(
+      "cat: projects: Is a directory",
+    );
+    expect(buildVirtualCatOutput(filesystem, "nope.txt")).toBe(
+      "cat: nope.txt: No such file or directory",
+    );
+    expect(
+      buildVirtualCatOutput(filesystem, "projects/same-name-2.md"),
+    ).toContain("https://github.com/jjalangtry/two");
+  });
+
+  it("normalizes and completes virtual paths", () => {
+    const filesystem = buildVirtualFilesystem(
+      {
+        featured: [
+          {
+            name: "Demo App",
+            url: "https://demo.example.com",
+            language: "JavaScript",
+          },
+        ],
+        contributions: [],
+        github: [],
+      },
+      null,
+    );
+
+    expect(normalizeVirtualPath("/home/guest/projects/../README.md")).toBe(
+      "README.md",
+    );
+    expect(normalizeVirtualPath("~/projects/./demo-app.md")).toBe(
+      "projects/demo-app.md",
+    );
+    expect(normalizeVirtualPath("home")).toBe("");
+    expect(resolveVirtualPath(null, "README.md")).toBeNull();
+    expect(listVirtualDirectory(null, "")).toEqual([]);
+    expect(getVirtualPathCompletions(null, "proj")).toEqual([]);
+    expect(getVirtualPathCompletions(filesystem, "proj")).toContain(
+      "projects/",
+    );
+    expect(getVirtualPathCompletions(filesystem, "projects/demo")).toEqual([
+      "projects/demo-app.md",
+    ]);
   });
 
   it("builds contribution chart ASCII from API data", () => {
