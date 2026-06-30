@@ -16,7 +16,12 @@ import {
   buildReposOutput,
   buildRepoExplorerOutput,
   buildRepositoryCloneCommand,
+  buildGitHubContentsApiUrl,
+  buildGitHubReadmeApiUrl,
+  formatRepositoryContentsOutput,
+  formatRepositoryReadmeOutput,
   resolveRepository,
+  resolveRepositoryContentTarget,
   buildContributionChartAscii,
   getRandomFortune,
   flipText,
@@ -1222,6 +1227,8 @@ Currently seeking opportunities in software engineering.`,
         const repoArgs = command.substring(5).trim();
         const openMatch = repoArgs.match(/^(open|view)\s+(.+)$/i);
         const cloneMatch = repoArgs.match(/^clone\s+(.+)$/i);
+        const filesMatch = repoArgs.match(/^(files|tree|ls)(?:\s+(.+))?$/i);
+        const readmeMatch = repoArgs.match(/^readme(?:\s+(.+))?$/i);
 
         if (openMatch) {
           const entry = resolveRepository(
@@ -1252,6 +1259,32 @@ Currently seeking opportunities in software engineering.`,
               `No repository matches '${cloneMatch[1]}'.`,
               "error-text",
             );
+          }
+          break;
+        }
+
+        if (filesMatch) {
+          const target = (filesMatch[2] || "").trim();
+          if (!target) {
+            appendOutput(
+              "Usage: repo files <name|number> [path]\nExamples: repo files wordlehelper · repo tree jakobs-ls-remake src",
+              "info-text",
+            );
+          } else {
+            fetchRepositoryFiles(target);
+          }
+          break;
+        }
+
+        if (readmeMatch) {
+          const target = (readmeMatch[1] || "").trim();
+          if (!target) {
+            appendOutput(
+              "Usage: repo readme <name|number>\nExample: repo readme Unix-Permissions-Game",
+              "info-text",
+            );
+          } else {
+            fetchRepositoryReadme(target);
           }
           break;
         }
@@ -1412,6 +1445,129 @@ NOTES:
   } else {
     appendOutput(
       `No detailed help available for '${command}'. Type 'help' to see all available commands.`,
+      "error-text",
+    );
+  }
+}
+
+function buildRepositoryFetchError(action, entry, response) {
+  const status = response?.status ? ` (${response.status})` : "";
+  return `Could not fetch ${action} for ${entry.name}${status}. GitHub may be rate limiting requests; try 'repo open ${entry.slug}'.`;
+}
+
+function decodeGitHubBase64Content(content) {
+  const binary = atob(String(content || "").replace(/\s/g, ""));
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+async function fetchRepositoryFiles(targetInput) {
+  const { entry, path } = resolveRepositoryContentTarget(
+    terminalData.projectGroups,
+    targetInput,
+  );
+
+  if (!entry) {
+    appendOutput(`No repository matches '${targetInput}'.`, "error-text");
+    return;
+  }
+
+  const apiUrl = buildGitHubContentsApiUrl(entry, path);
+  if (!apiUrl) {
+    appendOutput(
+      `Repository files are available for GitHub-hosted repos only. Open: ${entry.sourceUrl}`,
+      "info-text",
+    );
+    return;
+  }
+
+  const location = path ? `${entry.name}/${path}` : entry.name;
+  appendOutput(`Fetching files for ${location}...`, "info-text");
+
+  try {
+    const response = await fetch(apiUrl, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!response.ok) {
+      appendOutput(
+        buildRepositoryFetchError("files", entry, response),
+        "error-text",
+      );
+      return;
+    }
+
+    const data = await response.json();
+    const contents = Array.isArray(data) ? data : [data];
+    appendOutput(
+      formatRepositoryContentsOutput(entry, contents, path),
+      "info-text",
+    );
+  } catch (err) {
+    appendOutput(
+      `${buildRepositoryFetchError("files", entry)} ${err.message}`,
+      "error-text",
+    );
+  }
+}
+
+async function fetchRepositoryReadme(targetInput) {
+  const entry = resolveRepository(terminalData.projectGroups, targetInput);
+
+  if (!entry) {
+    appendOutput(`No repository matches '${targetInput}'.`, "error-text");
+    return;
+  }
+
+  const apiUrl = buildGitHubReadmeApiUrl(entry);
+  if (!apiUrl) {
+    appendOutput(
+      `README fetching is available for GitHub-hosted repos only. Open: ${entry.sourceUrl}`,
+      "info-text",
+    );
+    return;
+  }
+
+  appendOutput(`Fetching README for ${entry.name}...`, "info-text");
+
+  try {
+    const response = await fetch(apiUrl, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!response.ok) {
+      appendOutput(
+        buildRepositoryFetchError("README", entry, response),
+        "error-text",
+      );
+      return;
+    }
+
+    const metadata = await response.json();
+    let readmeText = "";
+
+    if (metadata?.content) {
+      try {
+        readmeText = decodeGitHubBase64Content(metadata.content);
+      } catch {
+        readmeText = "";
+      }
+    }
+
+    if (!readmeText && metadata?.download_url) {
+      const rawResponse = await fetch(metadata.download_url);
+      if (!rawResponse.ok) {
+        appendOutput(
+          buildRepositoryFetchError("README", entry, rawResponse),
+          "error-text",
+        );
+        return;
+      }
+      readmeText = await rawResponse.text();
+    }
+
+    appendOutput(formatRepositoryReadmeOutput(entry, readmeText), "info-text");
+  } catch (err) {
+    appendOutput(
+      `${buildRepositoryFetchError("README", entry)} ${err.message}`,
       "error-text",
     );
   }
@@ -3109,18 +3265,22 @@ function getHelpDetails() {
         "Also available via 'exit' or the keyboard shortcut Ctrl+B then q.",
     },
     repo: {
-      desc: "Browse, inspect, open, and clone source repositories from the terminal catalog.",
-      usage: "repo [--systems|--lang LANG|--search TERM|NAME|NUMBER]",
+      desc: "Browse, inspect, open, clone, and read GitHub repository contents from the terminal catalog.",
+      usage:
+        "repo [--systems|--lang LANG|--search TERM|NAME|NUMBER|files NAME [PATH]|readme NAME]",
       examples: [
         "repo",
         "repo --systems",
         "repo --lang C",
         "repo jakobs-ls-remake",
+        "repo files wordlehelper",
+        "repo tree jakobs-ls-remake src",
+        "repo readme Unix-Permissions-Game",
         "repo open wordlehelper",
         "repo clone 7",
       ],
       notes:
-        "The catalog is sourced from public/data/projects.json and includes deployed apps, contributions, GitHub repos, and forks.",
+        "The catalog is sourced from public/data/projects.json. File and README views use GitHub's public contents API and may be rate limited.",
     },
     resume: {
       desc: "View Jakob's resume in a new browser tab.",

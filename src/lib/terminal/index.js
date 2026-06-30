@@ -461,6 +461,12 @@ export function getRepositorySlug(url) {
   return match ? match[1] : clean;
 }
 
+export function getGitHubRepositoryPath(source) {
+  const clean = stripUrlProtocol(source).replace(/\.git$/, "");
+  const match = clean.match(/^github\.com\/([^/\s]+)\/([^/\s]+)$/i);
+  return match ? `${match[1]}/${match[2]}` : "";
+}
+
 export function buildRepositoryCatalog(projectGroups) {
   const groups = projectGroups || {};
   const sections = [
@@ -553,6 +559,142 @@ export function buildRepositoryCloneCommand(entry) {
   return `git clone ${cloneUrl}`;
 }
 
+function encodeRepositoryContentPath(path) {
+  return String(path || "")
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+}
+
+export function buildGitHubContentsApiUrl(entry, path = "") {
+  const source = typeof entry === "string" ? entry : entry?.sourceUrl;
+  const repoPath = getGitHubRepositoryPath(source);
+  if (!repoPath) return "";
+
+  const contentPath = encodeRepositoryContentPath(path);
+  return `https://api.github.com/repos/${repoPath}/contents${contentPath ? `/${contentPath}` : ""}`;
+}
+
+export function buildGitHubReadmeApiUrl(entry) {
+  const source = typeof entry === "string" ? entry : entry?.sourceUrl;
+  const repoPath = getGitHubRepositoryPath(source);
+  return repoPath ? `https://api.github.com/repos/${repoPath}/readme` : "";
+}
+
+export function resolveRepositoryContentTarget(projectGroups, input) {
+  const tokens = String(input || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (tokens.length === 0) {
+    return { entry: null, path: "" };
+  }
+
+  for (let i = tokens.length; i >= 1; i--) {
+    const entry = resolveRepository(
+      projectGroups,
+      tokens.slice(0, i).join(" "),
+    );
+    if (entry) {
+      return { entry, path: tokens.slice(i).join(" ") };
+    }
+  }
+
+  return { entry: null, path: "" };
+}
+
+function formatFileSize(size) {
+  const bytes = Number(size);
+  if (!Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function formatRepositoryContentsOutput(entry, contents, path = "") {
+  if (!entry) return "No repository selected.";
+  if (!Array.isArray(contents)) {
+    return `No files returned for ${entry.name}.`;
+  }
+
+  const location = path ? `${entry.name}/${path}` : entry.name;
+  if (contents.length === 0) {
+    return `No files found in ${location}.`;
+  }
+
+  const sorted = [...contents].sort((a, b) => {
+    const aType = a?.type === "dir" ? 0 : 1;
+    const bType = b?.type === "dir" ? 0 : 1;
+    if (aType !== bType) return aType - bType;
+    return String(a?.name || "").localeCompare(String(b?.name || ""));
+  });
+  const visible = sorted.slice(0, 60);
+  const lines = [
+    `Files:  ${location}`,
+    `Source: ${entry.sourceUrl}`,
+    "----------------------------------------",
+  ];
+
+  visible.forEach((item) => {
+    const type = item?.type === "dir" ? "dir" : item?.type || "file";
+    const name = `${item?.name || "(unnamed)"}${type === "dir" ? "/" : ""}`;
+    const size = type === "file" ? formatFileSize(item?.size) : "";
+    lines.push(
+      `${type.padEnd(7)} ${name}${size ? ` (${size})` : ""}`.trimEnd(),
+    );
+  });
+
+  if (sorted.length > visible.length) {
+    lines.push(`... ${sorted.length - visible.length} more entries`);
+  }
+
+  lines.push("");
+  lines.push(
+    `Use: repo files ${entry.slug} <path> · repo readme ${entry.slug}`,
+  );
+  return lines.join("\n");
+}
+
+export function formatRepositoryReadmeOutput(entry, readmeText, options = {}) {
+  const name = entry?.name || "repository";
+  const text = String(readmeText || "")
+    .replace(/\r\n/g, "\n")
+    .trim();
+
+  if (!text) {
+    return `README for ${name} is empty or unavailable.`;
+  }
+
+  const maxLines = Number.isInteger(options.maxLines) ? options.maxLines : 80;
+  const maxChars = Number.isInteger(options.maxChars) ? options.maxChars : 5000;
+  const sourceUrl = entry?.sourceUrl || "";
+  const readmeLines = text.split("\n");
+  let body = readmeLines.slice(0, maxLines).join("\n");
+  let truncated = readmeLines.length > maxLines;
+
+  if (body.length > maxChars) {
+    body = body.slice(0, maxChars).trimEnd();
+    truncated = true;
+  }
+
+  const lines = [`README: ${name}`];
+  if (sourceUrl) lines.push(`Source: ${sourceUrl}`);
+  lines.push("----------------------------------------");
+  lines.push(body);
+
+  if (truncated) {
+    lines.push("");
+    lines.push(
+      `[truncated] Use 'repo open ${entry?.slug || name}' for the full README.`,
+    );
+  }
+
+  return lines.join("\n");
+}
+
 function parseRepoExplorerArgs(argsString) {
   const tokens = String(argsString || "")
     .trim()
@@ -595,6 +737,10 @@ function formatRepositoryDetail(entry) {
   if (entry.language) lines.push(`Language:   ${entry.language}`);
   lines.push(`Type:       ${entry.sectionLabel}${entry.fork ? " fork" : ""}`);
   if (entry.description) lines.push(`About:      ${entry.description}`);
+  if (buildGitHubContentsApiUrl(entry)) {
+    lines.push(`Browse:     repo files ${entry.slug}`);
+    lines.push(`README:     repo readme ${entry.slug}`);
+  }
   lines.push(`Clone:      ${buildRepositoryCloneCommand(entry)}`);
   return lines.join("\n");
 }
@@ -659,7 +805,10 @@ export function buildRepoExplorerOutput(projectGroups, argsString = "") {
   });
 
   lines.push("");
-  lines.push("Use: repo <number|name> · repo open <name> · repo clone <name>");
+  lines.push(
+    "Use: repo <number|name> · repo files <name> · repo readme <name>",
+  );
+  lines.push("Also: repo open <name> · repo clone <name>");
   lines.push(
     "Filters: repo --systems · repo --lang C · repo --search terminal",
   );
