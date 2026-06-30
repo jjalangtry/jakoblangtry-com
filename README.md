@@ -28,6 +28,23 @@ Terminal-style personal website with command-driven navigation.
 - Project/domain/repository catalog: `public/data/projects.json`
 - Canonical resume file location: `public/resume.pdf`
 
+## Terminal Virtual Filesystem
+
+The terminal emulates a read-only portfolio filesystem rooted at `/home/guest`.
+It is generated from the same JSON data that powers the rest of the site:
+
+```bash
+pwd                    # print the current virtual directory
+ls [-la] [path]        # list files and directories
+ls --commands          # list available terminal commands
+cd projects            # move through the virtual filesystem
+cat about.txt          # print file contents
+tree [path]            # render a recursive file tree
+```
+
+The prompt updates as users move around, and Tab completes filesystem paths for
+`ls`, `cd`, `cat`, and `tree`.
+
 ## Terminal Repository Explorer
 
 The site includes a terminal command surface for browsing source repositories:

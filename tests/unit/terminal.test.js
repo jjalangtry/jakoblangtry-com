@@ -28,10 +28,20 @@ import {
   buildRepoExplorerOutput,
   buildRepositoryCatalog,
   buildRepositoryCloneCommand,
+  buildPortfolioFileSystem,
+  formatVirtualCat,
+  formatVirtualLs,
+  formatVirtualPathForPrompt,
+  formatVirtualTree,
+  getVirtualPathCompletions,
   getProjectSourceUrl,
   getRepositorySlug,
   isSystemsRepository,
+  normalizeVirtualPath,
+  parseVirtualLsArgs,
+  resolveVirtualNode,
   resolveRepository,
+  VIRTUAL_HOME,
   buildContributionChartAscii,
   estimateReadingTime,
   getRandomFortune,
@@ -67,6 +77,8 @@ describe("terminal helpers", () => {
     expect(COMMAND_LIST).toContain("logout");
     expect(COMMAND_LIST).toContain("repo");
     expect(COMMAND_LIST).toContain("repos");
+    expect(COMMAND_LIST).toContain("cat");
+    expect(COMMAND_LIST).toContain("tree");
     expect(COMMAND_LIST).toContain("calc");
     expect(COMMAND_LIST).toContain("countdown");
     expect(COMMAND_LIST).toContain("flip");
@@ -306,6 +318,141 @@ describe("terminal helpers", () => {
         "--systems",
       ),
     ).toContain("No repositories match");
+  });
+
+  it("builds a read-only portfolio filesystem from site data", () => {
+    const fs = buildPortfolioFileSystem({
+      version: "9.9.9",
+      siteConfig: { resumeUrl: "https://resume.example.com" },
+      skills: [
+        {
+          name: "Languages",
+          skills: [{ name: "JavaScript", level: 90 }],
+        },
+      ],
+      experience: [
+        {
+          title: "Engineer",
+          org: "Example Co",
+          period: "2025",
+          description: "Built terminal UIs",
+          tags: ["Terminal"],
+        },
+      ],
+      posts: [
+        {
+          slug: "hello-terminal",
+          title: "Hello Terminal",
+          date: "2026-05-29",
+          summary: "A short post",
+          content: "Terminals are interfaces.",
+        },
+      ],
+      projectGroups: {
+        featured: [
+          {
+            name: "Terminal Site",
+            url: "https://jjalangtry.com",
+            repo: "https://github.com/jjalangtry/jakoblangtry-com",
+            description: "Portfolio shell",
+            language: "JavaScript",
+          },
+        ],
+        contributions: [],
+        github: [
+          {
+            name: "wordlehelper",
+            url: "https://github.com/jjalangtry/wordlehelper",
+            language: "C",
+          },
+        ],
+      },
+    });
+
+    expect(VIRTUAL_HOME).toBe("/home/guest");
+    expect(normalizeVirtualPath("../projects", "/home/guest/repos")).toBe(
+      "/home/guest/projects",
+    );
+    expect(formatVirtualPathForPrompt("/home/guest/projects")).toBe(
+      "~/projects",
+    );
+    expect(resolveVirtualNode(fs, "projects", VIRTUAL_HOME).node?.type).toBe(
+      "dir",
+    );
+    expect(resolveVirtualNode(fs, "/missing", VIRTUAL_HOME).node).toBeNull();
+
+    expect(formatVirtualLs(fs, VIRTUAL_HOME)).toContain("projects/");
+    expect(formatVirtualLs(fs, VIRTUAL_HOME, "README.md")).toBe("README.md");
+    expect(
+      formatVirtualLs(fs, VIRTUAL_HOME, "projects", { long: true }),
+    ).toContain("-r--r--r-- guest guest");
+    expect(
+      formatVirtualLs(fs, VIRTUAL_HOME, "projects", { showAll: true }),
+    ).toContain("./");
+    expect(formatVirtualLs(fs, VIRTUAL_HOME, "missing")).toContain(
+      "No such file",
+    );
+
+    expect(formatVirtualCat(fs, VIRTUAL_HOME, "README.md")).toContain(
+      "Site version: 9.9.9",
+    );
+    expect(formatVirtualCat(fs, VIRTUAL_HOME, "projects")).toContain(
+      "Is a directory",
+    );
+    expect(formatVirtualCat(fs, VIRTUAL_HOME, "nope.txt")).toContain(
+      "No such file",
+    );
+    expect(formatVirtualCat(fs, VIRTUAL_HOME, "")).toContain("Usage");
+
+    const tree = formatVirtualTree(fs, VIRTUAL_HOME, "projects");
+    expect(tree).toContain("~/projects");
+    expect(tree).toContain("featured.txt");
+    expect(tree).toContain("directories");
+    expect(formatVirtualTree(fs, VIRTUAL_HOME, "README.md")).toBe("README.md");
+    expect(formatVirtualTree(fs, VIRTUAL_HOME, "missing")).toContain(
+      "No such file",
+    );
+  });
+
+  it("parses virtual ls flags and completes virtual paths", () => {
+    const fs = buildPortfolioFileSystem({
+      projectGroups: {
+        featured: [],
+        contributions: [],
+        github: [{ name: "Alpha Repo", url: "https://github.com/a/alpha" }],
+      },
+      skills: [],
+      experience: [],
+      posts: [],
+    });
+
+    expect(parseVirtualLsArgs("-la projects")).toEqual({
+      path: "projects",
+      long: true,
+      showAll: true,
+      commands: false,
+    });
+    expect(parseVirtualLsArgs("--commands")).toMatchObject({
+      commands: true,
+    });
+    expect(parseVirtualLsArgs("--long --all repos")).toMatchObject({
+      path: "repos",
+      long: true,
+      showAll: true,
+    });
+
+    expect(getVirtualPathCompletions(fs, VIRTUAL_HOME, "pro")).toEqual([
+      "projects/",
+    ]);
+    expect(getVirtualPathCompletions(fs, VIRTUAL_HOME, "~/pro")).toEqual([
+      "~/projects/",
+    ]);
+    expect(
+      getVirtualPathCompletions(fs, VIRTUAL_HOME, "README", {
+        directoriesOnly: true,
+      }),
+    ).toEqual([]);
+    expect(getVirtualPathCompletions(fs, VIRTUAL_HOME, "missing/")).toEqual([]);
   });
 
   it("classifies systems repositories and formats clone commands", () => {
