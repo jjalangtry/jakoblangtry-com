@@ -45,6 +45,23 @@ repo clone <name>     # print a git clone command
 The catalog is static and sourced from `public/data/projects.json`, which keeps
 the website usable without GitHub API credentials at runtime.
 
+## Terminal Aliases
+
+The terminal supports persistent command aliases stored in browser
+`localStorage`:
+
+```bash
+alias                         # list aliases
+alias ll='ls'                 # create a shortcut
+alias systems='repo --systems'
+alias systems                 # inspect one alias
+unalias systems               # remove one alias
+unalias -a                    # clear saved aliases
+```
+
+Aliases expand before command execution and work inside pipelines, so shortcuts
+like `alias hw='help | grep weather'` behave like a shell command.
+
 ## Build
 
 ```bash
